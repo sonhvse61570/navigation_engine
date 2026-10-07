@@ -1,0 +1,29 @@
+name: navigation_engine_flutter_map
+description: >-
+  Smooth turn-by-turn navigation view for flutter_map, built on navigation_engine: heading-up follow camera, route line, vehicle puck, recenter.
+version: 0.1.0
+repository: https://github.com/sonhvse61570/navigation_engine/tree/main/packages/navigation_engine_flutter_map
+issue_tracker: https://github.com/sonhvse61570/navigation_engine/issues
+topics:
+  - navigation
+  - maps
+  - turn-by-turn
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  navigation_engine: ^0.1.0
+  navigation_engine_flutter: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter

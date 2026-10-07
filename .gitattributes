@@ -1,0 +1,15 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.jar binary
+
+# Lockfiles and generated Xcode project files: keep diffs collapsed on GitHub
+pubspec.lock linguist-generated=true
+**/Runner.xcodeproj/project.pbxproj linguist-generated=true

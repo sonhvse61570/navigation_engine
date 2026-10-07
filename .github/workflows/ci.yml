@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed packages
+
+      - name: Analyze
+        run: |
+          for p in packages/*/; do
+            echo "::group::analyze $p"
+            (cd "$p" && flutter analyze --no-pub)
+            echo "::endgroup::"
+          done
+
+      - name: Test
+        run: |
+          for p in packages/*/; do
+            echo "::group::test $p"
+            (cd "$p" && flutter test --no-pub)
+            echo "::endgroup::"
+          done

@@ -1,0 +1,32 @@
+name: navigation_engine_maplibre_example
+description: navigation_engine on MapLibre with simulated GPS.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  maplibre_gl: ^0.27.1
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_flutter:
+    path: ../../navigation_engine_flutter
+  navigation_engine_maplibre:
+    path: ../
+
+dependency_overrides:
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_flutter:
+    path: ../../navigation_engine_flutter
+  navigation_engine_maplibre:
+    path: ../
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

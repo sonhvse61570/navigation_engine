@@ -1,0 +1,21 @@
+name: navigation_engine
+description: >-
+  Map-agnostic turn-by-turn navigation engine: snaps 1 Hz GPS to the route and
+  turns it into smooth 60 fps vehicle motion, camera targets and guidance.
+version: 0.1.0
+repository: https://github.com/sonhvse61570/navigation_engine/tree/main/packages/navigation_engine
+issue_tracker: https://github.com/sonhvse61570/navigation_engine/issues
+topics:
+  - navigation
+  - gps
+  - maps
+  - turn-by-turn
+
+environment:
+  sdk: ^3.8.0
+
+resolution: workspace
+
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.26.0

@@ -1,0 +1,13 @@
+name: navigation_engine_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+workspace:
+  - packages/navigation_engine
+  - packages/navigation_engine_flutter
+  - packages/navigation_engine_flutter_map
+  - packages/navigation_engine_maplibre
+  - packages/navigation_engine_google_maps
+  - packages/navigation_engine_mapbox

@@ -1,0 +1,31 @@
+name: navigation_engine_flutter_map_example
+description: navigation_engine on flutter_map with simulated GPS.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_flutter:
+    path: ../../navigation_engine_flutter
+  navigation_engine_flutter_map:
+    path: ../
+
+dependency_overrides:
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_flutter:
+    path: ../../navigation_engine_flutter
+  navigation_engine_flutter_map:
+    path: ../
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

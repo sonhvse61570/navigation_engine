@@ -1,0 +1,19 @@
+# Dart / Flutter
+.dart_tool/
+build/
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Secrets and machine-local files
+**/local.properties
+**/Secrets.xcconfig
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# AI-assisted process artifacts (specs, plans) — never committed
+.superpowers/

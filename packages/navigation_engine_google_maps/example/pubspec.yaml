@@ -1,0 +1,32 @@
+name: navigation_engine_google_maps_example
+description: navigation_engine on Google Maps with simulated GPS.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_maps_flutter: ^2.18.2
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_flutter:
+    path: ../../navigation_engine_flutter
+  navigation_engine_google_maps:
+    path: ../
+
+dependency_overrides:
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_flutter:
+    path: ../../navigation_engine_flutter
+  navigation_engine_google_maps:
+    path: ../
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

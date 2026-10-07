@@ -1,0 +1,27 @@
+name: navigation_engine_flutter
+description: >-
+  Flutter building blocks for navigation_engine map views: frame ticker,
+  follow and recenter, vehicle puck, turn-by-turn banner. No map SDK.
+version: 0.1.0
+repository: https://github.com/sonhvse61570/navigation_engine/tree/main/packages/navigation_engine_flutter
+issue_tracker: https://github.com/sonhvse61570/navigation_engine/issues
+topics:
+  - navigation
+  - maps
+  - turn-by-turn
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  navigation_engine: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
