@@ -31,8 +31,8 @@ flow.start();                        // FlowNavigating … FlowArrived
 flow.tripProgress.addListener(() => print(flow.tripProgress.value?.eta));
 
 // A failed request: offer "Retry" and "Cancel".
-if (flow.state.value case FlowError(:final to)) {
-  await flow.preview(to: to); // or flow.cancel()
+if (flow.state.value is FlowError) {
+  await flow.retry(); // or flow.cancel()
 }
 ```
 The controller never ticks the session (the map view does) and never
@@ -43,7 +43,11 @@ disposes it.
   the running route (and follows a reroute made meanwhile).
 - Failures land in `FlowError(error, previous, to)`: `cancel()` returns to
   the state before the request (the trip overview follows reroutes made meanwhile),
-  and `preview(to: error.to)` retries.
+  and `retry()` repeats the failed request, with its origin, heading and
+  alternatives.
+- `closeOverview()` closes a route preview (an overview that is not the
+  trip's own) back to `FlowIdle`, without touching the session; in the trip
+  overview, `start()` resumes the trip instead.
 - Resuming uses the route instance the session already runs; call `stop()`
   before replaying the same `NavRoute` instance from the start.
 - Map-adapter errors are reported through `FlutterError`, never thrown.

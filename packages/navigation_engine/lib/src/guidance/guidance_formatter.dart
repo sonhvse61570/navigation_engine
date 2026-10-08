@@ -31,9 +31,17 @@ abstract class GuidanceFormatter {
       '${t.hour.toString().padLeft(2, '0')}:'
       '${t.minute.toString().padLeft(2, '0')}';
 
-  /// A speed, rounded to whole km/h: "42 km/h".
+  /// A speed with its unit: [speedValue] and [speedUnit], "42 km/h".
   String speed(double metresPerSecond) =>
-      '${(metresPerSecond * 3.6).round()} km/h';
+      '${speedValue(metresPerSecond)} $speedUnit';
+
+  /// The number of a speed, without its unit: whole km/h by default, "42".
+  /// Override it with [speedUnit] to show another unit, such as mph.
+  String speedValue(double metresPerSecond) =>
+      '${(metresPerSecond * 3.6).round()}';
+
+  /// The unit of [speedValue]: "km/h" by default.
+  String get speedUnit => 'km/h';
 }
 
 /// [d] split the way [GuidanceFormatter.duration] reads it: `seconds` is set

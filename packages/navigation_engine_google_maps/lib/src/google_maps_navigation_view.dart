@@ -5,6 +5,7 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_maps_navigation_map.dart';
+import 'ui/google_style_colors.dart';
 
 /// A ready-made navigation map on Google Maps: follows [session]'s vehicle
 /// heading-up, draws the route and the vehicle, and offers recenter.
@@ -34,6 +35,12 @@ class GoogleMapsNavigationView extends StatefulWidget {
     this.focus = 0.7,
     this.markers = const {},
     this.onMapCreated,
+    this.style,
+    this.showRecenterButton = true,
+    this.routeLabel,
+    this.onRouteOptionTap,
+    this.alternativeRouteColor,
+    this.labelColors,
   });
 
   final NavigationSession session;
@@ -65,6 +72,38 @@ class GoogleMapsNavigationView extends StatefulWidget {
   final Set<Marker> markers;
   final void Function(GoogleMapController controller)? onMapCreated;
 
+  /// The map style, a JSON array of style rules, passed to `GoogleMap.style`.
+  /// [googleStyleNightMapStyle] is a ready-made dark one; null keeps the
+  /// default look and an empty string clears a style that was set.
+  final String? style;
+
+  /// Whether the recenter button shows once the user has moved the map away
+  /// from the vehicle. When false nothing is shown in its place (an app
+  /// with its own recenter control, or one showing it in a panel).
+  final bool showRecenterButton;
+
+  /// The text of the label bubble drawn on each route option, such as its
+  /// duration. Needed only for route options
+  /// ([RoutePreviewMap.showRouteOptions], called by
+  /// [NavigationFlowController]); when null no label bubbles are drawn.
+  /// Forwarded to the map, so changes apply to the next options shown.
+  final String Function(NavRoute route)? routeLabel;
+
+  /// Called with the index of the route option the user taps, on its line or
+  /// on its label bubble. Forwarded to the map.
+  final void Function(int index)? onRouteOptionTap;
+
+  /// The colour of the route options that are not selected. When null the
+  /// map's own colour is kept (a muted grey by default); when set, changes
+  /// redraw the options shown.
+  final Color? alternativeRouteColor;
+
+  /// The colours of the route option label bubbles: the selected one in
+  /// `accent` / `onAccent`, the others in `surface` / `onSurface`. When null
+  /// the map's own colours are kept ([GoogleStyleColors.day] by default);
+  /// when set, changes render the labels shown again.
+  final GoogleStyleColors? labelColors;
+
   @override
   State<GoogleMapsNavigationView> createState() =>
       _GoogleMapsNavigationViewState();
@@ -75,11 +114,33 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
   late final VehicleImageBuilder _image =
       widget.vehicleImage ?? vehicleImageFor(widget.puck);
   double? _ratio;
+  Size? _viewport;
+
+  void _forwardOptions() {
+    _map
+      ..routeLabel = widget.routeLabel
+      ..onRouteOptionTap = widget.onRouteOptionTap;
+    final alternative = widget.alternativeRouteColor;
+    if (alternative != null) _map.alternativeColor = alternative;
+    final labelColors = widget.labelColors;
+    if (labelColors != null) _map.labelColors = labelColors;
+  }
 
   @override
   void initState() {
     super.initState();
+    _forwardOptions();
     widget.session.map = _map;
+  }
+
+  // The map needs its size to fit routes; set after the frame, only when it
+  // changed, because the layout is not over while the builder runs.
+  void _viewportChanged(Size size) {
+    if (size == _viewport) return;
+    _viewport = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _map.viewportSize = size;
+    });
   }
 
   @override
@@ -88,6 +149,7 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
     final ratio = MediaQuery.devicePixelRatioOf(context);
     if (ratio == _ratio) return;
     _ratio = ratio;
+    _map.labelPixelRatio = ratio;
     _image(ratio).then(
       (png) {
         // A newer ratio may have been asked for while this one rendered.
@@ -108,6 +170,7 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
       widget.session.map = _map;
     }
     _map.routeColors = widget.routeColors;
+    _forwardOptions();
   }
 
   @override
@@ -124,30 +187,52 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
       vehicleMarkers: _map,
       focus: widget.focus,
       puck: widget.puck,
-      recenterButton: widget.recenterButton,
-      mapBuilder: (context, padding) => ValueListenableBuilder(
-        valueListenable: _map.polylines,
-        builder: (context, polylines, _) => ValueListenableBuilder(
-          valueListenable: _map.vehicleMarker,
-          builder: (context, vehicle, _) => GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: toLatLng(widget.initialCenter),
-              zoom: widget.initialZoom,
-            ),
-            padding: padding,
-            compassEnabled: false,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-            polylines: polylines,
-            markers: {...widget.markers, ?vehicle},
-            onMapCreated: (c) {
-              _map.onMapCreated(c);
-              widget.onMapCreated?.call(c);
-            },
-          ),
-        ),
-      ),
+      recenterButton: widget.showRecenterButton
+          ? widget.recenterButton
+          : (_) => const SizedBox.shrink(),
+      mapBuilder: (context, padding) {
+        // The SDK centres the camera target in the padded view: the next
+        // route fit accounts for it. A plain field, so nothing moves now.
+        _map.mapPadding = padding;
+        return LayoutBuilder(
+          builder: (context, box) {
+            _viewportChanged(box.biggest);
+            return ListenableBuilder(
+              listenable: Listenable.merge([
+                _map.polylines,
+                _map.routeOptionPolylines,
+                _map.routeOptionMarkers,
+                _map.vehicleMarker,
+              ]),
+              builder: (context, _) => GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: toLatLng(widget.initialCenter),
+                  zoom: widget.initialZoom,
+                ),
+                style: widget.style,
+                padding: padding,
+                compassEnabled: false,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                mapToolbarEnabled: false,
+                polylines: {
+                  ..._map.polylines.value,
+                  ..._map.routeOptionPolylines.value,
+                },
+                markers: {
+                  ...widget.markers,
+                  ..._map.routeOptionMarkers.value,
+                  ?_map.vehicleMarker.value,
+                },
+                onMapCreated: (c) {
+                  _map.onMapCreated(c);
+                  widget.onMapCreated?.call(c);
+                },
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

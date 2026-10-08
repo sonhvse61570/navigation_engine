@@ -6,6 +6,8 @@ import 'package:navigation_engine/testing.dart';
 import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import 'google_style_demo.dart';
+
 void main() {
   // Android: the Maps API key is read from android/local.properties
   // (MAPS_API_KEY); see the README for iOS.
@@ -72,6 +74,19 @@ class _DrivingScreenState extends State<DrivingScreen> {
             child: NavigationBanner(
               session: _session,
               showLastAnnouncement: true,
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 96,
+            right: 12,
+            child: FilledButton.tonalIcon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const GoogleStyleDemoScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.navigation_outlined),
+              label: const Text('Google-style UI'),
             ),
           ),
         ],
