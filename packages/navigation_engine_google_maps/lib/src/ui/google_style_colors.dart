@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// Colours of the Google-style navigation UI.
 final class GoogleStyleColors {
@@ -86,11 +87,14 @@ final class GoogleStyleColors {
   );
 }
 
-/// How the speed limit sign is drawn.
-enum SpeedLimitSign {
-  /// A red ring with the number (Europe, Vietnam, most of the world).
-  circular,
-
-  /// A white rectangle with "SPEED LIMIT" above the number (US style).
-  rectangular,
+/// The route label colours of a Google-style theme.
+extension GoogleStyleRouteLabelColors on GoogleStyleColors {
+  /// The route label colours: the selected bubble in [accent] / [onAccent],
+  /// the others in [surface] / [onSurface].
+  RouteLabelColors get routeLabelColors => RouteLabelColors(
+    selectedFill: accent,
+    selectedText: onAccent,
+    fill: surface,
+    text: onSurface,
+  );
 }

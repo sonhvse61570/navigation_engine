@@ -1,5 +1,7 @@
 ## 0.1.0
 
+- `FollowCamera.headingUp` (default `true`): when false the camera stays
+  north-up and flat (bearing 0, tilt 0), with the zoom logic unchanged.
 - Initial release: route snapping, predict-and-correct motion
   (`RouteMotionEngine`, `FreeMotionEngine`), `FollowCamera`, turn-by-turn
   guidance with English and Vietnamese formatters, `NavigationSession`, and

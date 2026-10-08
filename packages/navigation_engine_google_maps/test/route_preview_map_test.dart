@@ -10,7 +10,6 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
     as gmp;
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
 import 'package:navigation_engine_google_maps/src/google_maps_navigation_map.dart'
     show toCameraPosition;
@@ -414,9 +413,9 @@ void main() {
     test('labels are painted in labelColors', () async {
       addTearDown(map.dispose);
       final painted = <String>[];
-      String key(GoogleStyleColors c) =>
-          '${c.accent.toARGB32()}/${c.onAccent.toARGB32()}/'
-          '${c.surface.toARGB32()}/${c.onSurface.toARGB32()}';
+      String key(RouteLabelColors c) =>
+          '${c.selectedFill.toARGB32()}/${c.selectedText.toARGB32()}/'
+          '${c.fill.toARGB32()}/${c.text.toARGB32()}';
       map
         ..routeLabel = label
         ..labelPainter =
@@ -429,23 +428,23 @@ void main() {
               painted.add('$text/$selected/${key(colors)}');
               return pixel;
             };
-      expect(map.labelColors, same(GoogleStyleColors.day));
+      expect(map.labelColors, GoogleStyleColors.day.routeLabelColors);
       map.showRouteOptions(routes, 0);
       await pumpEventQueue();
       expect(painted, [
-        '${label(routes[0])}/true/${key(GoogleStyleColors.day)}',
-        '${label(routes[1])}/false/${key(GoogleStyleColors.day)}',
+        '${label(routes[0])}/true/${key(GoogleStyleColors.day.routeLabelColors)}',
+        '${label(routes[1])}/false/${key(GoogleStyleColors.day.routeLabelColors)}',
       ]);
       final dayMarkers = map.routeOptionMarkers.value;
       painted.clear();
 
-      map.labelColors = GoogleStyleColors.night;
+      map.labelColors = GoogleStyleColors.night.routeLabelColors;
       // The day labels stay until the night ones are ready.
       expect(map.routeOptionMarkers.value, same(dayMarkers));
       await pumpEventQueue();
       expect(painted, [
-        '${label(routes[0])}/true/${key(GoogleStyleColors.night)}',
-        '${label(routes[1])}/false/${key(GoogleStyleColors.night)}',
+        '${label(routes[0])}/true/${key(GoogleStyleColors.night.routeLabelColors)}',
+        '${label(routes[1])}/false/${key(GoogleStyleColors.night.routeLabelColors)}',
       ]);
       expect(map.routeOptionMarkers.value, hasLength(2));
       expect(map.routeOptionMarkers.value, isNot(same(dayMarkers)));
@@ -453,11 +452,11 @@ void main() {
 
       // The same colours, or no options shown: nothing is painted.
       painted.clear();
-      map.labelColors = GoogleStyleColors.night;
+      map.labelColors = GoogleStyleColors.night.routeLabelColors;
       await pumpEventQueue();
       expect(painted, isEmpty);
       map.clearRouteOptions();
-      map.labelColors = GoogleStyleColors.day;
+      map.labelColors = GoogleStyleColors.day.routeLabelColors;
       await pumpEventQueue();
       expect(painted, isEmpty);
       expect(map.routeOptionMarkers.value, isEmpty);
@@ -479,12 +478,12 @@ void main() {
               // The day renders wait; the night ones are immediate.
               if (calls++ < 2) await gate.future;
               return Uint8List.fromList([
-                identical(colors, GoogleStyleColors.day) ? 1 : 2,
+                colors == GoogleStyleColors.day.routeLabelColors ? 1 : 2,
               ]);
             };
       map.showRouteOptions(routes, 0);
       await pumpEventQueue();
-      map.labelColors = GoogleStyleColors.night;
+      map.labelColors = GoogleStyleColors.night.routeLabelColors;
       await pumpEventQueue();
       gate.complete();
       await pumpEventQueue();

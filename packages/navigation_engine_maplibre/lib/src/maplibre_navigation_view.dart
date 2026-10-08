@@ -1,3 +1,5 @@
+import 'dart:math' show Point;
+
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:navigation_engine/navigation_engine.dart';
@@ -6,7 +8,9 @@ import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'maplibre_navigation_map.dart';
 
 /// A ready-made navigation map on MapLibre: follows [session]'s vehicle
-/// heading-up, draws the route and the vehicle, and offers recenter.
+/// heading-up, draws the route and the vehicle, and offers recenter. It is
+/// a [RoutePreviewMap] too: a [NavigationFlowController] on [session] draws
+/// its route options here (see [routeLabel], [onRouteOptionTap]).
 ///
 /// On Android set `MapLibreMap.useHybridComposition = true` before
 /// `runApp()`, otherwise Flutter widgets (the vehicle puck) cannot be drawn
@@ -34,6 +38,13 @@ class MapLibreNavigationView extends StatefulWidget {
     this.recenterButton,
     this.focus = 0.7,
     this.onMapCreated,
+    this.nightStyleString,
+    this.night = false,
+    this.routeLabel,
+    this.onRouteOptionTap,
+    this.labelColors = const RouteLabelColors(),
+    this.alternativeRouteColor = const Color(0xFF9AA0A6),
+    this.bottomInset = 0,
   });
 
   final NavigationSession session;
@@ -42,6 +53,9 @@ class MapLibreNavigationView extends StatefulWidget {
   /// asset path or style JSON.
   final String styleString;
   final GeoPoint initialCenter;
+
+  /// The first zoom, in the scale of [CameraTarget] zooms (the 256 dp world
+  /// of Google Maps); the view converts it to MapLibre's.
   final double initialZoom;
 
   /// The route line colours and widths; changes are applied to the lines.
@@ -61,8 +75,48 @@ class MapLibreNavigationView extends StatefulWidget {
   final Widget Function(VoidCallback recenter)? recenterButton;
   final double focus;
 
-  /// Gives the app the controller, e.g. to add its own layers.
+  /// Gives the app the controller, e.g. to add its own layers (once the
+  /// style has loaded). Called after the adapter has the controller: route
+  /// options shown from here on, or before, are drawn once the style has
+  /// loaded, and a fit waits for the view's size.
   final void Function(MapLibreMapController controller)? onMapCreated;
+
+  /// The style used while [night] is true. When null, [styleString] is used
+  /// at night too.
+  final String? nightStyleString;
+
+  /// Whether to show [nightStyleString] (when set). A switch reloads the
+  /// style; the route, the vehicle and the route options are drawn again
+  /// once it has loaded.
+  final bool night;
+
+  /// The text of the label bubble of a route option, such as its duration.
+  /// When null, route options get no labels.
+  final String Function(NavRoute route)? routeLabel;
+
+  /// Called with the route index when a route option, or its label, is
+  /// tapped.
+  final void Function(int index)? onRouteOptionTap;
+
+  /// The colours of the route option labels.
+  final RouteLabelColors labelColors;
+
+  /// The colour of the route options that are not selected.
+  final Color alternativeRouteColor;
+
+  /// The height of what the app shows over the bottom of the map (a panel,
+  /// a footer): the MapLibre attribution button and logo keep 8 above it
+  /// (`attributionButtonMargins` and `logoViewMargins`), as the map's data
+  /// providers require them to stay visible.
+  final double bottomInset;
+
+  /// The margin of the attribution button and the logo from the map's
+  /// edges, above [bottomInset].
+  static const double _ornamentMargin = 8;
+
+  /// The style shown: [nightStyleString] at [night], otherwise [styleString].
+  String get _shownStyle =>
+      night ? nightStyleString ?? styleString : styleString;
 
   @override
   State<MapLibreNavigationView> createState() => _MapLibreNavigationViewState();
@@ -77,7 +131,30 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
   @override
   void initState() {
     super.initState();
+    _syncMap();
     widget.session.map = _map;
+  }
+
+  // What the adapter takes from the widget's properties.
+  void _syncMap() {
+    _map
+      ..routeLabel = widget.routeLabel
+      ..onRouteOptionTap = widget.onRouteOptionTap
+      ..routeColors = widget.routeColors
+      ..alternativeColor = widget.alternativeRouteColor
+      ..labelColors = widget.labelColors;
+  }
+
+  Size? _reportedSize;
+
+  // Tells the adapter the size of the map, after the frame (a pending fit
+  // moves the camera, which must not happen while building).
+  void _reportViewport(Size size) {
+    if (size == _reportedSize) return;
+    _reportedSize = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _reportedSize == size) _map.viewportSize = size;
+    });
   }
 
   @override
@@ -93,13 +170,14 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
       if (identical(old.session.map, _map)) old.session.map = null;
       widget.session.map = _map;
     }
-    _map.routeColors = widget.routeColors;
-    if (old.styleString != widget.styleString) _map.onStyleChanging();
+    _syncMap();
+    if (old._shownStyle != widget._shownStyle) _map.onStyleChanging();
   }
 
   @override
   void dispose() {
     if (identical(widget.session.map, _map)) widget.session.map = null;
+    _map.dispose();
     super.dispose();
   }
 
@@ -113,21 +191,38 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
       recenterButton: widget.recenterButton,
       mapBuilder: (context, padding) {
         _map.padding = padding;
-        return MapLibreMap(
-          styleString: widget.styleString,
-          initialCameraPosition: CameraPosition(
-            target: toLatLng(widget.initialCenter),
-            zoom: widget.initialZoom,
-          ),
-          compassEnabled: false,
-          myLocationEnabled: false,
-          onMapCreated: (c) {
-            _map.onMapCreated(c);
-            widget.onMapCreated?.call(c);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            _reportViewport(constraints.biggest);
+            return _buildMap();
           },
-          onStyleLoadedCallback: _map.onStyleLoaded,
         );
       },
+    );
+  }
+
+  /// Where the attribution button and the logo sit from their corner.
+  Point<double> get _ornamentMargins => Point(
+    MapLibreNavigationView._ornamentMargin,
+    widget.bottomInset + MapLibreNavigationView._ornamentMargin,
+  );
+
+  Widget _buildMap() {
+    return MapLibreMap(
+      styleString: widget._shownStyle,
+      initialCameraPosition: CameraPosition(
+        target: toLatLng(widget.initialCenter),
+        zoom: toSdkZoom(widget.initialZoom),
+      ),
+      compassEnabled: false,
+      myLocationEnabled: false,
+      attributionButtonMargins: _ornamentMargins,
+      logoViewMargins: _ornamentMargins,
+      onMapCreated: (c) {
+        _map.onMapCreated(c);
+        widget.onMapCreated?.call(c);
+      },
+      onStyleLoadedCallback: _map.onStyleLoaded,
     );
   }
 }

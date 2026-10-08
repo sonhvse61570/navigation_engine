@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 // The 256 dp Web Mercator projection, as fractions of the world (0..1).
 double worldX(double lng) => (lng + 180) / 360;

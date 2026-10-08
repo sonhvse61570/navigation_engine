@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 
 import 'google_style_colors.dart';
-import 'google_style_strings.dart';
+
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// The bottom card shown when the destination is reached: the arrival message,
 /// the last road and a done button.
@@ -11,7 +12,7 @@ class GoogleStyleArrivalPanel extends StatelessWidget {
   const GoogleStyleArrivalPanel({
     super.key,
     required this.route,
-    this.strings = const GoogleStyleStrings(),
+    this.strings = const NavigationStrings(),
     this.colors = GoogleStyleColors.day,
     this.onDone,
   });
@@ -20,7 +21,7 @@ class GoogleStyleArrivalPanel extends StatelessWidget {
   final NavRoute route;
 
   /// The words of the panel.
-  final GoogleStyleStrings strings;
+  final NavigationStrings strings;
 
   /// The colours of the panel.
   final GoogleStyleColors colors;

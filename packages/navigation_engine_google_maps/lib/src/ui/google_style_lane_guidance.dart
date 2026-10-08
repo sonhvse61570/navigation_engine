@@ -1,17 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-
-/// The Material icon for a lane arrow.
-IconData laneDirectionIcon(LaneDirection d) => switch (d) {
-  LaneDirection.straight => Icons.straight,
-  LaneDirection.slightLeft => Icons.turn_slight_left,
-  LaneDirection.left => Icons.turn_left,
-  LaneDirection.sharpLeft => Icons.turn_sharp_left,
-  LaneDirection.uturn => Icons.u_turn_left,
-  LaneDirection.slightRight => Icons.turn_slight_right,
-  LaneDirection.right => Icons.turn_right,
-  LaneDirection.sharpRight => Icons.turn_sharp_right,
-};
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// A row of lane arrows before a manoeuvre. A valid lane shows its active
 /// arrow at full colour; an invalid lane shows all its arrows dimmed.

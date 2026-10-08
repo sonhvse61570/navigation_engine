@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
-import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
 
 import 'package:navigation_engine_maplibre/navigation_engine_maplibre.dart';

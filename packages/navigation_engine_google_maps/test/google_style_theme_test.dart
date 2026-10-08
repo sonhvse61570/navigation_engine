@@ -21,42 +21,4 @@ void main() {
       expect(GoogleStyleColors.night.alternative, const Color(0xFF5F6368));
     });
   });
-
-  group('GoogleStyleStrings', () {
-    test('default constructor creates English strings', () {
-      const strings = GoogleStyleStrings();
-      expect(strings.start, 'Start');
-      expect(strings.resume, 'Resume');
-      expect(strings.steps, 'Steps');
-    });
-
-    test('via function works in English', () {
-      const strings = GoogleStyleStrings();
-      expect(strings.via('A, B'), 'via A, B');
-    });
-
-    test('vietnamese constructor creates Vietnamese strings', () {
-      const strings = GoogleStyleStrings.vietnamese();
-      expect(strings.start, 'Bắt đầu');
-      expect(strings.resume, 'Tiếp tục');
-      expect(strings.steps, 'Các bước');
-    });
-
-    test('vietnamese via function works', () {
-      const strings = GoogleStyleStrings.vietnamese();
-      expect(strings.via('A'), 'qua A');
-    });
-
-    test('custom override works', () {
-      const strings = GoogleStyleStrings(start: 'Go');
-      expect(strings.start, 'Go');
-      expect(strings.resume, 'Resume');
-    });
-  });
-
-  group('SpeedLimitSign', () {
-    test('has exactly two values', () {
-      expect(SpeedLimitSign.values.length, 2);
-    });
-  });
 }

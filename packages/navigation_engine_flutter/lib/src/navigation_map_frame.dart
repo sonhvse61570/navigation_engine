@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:navigation_engine/navigation_engine.dart';
@@ -16,6 +18,11 @@ typedef NavigationMapBuilder =
 /// [NavigationSession] once per frame, draws the vehicle [puck] fixed at the
 /// focus point while the camera follows, stops following when the user
 /// touches the map and offers a recenter button.
+///
+/// The [puck] is drawn pointing up and turned by the vehicle's bearing
+/// minus the camera's: not at all while the camera is heading up (the map
+/// turns instead), and by the vehicle's bearing while it is north up
+/// ([FollowCamera.headingUp] false). A switch shows on the next frame.
 ///
 /// The app owns the session: it creates, starts and disposes it. The frame
 /// only ticks it, toggles [NavigationSession.follow], and pauses / resumes
@@ -75,6 +82,10 @@ class _NavigationMapFrameState extends State<NavigationMapFrame>
   Duration _lastTick = Duration.zero;
   Duration? _markerAt;
   late bool _follow = widget.session.follow;
+
+  /// The puck's turn, in radians clockwise: the vehicle's bearing minus the
+  /// camera's (see [_puckTurn]).
+  final _puckAngle = ValueNotifier<double>(0);
   bool _pausedByLifecycle = false;
 
   @override
@@ -110,6 +121,7 @@ class _NavigationMapFrameState extends State<NavigationMapFrame>
     }
     WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
+    _puckAngle.dispose();
     super.dispose();
   }
 
@@ -133,6 +145,7 @@ class _NavigationMapFrameState extends State<NavigationMapFrame>
     _lastTick = elapsed;
     final session = widget.session;
     session.tick(dt);
+    _puckAngle.value = _puckTurn(session);
     final markers = widget.vehicleMarkers;
     if (session.follow != _follow) {
       // The app changed `session.follow` itself: follow it.
@@ -151,6 +164,14 @@ class _NavigationMapFrameState extends State<NavigationMapFrame>
     if (frame == null) return;
     _markerAt = elapsed;
     markers.showVehicle(frame.position, frame.bearing);
+  }
+
+  /// The vehicle's bearing minus the bearing the camera was sent (the
+  /// vehicle's while heading up, north otherwise), in radians clockwise.
+  static double _puckTurn(NavigationSession session) {
+    final frame = session.frame;
+    if (frame == null || session.camera.headingUp) return 0;
+    return frame.bearing * math.pi / 180;
   }
 
   void _setFollow(bool follow) {
@@ -186,7 +207,14 @@ class _NavigationMapFrameState extends State<NavigationMapFrame>
                 top: size.height * widget.focus.clamp(0.0, 1.0),
                 child: FractionalTranslation(
                   translation: const Offset(-0.5, -0.5),
-                  child: IgnorePointer(child: widget.puck),
+                  child: IgnorePointer(
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _puckAngle,
+                      builder: (context, angle, puck) =>
+                          Transform.rotate(angle: angle, child: puck),
+                      child: widget.puck,
+                    ),
+                  ),
                 ),
               ),
             if (!_follow)

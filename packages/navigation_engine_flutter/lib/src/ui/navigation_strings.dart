@@ -1,8 +1,8 @@
-/// Words of the Google-style navigation UI (distances, durations and
-/// times come from the GuidanceFormatter).
-final class GoogleStyleStrings {
-  /// Creates the English strings for the Google-style navigation UI.
-  const GoogleStyleStrings({
+/// Words of the navigation UIs (all styles). Distances, durations, times and
+/// speeds come from the GuidanceFormatter.
+final class NavigationStrings {
+  /// Creates the English strings for the navigation UIs.
+  const NavigationStrings({
     this.start = 'Start',
     this.resume = 'Resume',
     this.steps = 'Steps',
@@ -19,11 +19,17 @@ final class GoogleStyleStrings {
     this.exitNavigation = 'Exit navigation',
     this.fastest = 'Fastest',
     this.speedLimit = 'SPEED LIMIT',
+    this.mute = 'Mute',
+    this.unmute = 'Unmute',
+    this.reportIncident = 'Report',
+    this.compass = 'Compass',
+    this.northUp = 'North up',
+    this.headingUp = 'Heading up',
     this.via = _enVia,
   });
 
-  /// Creates the Vietnamese strings for the Google-style navigation UI.
-  const GoogleStyleStrings.vietnamese()
+  /// Creates the Vietnamese strings for the navigation UIs.
+  const NavigationStrings.vietnamese()
     : start = 'Bắt đầu',
       resume = 'Tiếp tục',
       steps = 'Các bước',
@@ -40,6 +46,12 @@ final class GoogleStyleStrings {
       exitNavigation = 'Thoát dẫn đường',
       fastest = 'Nhanh nhất',
       speedLimit = 'TỐC ĐỘ TỐI ĐA',
+      mute = 'Tắt tiếng',
+      unmute = 'Bật tiếng',
+      reportIncident = 'Báo cáo',
+      compass = 'La bàn',
+      northUp = 'Hướng bắc',
+      headingUp = 'Theo hướng đi',
       via = _viVia;
 
   /// The "Start" label (or equivalent in the chosen language).
@@ -89,6 +101,24 @@ final class GoogleStyleStrings {
 
   /// The "SPEED LIMIT" label.
   final String speedLimit;
+
+  /// The "Mute" label (silences the voice guidance).
+  final String mute;
+
+  /// The "Unmute" label (turns the voice guidance back on).
+  final String unmute;
+
+  /// The "Report" label (reports an incident on the road).
+  final String reportIncident;
+
+  /// The "Compass" label.
+  final String compass;
+
+  /// The "North up" label (the map keeps north at the top).
+  final String northUp;
+
+  /// The "Heading up" label (the map turns with the vehicle).
+  final String headingUp;
 
   /// A function that formats a route summary (e.g., "via A, B").
   final String Function(String summary) via;

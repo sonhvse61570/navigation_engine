@@ -12,6 +12,8 @@ import 'package:navigation_engine_maplibre/navigation_engine_maplibre.dart'
 import 'package:navigation_engine_maplibre/src/maplibre_navigation_map.dart'
     as src;
 
+import 'support/recording_platform.dart';
+
 const _target = CameraTarget(
   position: GeoPoint(10.77, 106.69),
   bearing: 42,
@@ -22,111 +24,8 @@ const _target = CameraTarget(
 const _a = GeoPoint(10, 106);
 const _b = GeoPoint(10.001, 106.001);
 
-/// A platform that records what the controller sends and can be told to
-/// fail or to hold a call back. Only the calls the adapter makes are
-/// implemented.
-class RecordingPlatform extends ml.MapLibrePlatform {
-  final calls = <(String, Object?)>[];
-  final _sources = <String>{};
-
-  /// Held back until completed; consumed by the first addImage call.
-  Completer<void>? addImageGate;
-
-  /// Methods that throw once, by name.
-  final failOnce = <String>{};
-
-  // Everything not overridden below is not expected to be called.
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-
-  Iterable<String> get names => calls.map((c) => c.$1);
-  Iterable<Object?> argsOf(String name) =>
-      calls.where((c) => c.$1 == name).map((c) => c.$2);
-
-  Future<void> _record(String name, Object? arg) async {
-    calls.add((name, arg));
-    if (failOnce.remove(name)) throw StateError('$name failed');
-  }
-
-  @override
-  Future<void> updateContentInsets(EdgeInsets insets, bool animated) =>
-      _record('updateContentInsets', insets);
-
-  @override
-  Future<void> addImage(
-    String name,
-    Uint8List bytes, [
-    bool sdf = false,
-  ]) async {
-    final gate = addImageGate;
-    addImageGate = null;
-    await _record('addImage', bytes);
-    if (gate != null) await gate.future;
-  }
-
-  @override
-  Future<void> addGeoJsonSource(
-    String sourceId,
-    Map<String, dynamic> geojson, {
-    String? promoteId,
-  }) async {
-    await _record('addGeoJsonSource', sourceId);
-    if (!_sources.add(sourceId)) {
-      throw PlatformException(code: 'sourceAlreadyExists');
-    }
-  }
-
-  @override
-  Future<void> setGeoJsonSource(
-    String sourceId,
-    Map<String, dynamic> geojson,
-  ) => _record('setGeoJsonSource', (sourceId, geojson));
-
-  @override
-  Future<void> addLineLayer(
-    String sourceId,
-    String layerId,
-    Map<String, dynamic> properties, {
-    String? belowLayerId,
-    String? sourceLayer,
-    double? minzoom,
-    double? maxzoom,
-    dynamic filter,
-    required bool enableInteraction,
-  }) => _record('addLineLayer', (layerId, properties));
-
-  @override
-  Future<void> setLayerProperties(
-    String layerId,
-    Map<String, dynamic> properties,
-  ) => _record('setLayerProperties', (layerId, properties));
-
-  @override
-  Future<void> addSymbolLayer(
-    String sourceId,
-    String layerId,
-    Map<String, dynamic> properties, {
-    String? belowLayerId,
-    String? sourceLayer,
-    double? minzoom,
-    double? maxzoom,
-    dynamic filter,
-    required bool enableInteraction,
-  }) => _record('addSymbolLayer', properties);
-
-  @override
-  Future<bool?> moveCamera(ml.CameraUpdate cameraUpdate) async {
-    await _record('moveCamera', cameraUpdate);
-    return true;
-  }
-}
-
 ml.MapLibreMapController _controller(RecordingPlatform platform) =>
-    ml.MapLibreMapController(
-      maplibrePlatform: platform,
-      annotationOrder: const [],
-      annotationConsumeTapEvents: const [],
-    );
+    controllerOn(platform);
 
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 20));
@@ -163,7 +62,21 @@ void main() {
     test('camera position', () {
       final p = src.toCameraPosition(_target);
       expect(p.target, const ml.LatLng(10.77, 106.69));
-      expect((p.bearing, p.zoom, p.tilt), (42, 17.5, 50));
+      // One zoom level less: see the zoom scale test below.
+      expect((p.bearing, p.zoom, p.tilt), (42, 16.5, 50));
+    });
+
+    test('CameraTarget zoom 17 becomes SDK zoom 16', () {
+      // CameraTarget zooms use the 256 dp world of Google Maps and
+      // flutter_map; MapLibre's 512 px tiles show the same scale one level
+      // lower.
+      const target = CameraTarget(
+        position: GeoPoint(10.77, 106.69),
+        bearing: 0,
+        zoom: 17,
+        tilt: 0,
+      );
+      expect(src.toCameraPosition(target).zoom, 16);
     });
 
     test('camera updates before the map exists are dropped, not thrown', () {

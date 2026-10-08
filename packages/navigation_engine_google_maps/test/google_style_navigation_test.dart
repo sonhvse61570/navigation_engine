@@ -122,7 +122,7 @@ class Harness {
     WidgetBuilder? idleBuilder,
     VoidCallback? onEnd,
     GuidanceFormatter formatter = const EnglishGuidanceFormatter(),
-    GoogleStyleStrings strings = const GoogleStyleStrings(),
+    NavigationStrings strings = const NavigationStrings(),
     RouteColors? dayRouteColors,
     RouteColors? nightRouteColors,
     Widget puck = const CarPuck(),
@@ -176,7 +176,7 @@ class Harness {
     bool createView = true,
     Size size = const Size(400, 800),
     GuidanceFormatter formatter = const EnglishGuidanceFormatter(),
-    GoogleStyleStrings strings = const GoogleStyleStrings(),
+    NavigationStrings strings = const NavigationStrings(),
     RouteColors? dayRouteColors,
     RouteColors? nightRouteColors,
     Widget puck = const CarPuck(),
@@ -394,7 +394,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     final button = tester.getRect(find.byType(GoogleStyleRecenterButton));
     final footer = tester.getRect(find.byType(GoogleStyleTripFooter));
-    expect(button.bottom, closeTo(footer.top - 16, 1));
+    // At the bottom start (spec D7), stacked above the speedometer.
+    final speed = tester.getRect(find.byType(GoogleStyleSpeedometer));
+    expect(button.left, closeTo(16, 1));
+    expect(button.center.dx, lessThan(400 / 2));
+    expect(button.bottom, lessThanOrEqualTo(speed.top));
+    expect(speed.bottom, closeTo(footer.top - 16, 1));
     await tester.tap(find.text('Re-center'));
     await tester.pump(const Duration(milliseconds: 16));
     expect(h.session.follow, isTrue);
@@ -565,12 +570,17 @@ void main() {
     expect(h.flow.paddingSets, sets, reason: 'no change, no set');
     expect(h.platform.cameraAnimations, hasLength(animations));
 
-    // A safe-area change that leaves the padding as it is: no set either.
+    // A side inset (final review I3): the routes keep clear of it; the
+    // panel keeps its size.
     tester.view.padding = const FakeViewPadding(left: 8);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
     expect(tester.getSize(find.byType(GoogleStyleOverviewPanel)), panel);
-    expect(h.flow.paddingSets, sets, reason: 'same padding, no set');
+    expect(h.flow.paddingSets, sets + 1);
+    expect(h.flow.overviewPadding.left, 32 + 8);
+    expect(h.flow.overviewPadding.right, 32);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(h.flow.paddingSets, sets + 1, reason: 'no change, no set');
 
     await h.flow.preview(from: route.points.first, to: route.points.last);
     expect(h.flow.state.value, isA<FlowError>());
@@ -578,7 +588,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     final error = tester.getSize(find.byType(GoogleStyleOverviewPanel));
     expect(error.height, isNot(closeTo(panel.height, 1)));
-    expect(h.flow.paddingSets, sets + 1);
+    expect(h.flow.paddingSets, sets + 2);
     expect(h.flow.overviewPadding.bottom, closeTo(error.height + 32, 1));
   }, provider: () => _FailingRouteProvider());
 
@@ -754,7 +764,7 @@ void main() {
       const night = GoogleStyleColors.night;
       expect(h.polylineColor('navigation_engine_option_0'), night.accent);
       expect(h.polylineColor('navigation_engine_option_1'), night.alternative);
-      expect(h.map.labelColors, same(night));
+      expect(h.map.labelColors, night.routeLabelColors);
 
       await h.startDriving(tester);
       expect(h.polylineColor('navigation_engine_ahead'), night.accent);
@@ -769,7 +779,7 @@ void main() {
       const day = GoogleStyleColors.day;
       expect(h.polylineColor('navigation_engine_ahead'), day.accent);
       expect(h.map.routeColors.driven, day.alternative);
-      expect(h.map.labelColors, same(day));
+      expect(h.map.labelColors, day.routeLabelColors);
     });
 
     navTest('nightRouteColors override the night default', (tester, h) async {
@@ -834,12 +844,12 @@ void main() {
     (
       'English',
       const EnglishGuidanceFormatter() as GuidanceFormatter,
-      const GoogleStyleStrings(),
+      const NavigationStrings(),
     ),
     (
       'Vietnamese',
       const VietnameseGuidanceFormatter(),
-      const GoogleStyleStrings.vietnamese(),
+      const NavigationStrings.vietnamese(),
     ),
   ]) {
     navTest('navigating at 2x text on 320 dp ($name) (I5)', (tester, h) async {
@@ -860,6 +870,51 @@ void main() {
       expect(find.byType(GoogleStyleSpeedometer), findsOneWidget);
       expect(tester.takeException(), isNull, reason: 'navigating');
     });
+
+    for (final scale in [1.0, 1.3]) {
+      navTest('844x390 landscape with insets, ${scale}x text ($name)', (
+        tester,
+        h,
+      ) async {
+        const insets = FakeViewPadding(left: 47, right: 47, bottom: 21);
+        tester.view
+          ..padding = insets
+          ..viewPadding = insets;
+        await h.mount(
+          tester,
+          size: const Size(844, 390),
+          textScaler: TextScaler.linear(scale),
+          formatter: formatter,
+          strings: strings,
+        );
+        h.flow.previewRoutes([route]);
+        await tester.pump();
+        await h.startDriving(tester, start: strings.start);
+        expect(h.flow.state.value, isA<FlowNavigating>());
+        h.session.follow = false;
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(tester.takeException(), isNull);
+        const safe = Rect.fromLTRB(47, 0, 844 - 47, 390 - 21);
+        bool inside(Rect r) =>
+            r.left >= safe.left - 0.5 &&
+            r.top >= safe.top - 0.5 &&
+            r.right <= safe.right + 0.5 &&
+            r.bottom <= safe.bottom + 0.5;
+        final speed = tester.getRect(find.byType(GoogleStyleSpeedometer));
+        final recenter = tester.getRect(find.byType(GoogleStyleRecenterButton));
+        final footer = tester.getRect(find.byType(GoogleStyleTripFooter));
+        final bar = tester.getRect(find.byType(GoogleStyleTripProgressBar));
+        expect(inside(speed), isTrue, reason: 'speed $speed');
+        expect(inside(recenter), isTrue, reason: 'recenter $recenter');
+        expect(inside(bar), isTrue, reason: 'progress bar $bar');
+        expect(recenter.height, greaterThanOrEqualTo(48));
+        expect(recenter.overlaps(speed), isFalse, reason: '$recenter');
+        expect(recenter.overlaps(footer), isFalse, reason: '$recenter');
+        expect(speed.overlaps(footer), isFalse, reason: '$speed');
+      });
+    }
   }
 
   navTest('the step sheet closes on arrival (M8)', (tester, h) async {

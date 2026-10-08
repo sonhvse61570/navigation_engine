@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'google_style_colors.dart';
-import 'google_style_strings.dart';
+
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// The pill that brings the camera back to the vehicle after the driver has
 /// moved the map.
@@ -10,7 +11,7 @@ class GoogleStyleRecenterButton extends StatelessWidget {
   const GoogleStyleRecenterButton({
     super.key,
     required this.onPressed,
-    this.strings = const GoogleStyleStrings(),
+    this.strings = const NavigationStrings(),
     this.colors = GoogleStyleColors.day,
   });
 
@@ -18,7 +19,7 @@ class GoogleStyleRecenterButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   /// The words of the button.
-  final GoogleStyleStrings strings;
+  final NavigationStrings strings;
 
   /// The colours of the button.
   final GoogleStyleColors colors;

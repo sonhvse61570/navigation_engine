@@ -60,12 +60,12 @@ void main() {
     (
       'English',
       const EnglishGuidanceFormatter() as GuidanceFormatter,
-      const GoogleStyleStrings(),
+      const NavigationStrings(),
     ),
     (
       'Vietnamese',
       const VietnameseGuidanceFormatter(),
-      const GoogleStyleStrings.vietnamese(),
+      const NavigationStrings.vietnamese(),
     ),
   ]) {
     group('2x text at 320 dp ($name)', () {

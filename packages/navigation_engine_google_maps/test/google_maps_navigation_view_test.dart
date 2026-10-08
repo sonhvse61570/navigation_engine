@@ -480,13 +480,13 @@ void main() {
     addTearDown(session.dispose);
     await tester.pumpWidget(app(session));
     final map = session.map! as GoogleMapsNavigationMap;
-    expect(map.labelColors, same(GoogleStyleColors.day));
+    expect(map.labelColors, GoogleStyleColors.day.routeLabelColors);
 
     await tester.pumpWidget(app(session, labelColors: GoogleStyleColors.night));
-    expect(map.labelColors, same(GoogleStyleColors.night));
+    expect(map.labelColors, GoogleStyleColors.night.routeLabelColors);
 
     await tester.pumpWidget(app(session));
-    expect(map.labelColors, same(GoogleStyleColors.night));
+    expect(map.labelColors, GoogleStyleColors.night.routeLabelColors);
   });
 
   testWidgets('routeLabel and onRouteOptionTap are forwarded', (tester) async {

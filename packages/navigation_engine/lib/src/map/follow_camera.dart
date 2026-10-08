@@ -27,6 +27,11 @@ class FollowCamera {
   /// Seconds; time constant of the zoom smoothing.
   final double zoomTau;
 
+  /// Whether the map rotates to the vehicle's heading and tilts. When false
+  /// the camera stays north-up and flat, and the zoom logic is unchanged.
+  /// Changing it does not reset the zoom smoothing.
+  bool headingUp = true;
+
   double? _zoom;
 
   /// The zoom the camera settles at for [speed] m/s.
@@ -46,9 +51,9 @@ class FollowCamera {
     _zoom = zoom;
     return CameraTarget(
       position: frame.position,
-      bearing: frame.bearing,
+      bearing: headingUp ? frame.bearing : 0,
       zoom: zoom,
-      tilt: tilt,
+      tilt: headingUp ? tilt : 0,
     );
   }
 

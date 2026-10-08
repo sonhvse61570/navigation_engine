@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -352,6 +353,74 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('Recenter'), findsOneWidget);
+  });
+
+  group('the puck while following', () {
+    // Due east along a parallel: the frame's bearing is 90.
+    final east = NavRoute.fromPoints(const [
+      GeoPoint(21, 105.80),
+      GeoPoint(21, 105.82),
+    ]);
+
+    /// The rotation (radians, clockwise) of the transform nearest the puck.
+    double puckAngle(WidgetTester tester) {
+      final transform = tester.widget<Transform>(
+        find
+            .ancestor(
+              of: find.byType(CarPuck),
+              matching: find.byType(Transform),
+            )
+            .first,
+      );
+      final m = transform.transform.storage;
+      return math.atan2(m[1], m[0]);
+    }
+
+    Future<void> drive(WidgetTester tester, {required bool headingUp}) async {
+      source = FakeFixSource();
+      map = FakeMap();
+      session = NavigationSession(fixes: source, map: map)
+        ..camera.headingUp = headingUp
+        ..start(route: east);
+      addTearDown(session.dispose);
+      await tester.pumpWidget(frame());
+      source.add(
+        NavFix(
+          position: east.pointAt(300),
+          accuracy: 5,
+          speed: 10,
+          heading: 90,
+          time: DateTime.now(),
+        ),
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(session.frame!.bearing, closeTo(90, 0.5));
+    }
+
+    testWidgets('heading up: the puck is not rotated', (tester) async {
+      await drive(tester, headingUp: true);
+      expect(puckAngle(tester), closeTo(0, 1e-9));
+    });
+
+    testWidgets('north up: the puck points the vehicle\'s way', (tester) async {
+      await drive(tester, headingUp: false);
+      expect(puckAngle(tester), closeTo(math.pi / 2, 0.01));
+    });
+
+    testWidgets('toggling heading up mid-drive turns the puck within a frame', (
+      tester,
+    ) async {
+      await drive(tester, headingUp: true);
+      expect(puckAngle(tester), closeTo(0, 1e-9));
+      session.camera.headingUp = false;
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(puckAngle(tester), closeTo(math.pi / 2, 0.01));
+      session.camera.headingUp = true;
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(puckAngle(tester), closeTo(0, 1e-9));
+    });
   });
 
   testWidgets('the recenter tooltip is configurable', (tester) async {

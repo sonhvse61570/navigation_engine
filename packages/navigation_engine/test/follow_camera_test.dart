@@ -8,6 +8,13 @@ void main() {
     speed: speed,
   );
 
+  MotionFrame frameAt({required double bearing, required double speed}) =>
+      MotionFrame(
+        position: const GeoPoint(10.77, 106.69),
+        bearing: bearing,
+        speed: speed,
+      );
+
   test('zoomFor: close in when slow, wider when fast, clamped', () {
     final c = FollowCamera();
     expect(c.zoomFor(0), 18.2);
@@ -50,5 +57,17 @@ void main() {
     final c = FollowCamera()..update(frame(0), 1 / 60);
     c.reset();
     expect(c.update(frame(22), 1 / 60).zoom, 16.6);
+  });
+
+  test('north-up returns bearing 0 and no tilt', () {
+    final cam = FollowCamera()..headingUp = false;
+    final t = cam.update(frameAt(bearing: 135, speed: 10), 0.1);
+    expect(t.bearing, 0);
+    expect(t.tilt, 0);
+  });
+
+  test('heading-up follows the frame bearing (default)', () {
+    final t = FollowCamera().update(frameAt(bearing: 135, speed: 10), 0.1);
+    expect(t.bearing, closeTo(135, 1e-9));
   });
 }

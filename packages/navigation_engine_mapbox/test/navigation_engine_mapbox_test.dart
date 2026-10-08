@@ -10,6 +10,8 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'package:navigation_engine_mapbox/src/mapbox_navigation_map.dart' as mba;
 
+import 'support/recording_backend.dart';
+
 const _target = CameraTarget(
   position: GeoPoint(10.77, 106.69),
   bearing: 42,
@@ -21,117 +23,6 @@ const _a = GeoPoint(10, 106);
 const _b = GeoPoint(10.001, 106.001);
 
 typedef _Map = mba.MapboxNavigationMap;
-
-/// A backend that records what the adapter sends and can be told to fail
-/// or to hold a call back. Adding a source or layer twice fails the way the
-/// native SDK does.
-class RecordingBackend implements mba.MapboxBackend {
-  final calls = <(String, Object?)>[];
-  final _sources = <String>{};
-  final _layers = <String>{};
-
-  /// Held back until completed; consumed by the first addImage call.
-  Completer<void>? addImageGate;
-
-  /// Methods that throw once, by name.
-  final failOnce = <String>{};
-
-  /// A layer id whose add throws once (before the layer is added).
-  String? failLayerOnce;
-
-  /// A new style: the sources and layers added so far are gone.
-  void resetStyle() {
-    _sources.clear();
-    _layers.clear();
-  }
-
-  Iterable<String> get names => calls.map((c) => c.$1);
-  Iterable<Object?> argsOf(String name) =>
-      calls.where((c) => c.$1 == name).map((c) => c.$2);
-
-  Future<void> _record(String name, Object? arg) async {
-    calls.add((name, arg));
-    await Future<void>.delayed(Duration.zero);
-    if (failOnce.remove(name)) {
-      throw PlatformException(code: 'Throwable', message: '$name failed');
-    }
-  }
-
-  @override
-  Future<void> updateCompass(mb.CompassSettings settings) =>
-      _record('updateCompass', settings);
-
-  @override
-  Future<void> updateScaleBar(mb.ScaleBarSettings settings) =>
-      _record('updateScaleBar', settings);
-
-  @override
-  Future<void> addImage(
-    String imageId,
-    double scale,
-    mb.StyleImage image,
-  ) async {
-    final gate = addImageGate;
-    addImageGate = null;
-    await _record('addImage', (imageId, scale, image));
-    if (gate != null) await gate.future;
-  }
-
-  @override
-  Future<void> addGeoJsonSource(String sourceId, String data) async {
-    await _record('addGeoJsonSource', sourceId);
-    if (!_sources.add(sourceId)) {
-      throw PlatformException(
-        code: 'Throwable',
-        message: 'Source $sourceId already exists.',
-      );
-    }
-  }
-
-  @override
-  Future<void> addLayer(mb.Layer layer) async {
-    await _record('addLayer', layer);
-    if (layer.id == failLayerOnce) {
-      failLayerOnce = null;
-      throw PlatformException(code: 'Throwable', message: 'layer failed');
-    }
-    if (!_layers.add(layer.id)) {
-      throw PlatformException(
-        code: 'Throwable',
-        message: 'Layer ${layer.id} already exists.',
-      );
-    }
-  }
-
-  @override
-  Future<void> updateLayer(mb.Layer layer) => _record('updateLayer', layer);
-
-  @override
-  Future<bool> styleSourceExists(String sourceId) async {
-    await _record('styleSourceExists', sourceId);
-    return _sources.contains(sourceId);
-  }
-
-  @override
-  Future<bool> styleLayerExists(String layerId) async {
-    await _record('styleLayerExists', layerId);
-    return _layers.contains(layerId);
-  }
-
-  @override
-  Future<void> setStyleSourceProperty(
-    String sourceId,
-    String property,
-    Object value,
-  ) => _record('setStyleSourceProperty', (sourceId, property, value));
-
-  @override
-  Future<void> loadStyleURI(String uri) => _record('loadStyleURI', uri);
-
-  @override
-  Future<void> setCamera(mb.CameraOptions options) =>
-      _record('setCamera', options);
-}
 
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 20));
@@ -188,8 +79,29 @@ void main() {
       final o = mba.toCameraOptions(_target, const EdgeInsets.only(top: 320));
       expect(o.center!.coordinates.lng, 106.69);
       expect(o.center!.coordinates.lat, 10.77);
-      expect((o.bearing, o.zoom, o.pitch), (42, 17.5, 50));
+      // One zoom level less: see the zoom scale test below.
+      expect((o.bearing, o.zoom, o.pitch), (42, 16.5, 50));
       expect((o.padding!.top, o.padding!.bottom), (320, 0));
+    });
+
+    test('CameraTarget zoom 17 becomes SDK zoom 16', () {
+      // CameraTarget zooms use the 256 dp world of Google Maps and
+      // flutter_map; Mapbox's 512 px tiles show the same scale one level
+      // lower.
+      const target = CameraTarget(
+        position: GeoPoint(10.77, 106.69),
+        bearing: 0,
+        zoom: 17,
+        tilt: 0,
+      );
+      expect(mba.toCameraOptions(target, EdgeInsets.zero).zoom, 16);
+    });
+
+    test('the initial zoom 17 becomes SDK zoom 16', () {
+      final v = mba.toInitialViewport(const GeoPoint(10.77, 106.69), 17);
+      expect(v.zoom, 16);
+      expect(v.center!.coordinates.lng, 106.69);
+      expect(v.center!.coordinates.lat, 10.77);
     });
 
     test('updates before the map exists are kept, not thrown', () async {
@@ -215,7 +127,7 @@ void main() {
       final o = backend.argsOf('setCamera').cast<mb.CameraOptions>().single;
       expect(backend.names, ['setCamera']);
       expect(o.center!.coordinates.lng, 106.69);
-      expect((o.bearing, o.zoom, o.pitch), (42, 17.5, 50));
+      expect((o.bearing, o.zoom, o.pitch), (42, 16.5, 50));
       expect((o.padding!.top, o.padding!.bottom), (100, 0));
     });
 
@@ -240,6 +152,70 @@ void main() {
             .enabled,
         isFalse,
       );
+    });
+
+    group('the logo and the attribution (I4)', () {
+      List<double?> logoMargins(RecordingBackend backend) => [
+        for (final s in backend.argsOf('updateLogo').cast<mb.LogoSettings>())
+          s.marginBottom,
+      ];
+      List<double?> attributionMargins(RecordingBackend backend) => [
+        for (final s
+            in backend
+                .argsOf('updateAttribution')
+                .cast<mb.AttributionSettings>())
+          s.marginBottom,
+      ];
+
+      test('placeOrnaments puts them 8 above bottomInset', () async {
+        final map = _Map()..bottomInset = 100;
+        final (_, backend) = _mapOnBackend(map: map);
+        await _settle();
+        expect(backend.calls, isEmpty, reason: 'only when placed');
+        map.placeOrnaments();
+        await _settle();
+        expect(backend.names, ['updateLogo', 'updateAttribution']);
+        expect(logoMargins(backend), [108]);
+        expect(attributionMargins(backend), [108]);
+      });
+
+      test('a new bottomInset places them again', () async {
+        final (map, backend) = _mapOnBackend();
+        map.placeOrnaments();
+        await _settle();
+        expect(logoMargins(backend), [8]);
+        map.bottomInset = 140;
+        await _settle();
+        expect(logoMargins(backend), [8, 148]);
+        expect(attributionMargins(backend), [8, 148]);
+        map.bottomInset = 140;
+        await _settle();
+        expect(logoMargins(backend), [8, 148], reason: 'no change');
+      });
+
+      test('before the map exists nothing is sent', () async {
+        final map = _Map()
+          ..bottomInset = 60
+          ..placeOrnaments();
+        final (_, backend) = _mapOnBackend(map: map);
+        await _settle();
+        expect(backend.calls, isEmpty);
+      });
+
+      test('a failing update does not escape', () async {
+        late RecordingBackend backend;
+        final errors = await _escaped(() async {
+          final _Map map;
+          (map, backend) = _mapOnBackend(
+            backend: RecordingBackend()
+              ..failOnce.addAll(['updateLogo', 'updateAttribution']),
+          );
+          map.placeOrnaments();
+          await _settle();
+        });
+        expect(errors, isEmpty);
+        expect(backend.names, ['updateLogo', 'updateAttribution']);
+      });
     });
 
     test('hideOrnaments before the map exists does nothing', () async {
