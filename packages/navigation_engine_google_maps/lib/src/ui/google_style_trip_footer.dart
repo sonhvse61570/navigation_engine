@@ -3,7 +3,6 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_style_colors.dart';
-import 'google_style_strings.dart';
 
 /// The bottom card of the navigation screen: the time left, the distance and
 /// the arrival time, and the end, steps and overview buttons.
@@ -14,7 +13,7 @@ class GoogleStyleTripFooter extends StatelessWidget {
     required this.progress,
     this.rerouting = false,
     this.formatter = const EnglishGuidanceFormatter(),
-    this.strings = const GoogleStyleStrings(),
+    this.strings = const NavigationStrings(),
     this.colors = GoogleStyleColors.day,
     this.onEnd,
     this.onSteps,
@@ -32,7 +31,7 @@ class GoogleStyleTripFooter extends StatelessWidget {
   final GuidanceFormatter formatter;
 
   /// The words of the footer.
-  final GoogleStyleStrings strings;
+  final NavigationStrings strings;
 
   /// The colours of the footer.
   final GoogleStyleColors colors;

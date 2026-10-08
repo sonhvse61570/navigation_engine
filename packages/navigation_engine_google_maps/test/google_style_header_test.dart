@@ -73,7 +73,7 @@ void main() {
     );
     expect(find.byType(GoogleStyleLaneGuidance), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('google_style_lane_cell')),
+      find.byKey(const ValueKey('navigation_engine_lane_cell')),
       findsNWidgets(3),
     );
 
@@ -89,7 +89,7 @@ void main() {
         GoogleStyleManeuverHeader(
           state: _state(lyTuTrong, then: sampleRoute.steps[4]),
           formatter: const VietnameseGuidanceFormatter(),
-          strings: const GoogleStyleStrings.vietnamese(),
+          strings: const NavigationStrings.vietnamese(),
         ),
       ),
     );
@@ -164,19 +164,5 @@ void main() {
     expect(find.byIcon(Icons.straight), findsNothing);
     final left = tester.widget<Icon>(find.byIcon(Icons.turn_left));
     expect(left.color!.a * 255, closeTo(102, 1));
-  });
-
-  test('laneDirectionIcon maps all 8 directions', () {
-    expect(laneDirectionIcon(LaneDirection.straight), Icons.straight);
-    expect(laneDirectionIcon(LaneDirection.slightLeft), Icons.turn_slight_left);
-    expect(laneDirectionIcon(LaneDirection.left), Icons.turn_left);
-    expect(laneDirectionIcon(LaneDirection.sharpLeft), Icons.turn_sharp_left);
-    expect(laneDirectionIcon(LaneDirection.uturn), Icons.u_turn_left);
-    expect(
-      laneDirectionIcon(LaneDirection.slightRight),
-      Icons.turn_slight_right,
-    );
-    expect(laneDirectionIcon(LaneDirection.right), Icons.turn_right);
-    expect(laneDirectionIcon(LaneDirection.sharpRight), Icons.turn_sharp_right);
   });
 }

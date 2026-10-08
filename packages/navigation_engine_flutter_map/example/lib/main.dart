@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
 
 import 'package:navigation_engine_flutter_map/navigation_engine_flutter_map.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
+
+import 'neutral_demo.dart';
 
 void main() {
   runApp(
@@ -70,6 +71,19 @@ class _DrivingScreenState extends State<DrivingScreen> {
             child: NavigationBanner(
               session: _session,
               showLastAnnouncement: true,
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 96,
+            right: 12,
+            child: FilledButton.tonalIcon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const NeutralDemoScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.navigation_outlined),
+              label: const Text('Styled UI'),
             ),
           ),
         ],

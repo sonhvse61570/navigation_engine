@@ -1,0 +1,62 @@
+import 'package:flutter/material.dart';
+import 'package:navigation_engine/navigation_engine.dart';
+
+import 'lane_direction_icon.dart';
+
+/// A row of lane arrows before a manoeuvre, shared by the styled banners. A
+/// valid lane shows its active arrow at full [color]; an invalid lane shows
+/// all its arrows dimmed. Each lane is a 32×36 cell keyed
+/// `ValueKey('navigation_engine_lane_cell')`; the row wraps when the lanes
+/// do not fit.
+class LaneGuidanceRow extends StatelessWidget {
+  /// Creates the lane arrows for [lanes], left to right.
+  const LaneGuidanceRow({super.key, required this.lanes, required this.color});
+
+  /// The lanes before the manoeuvre, left to right.
+  final List<Lane> lanes;
+
+  /// The arrow colour.
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      children: [for (final lane in lanes) _LaneCell(lane: lane, color: color)],
+    );
+  }
+}
+
+class _LaneCell extends StatelessWidget {
+  const _LaneCell({required this.lane, required this.color});
+
+  final Lane lane;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget arrows;
+    if (lane.valid && (lane.active != null || lane.directions.isNotEmpty)) {
+      arrows = Icon(
+        laneDirectionIcon(lane.active ?? lane.directions.first),
+        size: 28,
+        color: color,
+      );
+    } else {
+      final dimmed = color.withValues(alpha: 0.4);
+      arrows = Stack(
+        alignment: Alignment.center,
+        children: [
+          for (final d in lane.directions)
+            Icon(laneDirectionIcon(d), size: 28, color: dimmed),
+        ],
+      );
+    }
+    return SizedBox(
+      key: const ValueKey('navigation_engine_lane_cell'),
+      width: 32,
+      height: 36,
+      child: Center(child: arrows),
+    );
+  }
+}

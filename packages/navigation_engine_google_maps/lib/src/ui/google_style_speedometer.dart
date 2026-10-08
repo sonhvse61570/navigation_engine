@@ -3,7 +3,6 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_style_colors.dart';
-import 'google_style_strings.dart';
 
 const _signRed = Color(0xFFD93025);
 
@@ -16,9 +15,11 @@ class GoogleStyleSpeedometer extends StatelessWidget {
     super.key,
     required this.info,
     this.sign = SpeedLimitSign.circular,
-    this.strings = const GoogleStyleStrings(),
+    this.strings = const NavigationStrings(),
     this.colors = GoogleStyleColors.day,
     this.formatter = const EnglishGuidanceFormatter(),
+    this.showSpeed = true,
+    this.showLimit = true,
   });
 
   /// The speed and the limit, in metres per second.
@@ -28,7 +29,7 @@ class GoogleStyleSpeedometer extends StatelessWidget {
   final SpeedLimitSign sign;
 
   /// The words of the sign.
-  final GoogleStyleStrings strings;
+  final NavigationStrings strings;
 
   /// The colours of the bubble.
   final GoogleStyleColors colors;
@@ -36,9 +37,15 @@ class GoogleStyleSpeedometer extends StatelessWidget {
   /// Formats the speed, the limit and the unit.
   final GuidanceFormatter formatter;
 
+  /// Whether the current speed bubble shows.
+  final bool showSpeed;
+
+  /// Whether the speed limit sign shows (when the limit is known).
+  final bool showLimit;
+
   @override
   Widget build(BuildContext context) {
-    final limit = info.limit;
+    final limit = showLimit ? info.limit : null;
     final textColor = info.isOverLimit ? colors.warning : colors.onSurface;
 
     return Row(
@@ -51,50 +58,51 @@ class GoogleStyleSpeedometer extends StatelessWidget {
             sign: sign,
             speedLimit: strings.speedLimit,
           ),
-          const SizedBox(width: 8),
+          if (showSpeed) const SizedBox(width: 8),
         ],
-        Material(
-          color: colors.surface,
-          elevation: 4,
-          shape: const CircleBorder(),
-          child: SizedBox(
-            width: 56,
-            height: 56,
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              // Large text shrinks to fit the circle.
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      formatter.speedValue(info.speed),
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        height: 1.1,
+        if (showSpeed)
+          Material(
+            color: colors.surface,
+            elevation: 4,
+            shape: const CircleBorder(),
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                // Large text shrinks to fit the circle.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatter.speedValue(info.speed),
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          height: 1.1,
+                        ),
                       ),
-                    ),
-                    Text(
-                      formatter.speedUnit,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 10,
-                        height: 1,
+                      Text(
+                        formatter.speedUnit,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 10,
+                          height: 1,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -215,8 +215,8 @@ void main() {
   }
 
   for (final (name, strings) in [
-    ('English', const GoogleStyleStrings()),
-    ('Vietnamese', const GoogleStyleStrings.vietnamese()),
+    ('English', const NavigationStrings()),
+    ('Vietnamese', const NavigationStrings.vietnamese()),
   ]) {
     testWidgets(
       'rectangular sign keeps its font sizes and does not overflow ($name)',

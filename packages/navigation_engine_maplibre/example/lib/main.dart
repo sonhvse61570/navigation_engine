@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
-import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
 
 import 'package:navigation_engine_maplibre/navigation_engine_maplibre.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
+
+import 'maplibre_style_demo.dart';
 
 void main() {
   // Android: draw the map in a texture so Flutter widgets (the vehicle puck)
@@ -75,6 +76,19 @@ class _DrivingScreenState extends State<DrivingScreen> {
             child: NavigationBanner(
               session: _session,
               showLastAnnouncement: true,
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 96,
+            right: 12,
+            child: FilledButton.tonalIcon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const MapLibreStyleDemoScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.navigation_outlined),
+              label: const Text('Mapbox-style UI'),
             ),
           ),
         ],

@@ -4,7 +4,6 @@ import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_style_colors.dart';
 import 'google_style_lane_guidance.dart';
-import 'google_style_strings.dart';
 
 /// The green turn card at the top of the navigation screen: the next
 /// manoeuvre, the distance to it, the road, the lanes and, when it follows
@@ -15,7 +14,7 @@ class GoogleStyleManeuverHeader extends StatelessWidget {
     super.key,
     required this.state,
     this.formatter = const EnglishGuidanceFormatter(),
-    this.strings = const GoogleStyleStrings(),
+    this.strings = const NavigationStrings(),
     this.colors = GoogleStyleColors.day,
   });
 
@@ -26,7 +25,7 @@ class GoogleStyleManeuverHeader extends StatelessWidget {
   final GuidanceFormatter formatter;
 
   /// The words of the card.
-  final GoogleStyleStrings strings;
+  final NavigationStrings strings;
 
   /// The colours of the card.
   final GoogleStyleColors colors;

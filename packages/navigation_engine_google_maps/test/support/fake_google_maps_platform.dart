@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart'
     as gmp;
 
@@ -198,4 +199,11 @@ class FakeGoogleMapsPlatform extends gmp.GoogleMapsFlutterPlatform {
   @override
   Stream<gmp.GroundOverlayTapEvent> onGroundOverlayTap({required int mapId}) =>
       const Stream.empty();
+}
+
+/// Makes `GoogleMap` use [platform] until the end of the test.
+void installFakeGoogleMapsPlatform(FakeGoogleMapsPlatform platform) {
+  final previous = gmp.GoogleMapsFlutterPlatform.instance;
+  gmp.GoogleMapsFlutterPlatform.instance = platform;
+  addTearDown(() => gmp.GoogleMapsFlutterPlatform.instance = previous);
 }

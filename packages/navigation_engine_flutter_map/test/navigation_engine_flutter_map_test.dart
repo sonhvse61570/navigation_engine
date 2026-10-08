@@ -7,7 +7,6 @@ import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'package:navigation_engine_flutter_map/navigation_engine_flutter_map.dart';
 import 'package:navigation_engine_flutter_map/src/flutter_map_navigation_map.dart'
     show toLatLng;

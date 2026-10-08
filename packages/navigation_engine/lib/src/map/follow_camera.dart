@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../motion/motion_engine.dart';
 import '../motion/motion_frame.dart';
 import 'camera_target.dart';
@@ -27,6 +29,32 @@ class FollowCamera {
   /// Seconds; time constant of the zoom smoothing.
   final double zoomTau;
 
+  /// Whether the map rotates to the vehicle's heading and tilts. When false
+  /// the camera stays north-up and flat, and the zoom logic is unchanged.
+  /// Changing it does not reset the zoom smoothing. Each change is also
+  /// emitted on [headingUpChanges].
+  bool get headingUp => _headingUp;
+  set headingUp(bool value) {
+    if (value == _headingUp) return;
+    _headingUp = value;
+    if (!_headingUpChanges.isClosed) _headingUpChanges.add(value);
+  }
+
+  bool _headingUp = true;
+  final _headingUpChanges = StreamController<bool>.broadcast();
+
+  /// The new value of [headingUp] each time it changes (setting the same
+  /// value emits nothing), so a UI such as a compass can show it without
+  /// waiting for a frame. Ends with [dispose].
+  Stream<bool> get headingUpChanges => _headingUpChanges.stream;
+
+  /// Ends [headingUpChanges]; the camera still works. A
+  /// `NavigationSession` disposes the camera it created itself; a camera
+  /// passed to it belongs to the caller.
+  void dispose() {
+    if (!_headingUpChanges.isClosed) unawaited(_headingUpChanges.close());
+  }
+
   double? _zoom;
 
   /// The zoom the camera settles at for [speed] m/s.
@@ -46,9 +74,9 @@ class FollowCamera {
     _zoom = zoom;
     return CameraTarget(
       position: frame.position,
-      bearing: frame.bearing,
+      bearing: headingUp ? frame.bearing : 0,
       zoom: zoom,
-      tilt: tilt,
+      tilt: headingUp ? tilt : 0,
     );
   }
 

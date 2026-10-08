@@ -3,8 +3,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 
-/// The navigation arrow, pointing up (the camera rotates the map to the
-/// vehicle's heading, so up is the direction of travel).
+/// The navigation arrow, pointing up. [NavigationMapFrame] turns it by the
+/// vehicle's bearing minus the camera's: while the camera is heading up the
+/// map turns and the arrow stays up (the direction of travel); while it is
+/// north up the arrow turns to the vehicle's bearing.
 class CarPuck extends StatelessWidget {
   const CarPuck({super.key, this.size = 44, this.color = defaultColor});
 

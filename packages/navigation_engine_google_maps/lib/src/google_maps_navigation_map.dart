@@ -4,12 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
-import 'fit_camera.dart';
 import 'ui/google_style_colors.dart';
-import 'ui/route_label.dart';
 
 LatLng toLatLng(GeoPoint p) => LatLng(p.lat, p.lng);
 
@@ -154,30 +151,29 @@ class GoogleMapsNavigationMap
   double labelPixelRatio = 3;
 
   /// Renders a label bubble as PNG bytes in [labelColors] (passed as
-  /// `colors`). It defaults to [paintRouteLabel] with the selected bubble in
-  /// `accent` / `onAccent` and the others in `surface` / `onSurface`; tests
-  /// replace it to control when (and whether) a render finishes.
+  /// `colors`). It defaults to [paintRouteLabel]; tests replace it to control
+  /// when (and whether) a render finishes.
   Future<Uint8List> Function(
     String text, {
     required bool selected,
     required double pixelRatio,
-    required GoogleStyleColors colors,
+    required RouteLabelColors colors,
   })?
   labelPainter;
 
-  GoogleStyleColors _labelColors = GoogleStyleColors.day;
+  // The Google-style day label colours (`GoogleStyleColors.day`).
+  RouteLabelColors _labelColors = const RouteLabelColors(
+    border: Color(0x33202124),
+  );
 
-  /// The colours of the label bubbles (see [labelPainter]). Changing them
+  /// The colours of the label bubbles (see [labelPainter]), by default the
+  /// Google-style day ones. Changing them
   /// while options are shown renders the labels again; the old bubbles stay
   /// until the new ones are ready.
-  GoogleStyleColors get labelColors => _labelColors;
-  set labelColors(GoogleStyleColors value) {
+  RouteLabelColors get labelColors => _labelColors;
+  set labelColors(RouteLabelColors value) {
     final old = _labelColors;
-    if (identical(value, old) ||
-        (value.accent == old.accent &&
-            value.onAccent == old.onAccent &&
-            value.surface == old.surface &&
-            value.onSurface == old.onSurface)) {
+    if (value == old) {
       _labelColors = value;
       return;
     }
@@ -217,9 +213,9 @@ class GoogleMapsNavigationMap
   List<NavRoute>? _shownRoutes;
   int _shownSelected = 0;
 
-  // Label images by (text, selected, pixel ratio, accent, onAccent, surface,
-  // onSurface), oldest first. The futures are kept, so a render still
-  // running is shared too.
+  // Label images by (text, selected, pixel ratio, colours), least recently
+  // used first. The futures are kept, so a render still running is shared
+  // too.
   final _labelImages = <_LabelKey, Future<Uint8List>>{};
 
   Size? _viewportSize;
@@ -349,19 +345,15 @@ class GoogleMapsNavigationMap
     String text,
     bool selected,
     double ratio,
-    GoogleStyleColors colors,
+    RouteLabelColors colors,
   ) {
-    final key = (
-      text,
-      selected,
-      ratio,
-      colors.accent,
-      colors.onAccent,
-      colors.surface,
-      colors.onSurface,
-    );
-    final cached = _labelImages[key];
-    if (cached != null) return cached;
+    final key = (text, selected, ratio, colors);
+    final cached = _labelImages.remove(key);
+    if (cached != null) {
+      // Used again: it moves to the most recent end.
+      _labelImages[key] = cached;
+      return cached;
+    }
     final paint = labelPainter;
     final image = Future.sync(
       () => paint != null
@@ -370,10 +362,7 @@ class GoogleMapsNavigationMap
               text,
               selected: selected,
               pixelRatio: ratio,
-              selectedColor: colors.accent,
-              selectedTextColor: colors.onAccent,
-              color: colors.surface,
-              textColor: colors.onSurface,
+              colors: colors,
             ),
     );
     _labelImages[key] = image;
@@ -489,7 +478,7 @@ class GoogleMapsNavigationMap
 }
 
 /// The key of a cached label image.
-typedef _LabelKey = (String, bool, double, Color, Color, Color, Color);
+typedef _LabelKey = (String, bool, double, RouteLabelColors);
 
 /// A [GoogleMapsNavigationMap.fitRoutes] waiting for the map to be ready.
 class _PendingFit {

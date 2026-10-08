@@ -18,18 +18,21 @@ double _log2(double v) => math.log(v) / math.ln2;
 
 /// The camera that shows all of [points] inside [viewport] minus [padding].
 ///
-/// Uses a 256 dp Web Mercator world, as Google Maps does. The zoom is the
-/// largest one that fits the bounds in the padded rectangle, clamped to
-/// [minZoom]..[maxZoom] (a single point, or a degenerate bounds, gives
-/// [maxZoom]). The centre is shifted so the bounds sit in the middle of the
-/// padded rectangle, not of the whole view. Bearing and tilt are 0.
+/// Uses a 256 dp Web Mercator world (the zoom scale of [CameraTarget], as
+/// Google Maps and flutter_map use it; a map with 512 px tiles, such as
+/// MapLibre or Mapbox, shows the same framing one zoom level lower). The
+/// zoom is the largest one that fits the bounds in the padded rectangle,
+/// clamped to [minZoom]..[maxZoom] (a single point, or a degenerate bounds,
+/// gives [maxZoom]). The centre is shifted so the bounds sit in the middle
+/// of the padded rectangle, not of the whole view. Bearing and tilt are 0.
 ///
-/// [mapPadding] is the padding the map widget itself has (`GoogleMap.padding`,
-/// such as a navigation view's focus padding): the SDK puts the camera
-/// target at the centre of [viewport] minus [mapPadding], so the target is
-/// shifted to make the bounds centre show at the centre of [viewport] minus
-/// [padding] all the same. The zoom does not depend on it. In world dp at
-/// the fitted zoom, with y pointing down (south):
+/// [mapPadding] is the padding the map itself applies to its camera (such
+/// as a navigation view's focus padding, set on the map widget or its
+/// camera): the map puts the camera target at the centre of [viewport]
+/// minus [mapPadding], so the target is shifted to make the bounds centre
+/// show at the centre of [viewport] minus [padding] all the same. The zoom
+/// does not depend on it. In world dp at the fitted zoom, with y pointing
+/// down (south):
 ///
 /// ```text
 /// target = boundsCentre

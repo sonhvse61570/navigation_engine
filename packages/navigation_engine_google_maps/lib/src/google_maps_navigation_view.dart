@@ -99,9 +99,10 @@ class GoogleMapsNavigationView extends StatefulWidget {
   final Color? alternativeRouteColor;
 
   /// The colours of the route option label bubbles: the selected one in
-  /// `accent` / `onAccent`, the others in `surface` / `onSurface`. When null
-  /// the map's own colours are kept ([GoogleStyleColors.day] by default);
-  /// when set, changes render the labels shown again.
+  /// `accent` / `onAccent`, the others in `surface` / `onSurface` (see
+  /// [GoogleStyleRouteLabelColors.routeLabelColors]). When null the map's own
+  /// colours are kept ([GoogleStyleColors.day] by default); when set, changes
+  /// render the labels shown again.
   final GoogleStyleColors? labelColors;
 
   @override
@@ -123,7 +124,7 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
     final alternative = widget.alternativeRouteColor;
     if (alternative != null) _map.alternativeColor = alternative;
     final labelColors = widget.labelColors;
-    if (labelColors != null) _map.labelColors = labelColors;
+    if (labelColors != null) _map.labelColors = labelColors.routeLabelColors;
   }
 
   @override

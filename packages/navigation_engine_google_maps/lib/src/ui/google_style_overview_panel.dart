@@ -5,7 +5,6 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_style_colors.dart';
-import 'google_style_strings.dart';
 
 /// The line height (a multiple of the font size) of the text of a route card.
 const double _lineHeight = 1.25;
@@ -34,7 +33,7 @@ class GoogleStyleOverviewPanel extends StatelessWidget {
     required this.state,
     this.tripOverview = false,
     this.formatter = const EnglishGuidanceFormatter(),
-    this.strings = const GoogleStyleStrings(),
+    this.strings = const NavigationStrings(),
     this.colors = GoogleStyleColors.day,
     this.onSelect,
     this.onStart,
@@ -55,7 +54,7 @@ class GoogleStyleOverviewPanel extends StatelessWidget {
   final GuidanceFormatter formatter;
 
   /// The words of the panel.
-  final GoogleStyleStrings strings;
+  final NavigationStrings strings;
 
   /// The colours of the panel.
   final GoogleStyleColors colors;
@@ -78,7 +77,7 @@ class GoogleStyleOverviewPanel extends StatelessWidget {
 
   /// Called when the close button of the route options is pressed; the
   /// button, at the top right of the panel, is hidden when null. Its tooltip
-  /// is [GoogleStyleStrings.cancel].
+  /// is [NavigationStrings.cancel].
   final VoidCallback? onClose;
 
   @override
