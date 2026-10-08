@@ -19,6 +19,7 @@ Run these from the repo root:
 ```sh
 dart format packages
 for p in packages/*/; do (cd "$p" && flutter analyze && flutter test); done
+tool/import_all_check.sh # every package in one app, no clash (after pub get)
 ```
 
 CI runs the same checks. Also:

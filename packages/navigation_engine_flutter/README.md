@@ -34,6 +34,8 @@ Use one of the adapters for a complete view:
   (`NavigationFlowActions`) and builds the map apart from progress ticks.
   `recenterAlignment` places the recenter button (bottom start by default,
   stacked above the speed); anywhere else it keeps above the speed's band.
+  The alignment is directional, so in a right-to-left app the button
+  mirrors (bottom end is the bottom left).
 - **Mapbox-style UI** — `MapboxStyleFlowScaffold` is the scaffold dressed
   with ready-made pieces, the screen of the adapters' drop-ins
   (`MapboxStyleNavigation`, `MapLibreStyleNavigation`, `NeutralNavigation`).
@@ -103,7 +105,8 @@ NavigationFlowScaffold(
     ),
   ),
   panelBuilder: (context, state, actions) => MyPanel(state, actions),
-  headerBuilder: (context, guidance) => MyTurnCard(guidance),
+  headerBuilder: (context, guidance, actions) =>
+      MyTurnCard(guidance, onTap: actions.showSteps),
   footerBuilder: (context, progress, rerouting, actions) =>
       MyFooter(progress, onEnd: actions.end),
   arrivalBuilder: (context, route, actions) => MyArrival(onDone: actions.end),

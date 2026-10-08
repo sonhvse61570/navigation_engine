@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_style_colors.dart';
-
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// The bottom card shown when the destination is reached: the arrival message,
 /// the last road and a done button.

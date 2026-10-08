@@ -278,20 +278,20 @@ class _FlutterMapNavigationViewState extends State<FlutterMapNavigationView> {
 
   /// The attribution, above [FlutterMapNavigationView.bottomInset]. What
   /// covers the bottom keeps its content above the bottom safe area, so the
-  /// safe area counts only without it.
+  /// safe area counts only without it. The wrappers are the same whatever
+  /// the inset, so an inset change keeps the attribution's state (an open
+  /// popup stays open).
   Widget _attribution(BuildContext context) {
-    final inset = widget.bottomInset;
-    final attribution = RichAttributionWidget(
-      alignment: AttributionAlignment.bottomLeft,
-      attributions: [TextSourceAttribution(widget.attribution)],
-    );
-    if (inset <= 0) return attribution;
+    final inset = math.max(0.0, widget.bottomInset);
     return Padding(
       padding: EdgeInsets.only(bottom: inset),
       child: MediaQuery.removePadding(
         context: context,
-        removeBottom: true,
-        child: attribution,
+        removeBottom: inset > 0,
+        child: RichAttributionWidget(
+          alignment: AttributionAlignment.bottomLeft,
+          attributions: [TextSourceAttribution(widget.attribution)],
+        ),
       ),
     );
   }

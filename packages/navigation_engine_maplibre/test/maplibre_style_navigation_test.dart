@@ -838,6 +838,9 @@ void main() {
     );
     expect(calls, hasLength(1));
     expect(calls.single.$2, 1, reason: 'config.onMapReady runs first');
+    // The very controller the adapter draws with.
+    final adapter = h.session.map! as MapLibreNavigationMap;
+    expect(calls.single.$1, same(adapter.controller));
     // The adapter's controller: route option taps on it select.
     h.platform.tapFeature(_Map.optionLayer(1));
     await tester.pump();

@@ -19,16 +19,18 @@ import 'trip_progress.dart';
 /// - loading, overview, error: [panelBuilder] at the bottom;
 /// - navigating: [headerBuilder] at the top, inside the safe area (once
 ///   there is guidance); [footerBuilder] at the bottom; [speedBuilder] at
-///   the bottom start, 16 above the footer; [topEndBuilder] below the header
+///   the bottom start, 16 above the footer or the bottom inset, whichever
+///   is higher; [topEndBuilder] below the header
 ///   on the end side; [edgeBuilder] on the start edge, between the header
 ///   and the footer;
 /// - arrived: [arrivalBuilder] at the bottom.
 ///
 /// While idle or navigating, once the camera stopped following the vehicle
 /// (the user moved the map), [recenterBuilder]'s button shows at
-/// [recenterAlignment]; at the bottom start it stacks above the speed (see
-/// [recenterAlignment] for the other alignments). The map's own recenter
-/// button should be off.
+/// [recenterAlignment]; at the bottom start it stacks above the speed, or
+/// sits beside it where the stack would reach into the header, and is
+/// hidden where neither fits (see [recenterAlignment], also for the other
+/// alignments). The map's own recenter button should be off.
 ///
 /// Every piece keeps inside the safe area ([MediaQuery.paddingOf]): the
 /// header slot and the pieces at the bottom take the insets of their edge,
@@ -36,8 +38,9 @@ import 'trip_progress.dart';
 /// insets (start and end follow the text direction). [footerBuilder],
 /// [panelBuilder] and [arrivalBuilder] sit on the bottom edge and keep
 /// their content above the bottom inset themselves (a [SafeArea]); the
-/// speed and the recenter button sit above them, or above the bottom inset
-/// when there is no footer.
+/// speed and the recenter button sit 16 above them or above the bottom
+/// inset, whichever is higher (a footer without a [SafeArea] lower than the
+/// inset counts as the inset).
 ///
 /// The pieces get [NavigationFlowActions], each guarded against stale
 /// state. The scaffold also:
@@ -103,8 +106,13 @@ class NavigationFlowScaffold extends StatefulWidget {
   panelBuilder;
 
   /// Builds the turn card at the top while navigating, once there is
-  /// guidance. It follows the session's guidance.
-  final Widget Function(BuildContext context, GuidanceState guidance)
+  /// guidance, with the guarded [NavigationFlowActions] (as
+  /// [topEndBuilder] gets them). It follows the session's guidance.
+  final Widget Function(
+    BuildContext context,
+    GuidanceState guidance,
+    NavigationFlowActions actions,
+  )
   headerBuilder;
 
   /// Builds the trip footer at the bottom while navigating.
@@ -169,15 +177,21 @@ class NavigationFlowScaffold extends StatefulWidget {
   /// cover the speed however wide that grows (large text, narrow screens).
   /// The region is at least 48 high (a touch target): when that does not
   /// fit above the speed's band, the button stacks above the speed at the
-  /// bottom start.
+  /// bottom start. At the bottom start, where the stack would reach into
+  /// the header (a low screen, landscape, large text), the button sits
+  /// beside the speed instead; where that does not fit either, it is hidden
+  /// rather than overlap; it stays laid out off stage, so it comes back once
+  /// it fits (a smaller text scale, a turn to portrait). The button is never
+  /// shrunk. Before its first layout it counts as a 48 square.
   final AlignmentDirectional recenterAlignment;
 
   /// The space between the routes and the panel, the screen's sides and the
   /// top safe area in the overview.
   final double overviewMargin;
 
-  /// The background of the step sheet, by day (false) or night (true), as
-  /// the sheet opens. When null, the theme's bottom sheet colour is used.
+  /// The background of the step sheet, by day (false) or night (true). The
+  /// open sheet follows [NavigationFlowController.isNight], like the step
+  /// list in it. When null, the theme's bottom sheet colour is used.
   final Color Function(bool isNight)? stepSheetColor;
 
   @override
@@ -209,7 +223,7 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   /// or the arrival), given to the map ([NavigationMapConfig]).
   final _bottomOverlay = ValueNotifier<double>(0);
 
-  StreamSubscription<MotionFrame>? _frameSub;
+  StreamSubscription<bool>? _followSub;
 
   /// The height of the panel at its last layout; null before.
   double? _panelHeight;
@@ -225,6 +239,13 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   /// height at its last layout.
   bool _speedShown = false;
   double _speedLaid = 0;
+
+  /// The sizes of the speed piece and of the recenter button at their last
+  /// layout, read during layout (the notifiers above follow after the
+  /// frame, to rebuild). The decisions use these, so they hold from the
+  /// first frame after a layout. Null before the first one.
+  Size? _speedLaidSize;
+  Size? _recenterLaidSize;
   bool _bottomScheduled = false;
 
   /// The safe area of the screen, as last built.
@@ -264,8 +285,8 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   }
 
   void _subscribe(NavigationSession session) {
-    unawaited(_frameSub?.cancel());
-    _frameSub = session.frames.listen((_) => _syncFollowing());
+    unawaited(_followSub?.cancel());
+    _followSub = session.followChanges.listen((_) => _syncFollowing());
     _following.value = session.follow;
   }
 
@@ -290,7 +311,7 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   @override
   void dispose() {
     widget.flow.state.removeListener(_syncFollowing);
-    unawaited(_frameSub?.cancel());
+    unawaited(_followSub?.cancel());
     _following.dispose();
     _headerHeight.dispose();
     _footerHeight.dispose();
@@ -300,9 +321,10 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
     super.dispose();
   }
 
-  /// Reads [NavigationSession.follow]: on each frame, on each state change
-  /// (the flow turns following on and off) and on a touch on the map (the
-  /// map view turns it off).
+  /// Reads [NavigationSession.follow]: on each change the session reports
+  /// ([NavigationSession.followChanges]: the app, the flow or a touch on the
+  /// map view), with or without frames, and at once on a state change (the
+  /// flow turns following on and off with it).
   void _syncFollowing() => _following.value = _session.follow;
 
   void _onPanelSize(Size size) {
@@ -325,10 +347,13 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
         _Slot.arrival => _arrivalLaid,
         _ => 0.0,
       };
-      // The speed's band sits on the slot (or on the bottom inset without
-      // a footer), at the start, where maps put their attribution.
-      final below = _bottomSlot == null ? _safe.bottom : slot;
-      _bottomOverlay.value = _speedShown ? below + _speedLaid + _gap : slot;
+      // The speed's band sits on the slot or on the bottom inset, whichever
+      // is higher, at the start, where maps put their attribution.
+      final below = math.max(slot, _safe.bottom);
+      // A speed piece that lays out empty shows nothing: no band.
+      _bottomOverlay.value = _speedShown && _speedLaid > 0
+          ? below + _speedLaid + _gap
+          : slot;
     });
   }
 
@@ -369,11 +394,24 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
 
   void _onSpeedSize(Size size) {
     _speedLaid = size.height;
+    _speedLaidSize = size;
     _afterFrame(_speedSize, size);
     _scheduleBottomOverlay();
   }
 
-  void _onRecenterSize(Size size) => _afterFrame(_recenterSize, size);
+  void _onRecenterSize(Size size) {
+    _recenterLaidSize = size;
+    _afterFrame(_recenterSize, size);
+  }
+
+  /// The speed piece's size for the decisions; zero before it was laid out.
+  Size get _speed => _speedLaidSize ?? Size.zero;
+
+  /// The recenter button's size for the decisions. Before it was ever laid
+  /// out it counts as a 48 square, a touch target, so its first placement
+  /// does not assume it takes no room.
+  Size get _recenterBox =>
+      _recenterLaidSize ?? const Size(_minRecenterHeight, _minRecenterHeight);
 
   void _afterFrame<T>(ValueNotifier<T> notifier, T value) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -463,6 +501,7 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
           opened: opened,
           route: route,
           builder: widget.stepListBuilder,
+          color: widget.stepSheetColor,
         ),
       ),
     );
@@ -524,18 +563,13 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
               // Built here, not with the overlays: progress ticks do not
               // rebuild the map.
               Positioned.fill(
-                child: Listener(
-                  // After the map view's own listener, which stops
-                  // following on a touch.
-                  onPointerDown: (_) => _syncFollowing(),
-                  child: widget.mapBuilder(
-                    context,
-                    NavigationMapConfig(
-                      isNight: _flow.isNight.value,
-                      onRouteOptionTap: _onRouteOptionTap,
-                      onMapReady: _onMapReady,
-                      bottomOverlayHeight: _bottomOverlay,
-                    ),
+                child: widget.mapBuilder(
+                  context,
+                  NavigationMapConfig(
+                    isNight: _flow.isNight.value,
+                    onRouteOptionTap: _onRouteOptionTap,
+                    onMapReady: _onMapReady,
+                    bottomOverlayHeight: _bottomOverlay,
                   ),
                 ),
               ),
@@ -634,6 +668,10 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
                 onSize: _onSpeedSize,
                 child: speedBuilder(context, speed),
               );
+        // A speed piece that lays out empty (it shows nothing) leaves no
+        // gap above it, and no band in bottomOverlayHeight; its padding
+        // stays, so a speed that appears does not move.
+        final hasSpeed = speedPiece != null && _speed.height > 0;
         final stackRecenter =
             recenter != null &&
             (recenterAtStart ||
@@ -641,8 +679,19 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
                   screen,
                   header: header,
                   footer: footer,
-                  hasSpeed: speedPiece != null,
+                  hasSpeed: hasSpeed,
                 ));
+        // At the bottom start: above the speed, else beside it when the
+        // stack would reach into the header, else (it fits nowhere) hidden
+        // rather than overlap.
+        final startFit = stackRecenter
+            ? _startFit(
+                screen,
+                header: header,
+                footer: footer,
+                hasSpeed: hasSpeed,
+              )
+            : _StartFit.hidden;
         return [
           Positioned(
             key: const ValueKey(_Slot.header),
@@ -659,7 +708,7 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
                   builder: (context, snapshot) {
                     final guidance = snapshot.data;
                     if (guidance == null) return const SizedBox.shrink();
-                    return widget.headerBuilder(context, guidance);
+                    return widget.headerBuilder(context, guidance, actions);
                   },
                 ),
               ),
@@ -690,8 +739,10 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
               ),
             ),
           _bottom(
-            recenter: stackRecenter ? recenter : null,
+            recenter: startFit == _StartFit.hidden ? null : recenter,
+            recenterBeside: startFit == _StartFit.beside,
             speed: speedPiece,
+            speedEmpty: !hasSpeed,
             footer: progress == null
                 ? null
                 : _SizeReporter(
@@ -704,13 +755,17 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
                     ),
                   ),
           ),
+          // Hidden (it fits nowhere): still laid out, off stage, so its size
+          // stays current and it comes back once it fits.
+          if (recenter != null && stackRecenter && startFit == _StartFit.hidden)
+            Offstage(key: const ValueKey(_Slot.measure), child: recenter),
           if (recenter != null && !stackRecenter)
             _recenterRegion(
               recenter,
               screen,
               top: header,
-              bottom: _recenterLifted(screen, hasSpeed: speedPiece != null)
-                  ? footer + _speedSize.value.height + _gap
+              bottom: _recenterLifted(screen, hasSpeed: hasSpeed)
+                  ? footer + _speed.height + _gap
                   : footer,
             ),
         ];
@@ -745,10 +800,10 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   /// the last layout.
   bool _recenterLifted(Size screen, {required bool hasSpeed}) {
     if (!hasSpeed) return false;
-    final speedEnd = _startInset + _gap + _speedSize.value.width;
+    final speedEnd = _startInset + _gap + _speed.width;
     final regionStart = _startInset + _gap;
     final regionWidth = screen.width - _startInset - _endInset - 2 * _gap;
-    final free = math.max(0.0, regionWidth - _recenterSize.value.width);
+    final free = math.max(0.0, regionWidth - _recenterBox.width);
     final x = widget.recenterAlignment.start;
     final recenterStart = regionStart + free * (x + 1) / 2;
     return speedEnd + _gap > recenterStart;
@@ -766,54 +821,110 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
     required bool hasSpeed,
   }) {
     final bottom = _recenterLifted(screen, hasSpeed: hasSpeed)
-        ? footer + _speedSize.value.height + _gap
+        ? footer + _speed.height + _gap
         : footer;
     final room = screen.height - (header + _gap) - (bottom + _gap);
     return room >= _minRecenterHeight;
   }
 
+  /// Where the recenter button goes at the bottom start, below the header:
+  /// above the speed (8 between them); else, when that reaches into the
+  /// header, beside the speed on its end side if that row fits the width
+  /// and stays below the header; else nowhere. Uses their sizes at the last
+  /// layout.
+  _StartFit _startFit(
+    Size screen, {
+    required double header,
+    required double footer,
+    required bool hasSpeed,
+  }) {
+    final bandBottom = screen.height - footer - _gap;
+    final recenter = _recenterBox;
+    final speed = hasSpeed ? _speed : Size.zero;
+    final stackHeight = recenter.height + (hasSpeed ? 8 + speed.height : 0);
+    if (bandBottom - stackHeight >= header) return _StartFit.above;
+    final rowWidth =
+        _startInset +
+        _gap +
+        speed.width +
+        8 +
+        recenter.width +
+        _gap +
+        _endInset;
+    final rowHeight = math.max(speed.height, recenter.height);
+    if (hasSpeed &&
+        rowWidth <= screen.width &&
+        bandBottom - rowHeight >= header) {
+      return _StartFit.beside;
+    }
+    return _StartFit.hidden;
+  }
+
   /// The bottom of the screen: the recenter button and the speed at the
-  /// start, [_gap] above the footer (or above the bottom safe area when
-  /// there is no footer).
-  Widget _bottom({Widget? recenter, Widget? speed, Widget? footer}) =>
-      Positioned(
-        key: const ValueKey(_Slot.bottom),
-        left: 0,
-        right: 0,
-        bottom: 0,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (recenter != null || speed != null)
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Padding(
-                  padding: EdgeInsetsDirectional.only(
-                    start: _gap + _startInset,
-                    bottom: _gap + (footer == null ? _safe.bottom : 0),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ?recenter,
-                      if (recenter != null && speed != null)
-                        const SizedBox(height: 8),
-                      ?speed,
-                    ],
-                  ),
-                ),
+  /// start, [_gap] above the footer or the bottom safe area, whichever is
+  /// higher.
+  Widget _bottom({
+    Widget? recenter,
+    Widget? speed,
+    Widget? footer,
+    bool recenterBeside = false,
+    bool speedEmpty = false,
+  }) => Positioned(
+    key: const ValueKey(_Slot.bottom),
+    left: 0,
+    right: 0,
+    bottom: 0,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (recenter != null || speed != null)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Padding(
+              // One bottom rule with the recenter region and the edge:
+              // max(footer, bottom inset) + gap, also for a footer
+              // lower than the inset (one without a SafeArea).
+              padding: EdgeInsetsDirectional.only(
+                start: _gap + _startInset,
+                // Always padded: an empty speed shows nothing anyway, and a
+                // speed that appears is in place from its first frame.
+                bottom:
+                    _gap +
+                    (footer == null
+                        ? _safe.bottom
+                        : math.max(0, _safe.bottom - _footerHeight.value)),
               ),
-            ?footer,
-          ],
-        ),
-      );
+              child: recenterBeside && recenter != null && speed != null
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [speed, const SizedBox(width: 8), recenter],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ?recenter,
+                        if (recenter != null && speed != null && !speedEmpty)
+                          const SizedBox(height: 8),
+                        ?speed,
+                      ],
+                    ),
+            ),
+          ),
+        ?footer,
+      ],
+    ),
+  );
 
   /// The recenter button at [NavigationFlowScaffold.recenterAlignment],
   /// between [top] and [bottom] with a [_gap] margin, inside the side safe
-  /// area. The region is never lower than [_minRecenterHeight]: when the
-  /// space is smaller, it reaches up over [top].
+  /// area. While navigating it is used only when that space is at least
+  /// [_minRecenterHeight] (see [_recenterFitsAboveFooter]; otherwise the
+  /// button stacks at the bottom start). The top clamp, which lets the
+  /// region reach up over [top] to keep [_minRecenterHeight], therefore
+  /// only acts in idle, on a very low screen.
   Widget _recenterRegion(
     Widget recenter,
     Size screen, {
@@ -832,6 +943,9 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   );
 }
 
+/// Where the recenter button goes at the bottom start.
+enum _StartFit { above, beside, hidden }
+
 /// The scaffold's slots, as keys that cannot clash with the pieces' own.
 enum _Slot {
   idle,
@@ -842,12 +956,14 @@ enum _Slot {
   bottom,
   footer,
   recenter,
+  measure,
   arrival,
 }
 
 /// The step list in a bottom sheet: the current step follows [session]'s
-/// guidance, and the sheet closes itself once [flow] leaves the state it was
-/// [opened] in (another kind of state, or another route).
+/// guidance, the list and the [color] follow [flow]'s night mode, and the
+/// sheet closes itself once [flow] leaves the state it was [opened] in
+/// (another kind of state, or another route).
 class _StepSheet extends StatefulWidget {
   const _StepSheet({
     required this.flow,
@@ -855,6 +971,7 @@ class _StepSheet extends StatefulWidget {
     required this.opened,
     required this.route,
     required this.builder,
+    this.color,
   });
 
   final NavigationFlowController flow;
@@ -863,6 +980,7 @@ class _StepSheet extends StatefulWidget {
   final NavRoute route;
   final Widget Function(BuildContext context, NavRoute route, int currentStep)
   builder;
+  final Color Function(bool isNight)? color;
 
   @override
   State<_StepSheet> createState() => _StepSheetState();
@@ -913,28 +1031,55 @@ class _StepSheetState extends State<_StepSheet> {
     }
   }
 
+  /// The shape of the modal sheet, so the live background keeps it.
+  static ShapeBorder? _shape(BuildContext context) {
+    final theme = Theme.of(context).bottomSheetTheme;
+    return theme.shape ??
+        (Theme.of(context).useMaterial3
+            ? const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              )
+            : null);
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.6,
-      maxChildSize: 0.9,
-      builder: (context, controller) => PrimaryScrollController(
-        controller: controller,
-        child: StreamBuilder<GuidanceState?>(
-          stream: session.guidance,
-          initialData: session.guidanceState,
-          builder: (context, snapshot) => widget.builder(
-            context,
-            widget.route,
-            // Only the route the session drives has a current step.
-            identical(session.route, widget.route)
-                ? snapshot.data?.stepIndex ?? -1
-                : -1,
+    // Rebuilt on a night switch: the list's colours and the background
+    // follow it while the sheet is open.
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.flow.isNight,
+      builder: (context, isNight, _) {
+        final sheet = DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          builder: (context, controller) => PrimaryScrollController(
+            controller: controller,
+            child: StreamBuilder<GuidanceState?>(
+              stream: session.guidance,
+              initialData: session.guidanceState,
+              builder: (context, snapshot) => widget.builder(
+                context,
+                widget.route,
+                // Only the route the session drives has a current step.
+                identical(session.route, widget.route)
+                    ? snapshot.data?.stepIndex ?? -1
+                    : -1,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+        final color = widget.color;
+        if (color == null) return sheet;
+        return Material(
+          key: const ValueKey('navigation_engine_step_sheet'),
+          color: color(isNight),
+          shape: _shape(context),
+          clipBehavior: Clip.antiAlias,
+          child: sheet,
+        );
+      },
     );
   }
 }

@@ -161,9 +161,13 @@ class GoogleMapsNavigationMap
   })?
   labelPainter;
 
-  RouteLabelColors _labelColors = const RouteLabelColors();
+  // The Google-style day label colours (`GoogleStyleColors.day`).
+  RouteLabelColors _labelColors = const RouteLabelColors(
+    border: Color(0x33202124),
+  );
 
-  /// The colours of the label bubbles (see [labelPainter]). Changing them
+  /// The colours of the label bubbles (see [labelPainter]), by default the
+  /// Google-style day ones. Changing them
   /// while options are shown renders the labels again; the old bubbles stay
   /// until the new ones are ready.
   RouteLabelColors get labelColors => _labelColors;
@@ -209,8 +213,9 @@ class GoogleMapsNavigationMap
   List<NavRoute>? _shownRoutes;
   int _shownSelected = 0;
 
-  // Label images by (text, selected, pixel ratio, colours), oldest first. The futures are kept, so a render still
-  // running is shared too.
+  // Label images by (text, selected, pixel ratio, colours), least recently
+  // used first. The futures are kept, so a render still running is shared
+  // too.
   final _labelImages = <_LabelKey, Future<Uint8List>>{};
 
   Size? _viewportSize;
@@ -343,8 +348,12 @@ class GoogleMapsNavigationMap
     RouteLabelColors colors,
   ) {
     final key = (text, selected, ratio, colors);
-    final cached = _labelImages[key];
-    if (cached != null) return cached;
+    final cached = _labelImages.remove(key);
+    if (cached != null) {
+      // Used again: it moves to the most recent end.
+      _labelImages[key] = cached;
+      return cached;
+    }
     final paint = labelPainter;
     final image = Future.sync(
       () => paint != null

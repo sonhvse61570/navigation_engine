@@ -111,7 +111,8 @@ final class NavigationStrings {
   /// The "Report" label (reports an incident on the road).
   final String reportIncident;
 
-  /// The "Compass" label.
+  /// The "Compass" label, for an app's own compass. The packages' compass
+  /// buttons are labelled by what a tap does ([northUp] / [headingUp]).
   final String compass;
 
   /// The "North up" label (the map keeps north at the top).
@@ -122,6 +123,58 @@ final class NavigationStrings {
 
   /// A function that formats a route summary (e.g., "via A, B").
   final String Function(String summary) via;
+
+  /// A copy with the given strings replaced, such as one word of
+  /// [NavigationStrings.vietnamese]; the others are kept.
+  NavigationStrings copyWith({
+    String? start,
+    String? resume,
+    String? steps,
+    String? recenter,
+    String? rerouting,
+    String? arrived,
+    String? done,
+    String? retry,
+    String? cancel,
+    String? then,
+    String? findingRoutes,
+    String? noRoute,
+    String? overview,
+    String? exitNavigation,
+    String? fastest,
+    String? speedLimit,
+    String? mute,
+    String? unmute,
+    String? reportIncident,
+    String? compass,
+    String? northUp,
+    String? headingUp,
+    String Function(String summary)? via,
+  }) => NavigationStrings(
+    start: start ?? this.start,
+    resume: resume ?? this.resume,
+    steps: steps ?? this.steps,
+    recenter: recenter ?? this.recenter,
+    rerouting: rerouting ?? this.rerouting,
+    arrived: arrived ?? this.arrived,
+    done: done ?? this.done,
+    retry: retry ?? this.retry,
+    cancel: cancel ?? this.cancel,
+    then: then ?? this.then,
+    findingRoutes: findingRoutes ?? this.findingRoutes,
+    noRoute: noRoute ?? this.noRoute,
+    overview: overview ?? this.overview,
+    exitNavigation: exitNavigation ?? this.exitNavigation,
+    fastest: fastest ?? this.fastest,
+    speedLimit: speedLimit ?? this.speedLimit,
+    mute: mute ?? this.mute,
+    unmute: unmute ?? this.unmute,
+    reportIncident: reportIncident ?? this.reportIncident,
+    compass: compass ?? this.compass,
+    northUp: northUp ?? this.northUp,
+    headingUp: headingUp ?? this.headingUp,
+    via: via ?? this.via,
+  );
 }
 
 /// English format for "via" phrases.

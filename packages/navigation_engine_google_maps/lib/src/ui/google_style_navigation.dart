@@ -52,8 +52,9 @@ import 'night_map_style.dart';
 /// [dayColors] / [nightColors] reach the panels, the turn card, the route
 /// lines and the route option labels. [dayRouteColors] / [nightRouteColors]
 /// override the selected option and the session's route line; the other
-/// options always use [GoogleStyleColors.alternative]. Speeds go through [formatter]
-/// ([GuidanceFormatter.speedValue] and [GuidanceFormatter.speedUnit]).
+/// options always use [GoogleStyleColors.alternative]. Speeds go through
+/// [formatter] ([GuidanceFormatter.speedValue] and
+/// [GuidanceFormatter.speedUnit]).
 ///
 /// The map is a [GoogleMapsNavigationView]: it attaches itself to [session]
 /// and ticks it while on screen. The flow binding (the states, the back, the
@@ -269,7 +270,7 @@ class _GoogleStyleNavigationState extends State<GoogleStyleNavigation> {
         onCancel: actions.cancel,
         onClose: actions.close,
       ),
-      headerBuilder: (context, guidance) => widget.headerEnabled
+      headerBuilder: (context, guidance, actions) => widget.headerEnabled
           ? GoogleStyleManeuverHeader(
               state: guidance,
               formatter: formatter,
@@ -379,8 +380,14 @@ class _GoogleStyleNavigationState extends State<GoogleStyleNavigation> {
 /// The compass of [session]'s camera. The scaffold rebuilds its overlays
 /// about once a second, too seldom for a needle, so it listens to the
 /// session's frames itself and rebuilds only when the camera's bearing
-/// changed by 1 degree or more, or the camera switched between heading up
-/// and north up.
+/// changed by 1 degree or more; it also listens to
+/// [FollowCamera.headingUpChanges], so a switch between heading up and north
+/// up shows without a frame.
+///
+/// The bearing is the one the session's camera sends, not one read back
+/// from the map: it is right while the camera follows the vehicle, which is
+/// the only time the compass shows (a gesture that rotates the map stops
+/// following and hides it).
 class _LiveCompass extends StatefulWidget {
   const _LiveCompass({
     required this.session,
@@ -398,6 +405,7 @@ class _LiveCompass extends StatefulWidget {
 
 class _LiveCompassState extends State<_LiveCompass> {
   StreamSubscription<MotionFrame>? _sub;
+  StreamSubscription<bool>? _modeSub;
 
   /// What the compass shows now.
   late double _bearing;
@@ -418,7 +426,9 @@ class _LiveCompassState extends State<_LiveCompass> {
 
   void _subscribe() {
     unawaited(_sub?.cancel());
+    unawaited(_modeSub?.cancel());
     _sub = widget.session.frames.listen((_) => _sync());
+    _modeSub = widget.session.camera.headingUpChanges.listen((_) => _sync());
   }
 
   @override
@@ -434,10 +444,12 @@ class _LiveCompassState extends State<_LiveCompass> {
   @override
   void dispose() {
     unawaited(_sub?.cancel());
+    unawaited(_modeSub?.cancel());
     super.dispose();
   }
 
   void _sync() {
+    if (!mounted) return;
     final camera = widget.session.camera;
     final bearing = _bearingOf(widget.session);
     final turned = ((bearing - _bearing + 540) % 360 - 180).abs() >= 1;

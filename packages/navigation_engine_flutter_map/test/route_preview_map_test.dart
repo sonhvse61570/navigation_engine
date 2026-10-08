@@ -217,6 +217,36 @@ void main() {
     }
   });
 
+  test('a routeLabel change rebuilds the shown labels', () {
+    addTearDown(map.dispose);
+    map
+      ..routeLabel = _label
+      ..showRouteOptions(_routes, 0);
+    String textOf(fm.Marker m) =>
+        ((m.child as GestureDetector).child! as Align).child!
+            is RouteLabelBubble
+        ? (((m.child as GestureDetector).child! as Align).child!
+                  as RouteLabelBubble)
+              .text
+        : '';
+    expect(map.routeOptionLabels.value.map(textOf), {'west', 'north'});
+    map.routeLabel = (r) => 'new ${_label(r)}';
+    expect(map.routeOptionLabels.value.map(textOf), {'new west', 'new north'});
+    map.routeLabel = null;
+    expect(map.routeOptionLabels.value, isEmpty);
+  });
+
+  test('a casing and its line share one list of points', () {
+    addTearDown(map.dispose);
+    map.showRouteOptions(_routes, 0);
+    final lines = map.routeOptionLines.value;
+    for (final i in [0, 1]) {
+      final pair = lines.where((l) => l.hitValue == i).toList();
+      expect(pair, hasLength(2));
+      expect(pair[0].points, same(pair[1].points), reason: 'route $i');
+    }
+  });
+
   testWidgets('a label bubble is selected and coloured by labelColors', (
     tester,
   ) async {
@@ -354,14 +384,22 @@ void main() {
       expect(find.byType(RouteLabelBubble), findsNWidgets(2));
       expectOnMidpoints(tester, adapter);
 
-      // Rotated, the bubbles stay upright with the same anchor.
+      // Rotated, the bubbles stay upright with the same anchor: the markers
+      // turn against the map (`rotate: true`).
       adapter.controller.rotate(30);
       await tester.pump();
+      for (final route in _routes) {
+        final box = tester.renderObject<RenderBox>(
+          find.widgetWithText(RouteLabelBubble, _label(route)),
+        );
+        // The top edge is level on the screen (a 30 degree tilt would
+        // put its ends half the width apart).
+        final topLeft = box.localToGlobal(Offset.zero);
+        final topRight = box.localToGlobal(Offset(box.size.width, 0));
+        expect(topRight.dy, closeTo(topLeft.dy, 0.01), reason: 'upright');
+        expect(topRight.dx - topLeft.dx, closeTo(box.size.width, 0.01));
+      }
       expectOnMidpoints(tester, adapter);
-      final rect = tester.getRect(
-        find.widgetWithText(RouteLabelBubble, _label(_west)),
-      );
-      expect(rect.width, greaterThan(rect.height), reason: 'upright');
     });
   });
 
@@ -642,20 +680,24 @@ void main() {
     other.viewportSize = _viewport;
     other.onMapReady();
     expect(spy.moves, isEmpty);
+    expect(spy.rotations, isEmpty);
 
-    // Control: the same sequence without dispose moves the camera once.
+    // Control: the same sequence without dispose moves the camera once,
+    // north up (a fit has no bearing).
     final live = FlutterMapNavigationMap(controller: spy);
     addTearDown(live.dispose);
     await live.fitRoutes(_routes, _padding);
     live.viewportSize = _viewport;
     live.onMapReady();
     expect(spy.moves, hasLength(1));
+    expect(spy.rotations, [0]);
   });
 }
 
 /// Records the camera moves; everything else is unused.
 class _SpyController implements fm.MapController {
   final moves = <LatLng>[];
+  final rotations = <double>[];
 
   @override
   bool move(
@@ -669,7 +711,10 @@ class _SpyController implements fm.MapController {
   }
 
   @override
-  bool rotate(double degree, {String? id}) => true;
+  bool rotate(double degree, {String? id}) {
+    rotations.add(degree);
+    return true;
+  }
 
   @override
   void dispose() {}

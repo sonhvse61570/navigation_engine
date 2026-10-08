@@ -23,8 +23,9 @@ class GoogleStyleCompassButton extends StatelessWidget {
   /// points to north.
   final double bearing;
 
-  /// Whether the camera turns with the vehicle. The tooltip names what a tap
-  /// switches to: [NavigationStrings.northUp] when true, else
+  /// Whether the camera turns with the vehicle. The tooltip, which is also
+  /// the button's only accessibility label, names what a tap switches to:
+  /// [NavigationStrings.northUp] when true, else
   /// [NavigationStrings.headingUp].
   final bool headingUp;
 
@@ -43,17 +44,15 @@ class GoogleStyleCompassButton extends StatelessWidget {
       tooltip: headingUp ? strings.northUp : strings.headingUp,
       onPressed: onPressed,
       colors: colors,
-      icon: Semantics(
-        label: strings.compass,
-        child: Transform.rotate(
-          key: const ValueKey('google_style_compass_needle'),
-          angle: -bearing * math.pi / 180,
-          child: CustomPaint(
-            size: const Size(24, 24),
-            painter: _NeedlePainter(
-              north: colors.warning,
-              south: colors.alternative,
-            ),
+      // The tooltip is the one accessibility label: what a tap does.
+      icon: Transform.rotate(
+        key: const ValueKey('google_style_compass_needle'),
+        angle: -bearing * math.pi / 180,
+        child: CustomPaint(
+          size: const Size(24, 24),
+          painter: _NeedlePainter(
+            north: colors.warning,
+            south: colors.alternative,
           ),
         ),
       ),

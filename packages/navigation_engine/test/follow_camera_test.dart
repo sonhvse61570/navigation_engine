@@ -2,18 +2,11 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:test/test.dart';
 
 void main() {
-  MotionFrame frame(double speed) => MotionFrame(
+  MotionFrame frame(double speed, {double bearing = 42}) => MotionFrame(
     position: const GeoPoint(10.77, 106.69),
-    bearing: 42,
+    bearing: bearing,
     speed: speed,
   );
-
-  MotionFrame frameAt({required double bearing, required double speed}) =>
-      MotionFrame(
-        position: const GeoPoint(10.77, 106.69),
-        bearing: bearing,
-        speed: speed,
-      );
 
   test('zoomFor: close in when slow, wider when fast, clamped', () {
     final c = FollowCamera();
@@ -61,13 +54,72 @@ void main() {
 
   test('north-up returns bearing 0 and no tilt', () {
     final cam = FollowCamera()..headingUp = false;
-    final t = cam.update(frameAt(bearing: 135, speed: 10), 0.1);
+    final t = cam.update(frame(10, bearing: 135), 0.1);
     expect(t.bearing, 0);
     expect(t.tilt, 0);
   });
 
   test('heading-up follows the frame bearing (default)', () {
-    final t = FollowCamera().update(frameAt(bearing: 135, speed: 10), 0.1);
+    final t = FollowCamera().update(frame(10, bearing: 135), 0.1);
     expect(t.bearing, closeTo(135, 1e-9));
   });
+
+  test('north-up keeps the position and the speed-based zoom', () {
+    final cam = FollowCamera()..headingUp = false;
+    final t = cam.update(frame(0, bearing: 135), 1 / 60);
+    expect(t.position, const GeoPoint(10.77, 106.69));
+    expect(t.zoom, 18.2);
+    final up = FollowCamera().update(frame(0, bearing: 135), 1 / 60);
+    expect(t.zoom, up.zoom);
+    expect(t.position, up.position);
+  });
+
+  test('toggling headingUp keeps the zoom smoothing (no jump)', () {
+    final toggled = FollowCamera()..update(frame(0), 1 / 60);
+    final steady = FollowCamera()..update(frame(0), 1 / 60);
+    for (var i = 0; i < 30; i++) {
+      toggled.update(frame(22), 1 / 60);
+      steady.update(frame(22), 1 / 60);
+    }
+    toggled.headingUp = false;
+    final a = toggled.update(frame(22), 1 / 60);
+    final b = steady.update(frame(22), 1 / 60);
+    expect(a.zoom, closeTo(b.zoom, 1e-9));
+    expect(a.zoom, greaterThan(16.7));
+    toggled.headingUp = true;
+    expect(
+      toggled.update(frame(22), 1 / 60).zoom,
+      closeTo(steady.update(frame(22), 1 / 60).zoom, 1e-9),
+    );
+  });
+
+  test(
+    'headingUpChanges emits each change of headingUp, not a repeat',
+    () async {
+      final cam = FollowCamera();
+      final seen = <bool>[];
+      final sub = cam.headingUpChanges.listen(seen.add);
+      cam
+        ..headingUp = false
+        ..headingUp = false
+        ..headingUp = true;
+      await Future<void>.delayed(Duration.zero);
+      expect(seen, [false, true]);
+      await sub.cancel();
+    },
+  );
+
+  test(
+    'dispose ends headingUpChanges; a later change does not throw',
+    () async {
+      final cam = FollowCamera();
+      var done = false;
+      cam.headingUpChanges.listen(null, onDone: () => done = true);
+      cam.dispose();
+      await Future<void>.delayed(Duration.zero);
+      expect(done, isTrue);
+      cam.headingUp = false;
+      expect(cam.headingUp, isFalse);
+    },
+  );
 }

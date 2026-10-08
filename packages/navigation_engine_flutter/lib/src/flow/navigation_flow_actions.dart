@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// The flow actions a [NavigationFlowScaffold] gives the pieces it builds
-/// (panels, footer, arrival).
+/// The flow actions a [NavigationFlowScaffold] gives the pieces it builds:
+/// the panel, the header, the footer, the top end slot and the arrival.
 ///
 /// Each one is guarded against stale state: a call in a state where the
 /// action does not apply does nothing, so a double tap, or a tap on a piece

@@ -985,6 +985,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    navTest('keeps its state (an open popup) when the inset comes and goes', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester);
+      final idle = tester.state(find.byType(fm.RichAttributionWidget));
+      h.flow.previewRoutes([route, alt]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        attribution(tester).bottom,
+        lessThan(800 - 8),
+        reason: 'the inset is above 0',
+      );
+      expect(
+        tester.state(find.byType(fm.RichAttributionWidget)),
+        same(idle),
+        reason: 'not remounted',
+      );
+      h.flow.closeOverview();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.state(find.byType(fm.RichAttributionWidget)), same(idle));
+    });
+
     navTest('NeutralNavigation(attribution:) shows the app\'s text', (
       tester,
       h,

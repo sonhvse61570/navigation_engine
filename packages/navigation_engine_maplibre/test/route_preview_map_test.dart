@@ -59,8 +59,10 @@ final _selectedCasing = Color.lerp(
 )!;
 final _mutedCasing = Color.lerp(_alternative, const Color(0xFFFFFFFF), 0.5)!;
 
-Future<void> _settle() =>
-    Future<void>.delayed(const Duration(milliseconds: 20));
+/// Lets the adapter's pending work run: the fake platform answers through
+/// futures, not timers, so a fixed number of event-loop turns is enough (no
+/// wall-clock wait).
+Future<void> _settle() => pumpEventQueue();
 
 /// A painter that returns `<text>/<sel|alt>` as bytes and records each call.
 class _Painter {
@@ -418,6 +420,73 @@ void main() {
       ]);
     });
 
+    test('a selection change keeps the labels until the new ones are '
+        'ready (no blink)', () async {
+      final painter = _Painter();
+      final (map, platform) = await _loaded(labels: true, painter: painter);
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      expect(platform.layerIds, contains(_labels));
+      platform.calls.clear();
+
+      painter.gate = Completer<void>();
+      map.showRouteOptions(_routes, 1);
+      await _settle();
+      // The new labels are still rendering: the old ones stay drawn.
+      expect(platform.layerIds, contains(_labels));
+      expect(platform.sources.containsKey(_labels), isTrue);
+      expect(platform.argsOf('removeLayer'), isNot(contains(_labels)));
+      expect(platform.argsOf('removeSource'), isNot(contains(_labels)));
+
+      painter.gate!.complete();
+      await _settle();
+      expect(
+        [for (final f in _labelFeatures(platform)) f['properties']],
+        [
+          {'index': 0, 'image': _image(0, selected: false)},
+          {'index': 1, 'image': _image(1, selected: true)},
+        ],
+      );
+      expect(platform.argsOf('removeLayer'), isNot(contains(_labels)));
+    });
+
+    test('new routes drop the old labels at once', () async {
+      final painter = _Painter();
+      final (map, platform) = await _loaded(labels: true, painter: painter);
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      painter.gate = Completer<void>();
+      map.showRouteOptions(_three, 0);
+      await _settle();
+      expect(platform.layerIds, isNot(contains(_labels)));
+      painter.gate!.complete();
+      await _settle();
+      expect(_labelFeatures(platform), hasLength(3));
+    });
+
+    test('the label image cache evicts the least recently used', () async {
+      final painter = _Painter();
+      final (map, _) = await _loaded(labels: true, painter: painter);
+      var text = 'keep';
+      map.routeLabel = (_) => text;
+      void show(String t) {
+        text = t;
+        map.showRouteOptions([_west], 0);
+      }
+
+      show('keep');
+      // More new labels than the cache holds (32), with 'keep' used again
+      // in between: it stays, the others go oldest first.
+      for (var i = 0; i < 40; i++) {
+        show('label $i');
+        show('keep');
+      }
+      expect(painter.calls.where((c) => c.$1 == 'keep'), hasLength(1));
+      show('label 0');
+      expect(painter.calls.where((c) => c.$1 == 'label 0'), hasLength(2));
+      await _settle();
+    });
+
     test('labels are painted at the pixel ratio in labelColors', () async {
       const colors = RouteLabelColors(selectedFill: Color(0xFF00FF00));
       final painter = _Painter();
@@ -442,9 +511,10 @@ void main() {
         ..pixelRatio = 2;
       await map.onStyleLoaded();
       map.showRouteOptions(_routes, 0);
-      for (var i = 0; i < 200 && !platform.sources.containsKey(_labels); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 5));
-      }
+      // The real painter renders on the engine: wait for the image itself.
+      await platform
+          .imageAdded(_image(0, selected: true))
+          .timeout(const Duration(seconds: 10));
       final png = platform.images[_image(0, selected: true)]!;
       final expected = await paintRouteLabel(
         'west',
@@ -581,6 +651,39 @@ void main() {
       // The labels are not painted again.
       expect(painter.calls, hasLength(3));
     });
+
+    for (final android in [false, true]) {
+      test('a second style load on the same style keeps the options '
+          '(${android ? 'Android: silent' : 'iOS: throwing'} duplicate '
+          'sources)', () async {
+        final painter = _Painter();
+        final (map, platform) = await _loaded(labels: true, painter: painter);
+        platform.silentDuplicateSources = android;
+        map.showRouteOptions(_three, 1);
+        await _settle();
+        map.showRouteOptions(_three, 2);
+        await _settle();
+        final layers = List.of(platform.layerIds);
+        final sources = Map.of(platform.sources);
+
+        // The SDK reports the same style again (or the app retries).
+        await map.onStyleLoaded();
+        await _settle();
+        expect(platform.layerIds, unorderedEquals(layers));
+        expect(platform.sources, sources);
+        expect(
+          [for (final f in _labelFeatures(platform)) f['properties']].last,
+          {'index': 2, 'image': _image(2, selected: true)},
+        );
+        // Still current after a change.
+        map.showRouteOptions(_three, 0);
+        await _settle();
+        expect(
+          [for (final f in _labelFeatures(platform)) f['properties']].last,
+          {'index': 0, 'image': _image(0, selected: true)},
+        );
+      });
+    }
 
     test(
       'options changed while the style reloads are drawn as last shown',

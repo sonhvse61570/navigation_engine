@@ -3,7 +3,9 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// A row of lane arrows before a manoeuvre. A valid lane shows its active
-/// arrow at full colour; an invalid lane shows all its arrows dimmed.
+/// arrow at full colour; an invalid lane shows all its arrows dimmed. It is
+/// the shared [LaneGuidanceRow] (the same look in every style), with a
+/// white default colour.
 class GoogleStyleLaneGuidance extends StatelessWidget {
   /// Creates the lane arrows for [lanes], left to right.
   const GoogleStyleLaneGuidance({
@@ -19,44 +21,6 @@ class GoogleStyleLaneGuidance extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      children: [for (final lane in lanes) _LaneCell(lane: lane, color: color)],
-    );
-  }
-}
-
-class _LaneCell extends StatelessWidget {
-  const _LaneCell({required this.lane, required this.color});
-
-  final Lane lane;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget arrows;
-    if (lane.valid && (lane.active != null || lane.directions.isNotEmpty)) {
-      arrows = Icon(
-        laneDirectionIcon(lane.active ?? lane.directions.first),
-        size: 28,
-        color: color,
-      );
-    } else {
-      final dimmed = color.withValues(alpha: 0.4);
-      arrows = Stack(
-        alignment: Alignment.center,
-        children: [
-          for (final d in lane.directions)
-            Icon(laneDirectionIcon(d), size: 28, color: dimmed),
-        ],
-      );
-    }
-    return SizedBox(
-      key: const ValueKey('google_style_lane_cell'),
-      width: 32,
-      height: 36,
-      child: Center(child: arrows),
-    );
-  }
+  Widget build(BuildContext context) =>
+      LaneGuidanceRow(lanes: lanes, color: color);
 }

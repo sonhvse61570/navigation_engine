@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 
 import '../../maneuver_icon.dart';
-import '../lane_direction_icon.dart';
+import '../lane_guidance_row.dart';
 import '../navigation_strings.dart';
 import 'mapbox_style_colors.dart';
 
@@ -113,7 +113,7 @@ class MapboxStyleManeuverBanner extends StatelessWidget {
                         color: on.withValues(alpha: 0.24),
                       ),
                       const SizedBox(height: 6),
-                      _LaneRow(lanes: step.lanes, color: on),
+                      LaneGuidanceRow(lanes: step.lanes, color: on),
                     ],
                   ],
                 ),
@@ -146,57 +146,6 @@ class MapboxStyleManeuverBanner extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// A row of lane arrows before a manoeuvre. A valid lane shows its active
-/// arrow at full colour; an invalid lane shows all its arrows dimmed.
-class _LaneRow extends StatelessWidget {
-  const _LaneRow({required this.lanes, required this.color});
-
-  final List<Lane> lanes;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      children: [for (final lane in lanes) _LaneCell(lane: lane, color: color)],
-    );
-  }
-}
-
-class _LaneCell extends StatelessWidget {
-  const _LaneCell({required this.lane, required this.color});
-
-  final Lane lane;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget arrows;
-    if (lane.valid && (lane.active != null || lane.directions.isNotEmpty)) {
-      arrows = Icon(
-        laneDirectionIcon(lane.active ?? lane.directions.first),
-        size: 28,
-        color: color,
-      );
-    } else {
-      final dimmed = color.withValues(alpha: 0.4);
-      arrows = Stack(
-        alignment: Alignment.center,
-        children: [
-          for (final d in lane.directions)
-            Icon(laneDirectionIcon(d), size: 28, color: dimmed),
-        ],
-      );
-    }
-    return SizedBox(
-      key: const ValueKey('mapbox_style_lane_cell'),
-      width: 32,
-      height: 36,
-      child: Center(child: arrows),
     );
   }
 }

@@ -151,7 +151,7 @@ class MapboxStyleFlowScaffold extends StatelessWidget {
       onCancel: actions.cancel,
       onClose: actions.close,
     ),
-    headerBuilder: (context, guidance) => MapboxStyleManeuverBanner(
+    headerBuilder: (context, guidance, actions) => MapboxStyleManeuverBanner(
       state: guidance,
       formatter: formatter,
       strings: strings,

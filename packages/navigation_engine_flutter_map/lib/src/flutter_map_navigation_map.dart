@@ -36,7 +36,8 @@ const _labelHeight = 48.0;
 /// come first, so the selected one is drawn on top and hit first. The view
 /// reads the hit through a `PolylineLayer.hitNotifier` and calls
 /// [onRouteOptionTap]. With [routeLabel] set, [routeOptionLabels] also gets
-/// a [RouteLabelBubble] marker at the middle of each route. Labels are
+/// a [RouteLabelBubble] marker at the middle of each route, with
+/// `rotate: true` so it stays upright when the map rotates. Labels are
 /// widgets, so they are rebuilt synchronously.
 ///
 /// [fitRoutes] needs the map to be ready ([onMapReady]) and [viewportSize];
@@ -59,9 +60,17 @@ class FlutterMapNavigationMap
   final routeOptionLabels = ValueNotifier<List<Marker>>(const []);
 
   /// The text of the label bubble of a route option, such as its duration.
-  /// When null, [showRouteOptions] adds no labels. It is read when the
-  /// options are shown.
-  String Function(NavRoute route)? routeLabel;
+  /// When null, [showRouteOptions] adds no labels. Changing it while options
+  /// are shown rebuilds the labels.
+  String Function(NavRoute route)? get routeLabel => _routeLabel;
+  set routeLabel(String Function(NavRoute route)? value) {
+    if (value == _routeLabel) return;
+    _routeLabel = value;
+    final routes = _shownRoutes;
+    if (routes != null) _redrawLabels(routes, _shownSelected);
+  }
+
+  String Function(NavRoute route)? _routeLabel;
 
   /// Called with the route index when a route option is tapped.
   void Function(int index)? onRouteOptionTap;
@@ -200,14 +209,18 @@ class FlutterMapNavigationMap
       0.5,
     )!;
 
+    // Each route's points are mapped once; its casing and line share them.
+    final points = [
+      for (final route in routes) route.points.map(toLatLng).toList(),
+    ];
     Polyline<Object> casingOf(int i, Color color) => Polyline<Object>(
-      points: routes[i].points.map(toLatLng).toList(),
+      points: points[i],
       color: color,
       strokeWidth: width + 4,
       hitValue: i,
     );
     Polyline<Object> lineOf(int i, Color color) => Polyline<Object>(
-      points: routes[i].points.map(toLatLng).toList(),
+      points: points[i],
       color: color,
       strokeWidth: width,
       hitValue: i,
@@ -260,6 +273,8 @@ class FlutterMapNavigationMap
       height: _labelHeight,
       // The box sits above the point: its bottom-centre is on the route.
       alignment: Alignment.topCenter,
+      // flutter_map turns the marker against the map's rotation, so the
+      // bubble stays upright on the screen, its anchor on the route.
       rotate: true,
       child: GestureDetector(
         onTap: () => onRouteOptionTap?.call(index),

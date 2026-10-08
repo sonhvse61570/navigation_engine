@@ -28,3 +28,7 @@
   `NavigationFlowController`, `NavigationStrings`, `MapboxStyleColors`,
   `SpeedLimitSign`, `RouteColors`, `CarPuck` and `VehicleImageBuilder`
   from navigation_engine_flutter.
+- A selection change keeps the route option labels drawn until the new
+  ones are ready (no blink); the label image cache drops the least
+  recently used image. A new controller (`onMapCreated`) drops a style
+  load still running for the old one.

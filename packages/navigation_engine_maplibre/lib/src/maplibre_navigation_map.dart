@@ -173,8 +173,9 @@ class MapLibreNavigationMap
   // style reload; null until they are rendered.
   _Labels? _labels;
 
-  // Label images by (text, selected, pixel ratio, colours), oldest first.
-  // The futures are kept, so a render still running is shared too.
+  // Label images by (text, selected, pixel ratio, colours), least recently
+  // used first. The futures are kept, so a render still running is shared
+  // too.
   final _labelImages = <_LabelKey, Future<Uint8List>>{};
 
   // What the current style holds of the route options. Emptied when the
@@ -278,12 +279,18 @@ class MapLibreNavigationMap
     }
   }
 
+  /// The controller of the map, from [onMapCreated]; null before.
+  @visibleForTesting
+  MapLibreMapController? get controller => _controller;
+
   /// Call from `MapLibreMap.onMapCreated`. Route option taps are read from
   /// this controller from now on.
   void onMapCreated(MapLibreMapController controller) {
     _controller?.onFeatureTapped.remove(_onFeatureTapped);
     _controller = controller;
     controller.onFeatureTapped.add(_onFeatureTapped);
+    // A style load still running is for the old controller: drop it.
+    _styleGeneration++;
     _styleReady = false;
     _forgetDrawnOptions();
     _fire(_applyPadding);
@@ -478,13 +485,25 @@ class MapLibreNavigationMap
   @override
   void showRouteOptions(List<NavRoute> routes, int selected) {
     final generation = ++_labelGeneration;
+    final sameRoutes = _sameRoutes(_shownRoutes, routes);
     _shownRoutes = routes;
     _shownSelected = selected;
-    _labels = null;
+    // The same routes (a selection change): the old labels stay drawn until
+    // the new ones are ready, so they do not blink. Other routes: the old
+    // labels would sit on routes no longer shown, so they go at once.
+    if (!sameRoutes || routeLabel == null) _labels = null;
     _fireOptions(_syncOptions);
     if (routeLabel != null) {
       unawaited(_renderLabels(routes, selected, generation));
     }
+  }
+
+  static bool _sameRoutes(List<NavRoute>? a, List<NavRoute> b) {
+    if (a == null || a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!identical(a[i], b[i])) return false;
+    }
+    return true;
   }
 
   @override
@@ -538,10 +557,12 @@ class MapLibreNavigationMap
       padding,
       mapPadding: _padding,
     );
-    // fitCameraToBounds uses a 256 dp world; MapLibre's tiles are 512 px, so
-    // the same scale is one zoom level less.
+    // fitCameraToBounds uses a 256 dp world; MapLibre's tiles are 512 px.
     return CameraUpdate.newCameraPosition(
-      CameraPosition(target: toLatLng(target.position), zoom: target.zoom - 1),
+      CameraPosition(
+        target: toLatLng(target.position),
+        zoom: toSdkZoom(target.zoom),
+      ),
     );
   }
 
@@ -799,7 +820,12 @@ class MapLibreNavigationMap
           _labelImage(label(routes[i]), i == selected, ratio, colors),
       ]);
     } on Object {
-      // No labels for this generation; the lines are still shown.
+      // No labels for this generation (the old ones, of another selection,
+      // go too); the lines are still shown.
+      if (generation == _labelGeneration && _labels != null) {
+        _labels = null;
+        _fireOptions(_syncLabels);
+      }
       return;
     }
     if (generation != _labelGeneration) return;
@@ -814,8 +840,12 @@ class MapLibreNavigationMap
     RouteLabelColors colors,
   ) {
     final key = (text, selected, ratio, colors);
-    final cached = _labelImages[key];
-    if (cached != null) return cached;
+    final cached = _labelImages.remove(key);
+    if (cached != null) {
+      // Used again: it moves to the most recent end.
+      _labelImages[key] = cached;
+      return cached;
+    }
     final paint = labelPainter;
     final image = Future.sync(
       () => paint != null

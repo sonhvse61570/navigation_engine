@@ -52,5 +52,49 @@ void main() {
       expect(strings.northUp, 'Hướng bắc');
       expect(strings.headingUp, 'Theo hướng đi');
     });
+
+    test('copyWith changes only the given fields', () {
+      const vi = NavigationStrings.vietnamese();
+      final copy = vi.copyWith(start: 'Đi', via: (s) => 'ngang $s');
+      expect(copy.start, 'Đi');
+      expect(copy.via('A'), 'ngang A');
+      expect(copy.resume, vi.resume);
+      expect(copy.headingUp, vi.headingUp);
+      expect(copy.speedLimit, vi.speedLimit);
+      final same = vi.copyWith();
+      for (final (name, read) in <(String, String Function(NavigationStrings))>[
+        ('start', (s) => s.start),
+        ('resume', (s) => s.resume),
+        ('steps', (s) => s.steps),
+        ('recenter', (s) => s.recenter),
+        ('rerouting', (s) => s.rerouting),
+        ('arrived', (s) => s.arrived),
+        ('done', (s) => s.done),
+        ('retry', (s) => s.retry),
+        ('cancel', (s) => s.cancel),
+        ('then', (s) => s.then),
+        ('findingRoutes', (s) => s.findingRoutes),
+        ('noRoute', (s) => s.noRoute),
+        ('overview', (s) => s.overview),
+        ('exitNavigation', (s) => s.exitNavigation),
+        ('fastest', (s) => s.fastest),
+        ('speedLimit', (s) => s.speedLimit),
+        ('mute', (s) => s.mute),
+        ('unmute', (s) => s.unmute),
+        ('reportIncident', (s) => s.reportIncident),
+        ('compass', (s) => s.compass),
+        ('northUp', (s) => s.northUp),
+        ('headingUp', (s) => s.headingUp),
+        ('via', (s) => s.via('A')),
+      ]) {
+        expect(read(same), read(vi), reason: name);
+      }
+      // Each field can be set on its own.
+      expect(vi.copyWith(compass: 'C').compass, 'C');
+      expect(vi.copyWith(compass: 'C').northUp, vi.northUp);
+      expect(vi.copyWith(northUp: 'N').northUp, 'N');
+      expect(vi.copyWith(mute: 'M').mute, 'M');
+      expect(vi.copyWith(exitNavigation: 'X').exitNavigation, 'X');
+    });
   });
 }

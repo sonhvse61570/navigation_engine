@@ -37,6 +37,9 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Import every package in one app
+        run: tool/import_all_check.sh
+
       - name: Test
         run: |
           for p in packages/*/; do

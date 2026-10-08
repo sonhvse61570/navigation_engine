@@ -27,15 +27,10 @@ const _b = GeoPoint(10.001, 106.001);
 ml.MapLibreMapController _controller(RecordingPlatform platform) =>
     controllerOn(platform);
 
-Future<void> _settle() =>
-    Future<void>.delayed(const Duration(milliseconds: 20));
-
-Future<void> _until(bool Function() done) async {
-  for (var i = 0; i < 500 && !done(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 2));
-  }
-  expect(done(), isTrue, reason: 'timed out waiting');
-}
+/// Lets the adapter's pending work run: the fake platform answers through
+/// futures, not timers, so a fixed number of event-loop turns is enough (no
+/// wall-clock wait).
+Future<void> _settle() => pumpEventQueue();
 
 /// The width of a PNG, from its IHDR chunk.
 int _pngWidth(Uint8List png) => ByteData.sublistView(png).getUint32(16);
@@ -337,7 +332,7 @@ void main() {
         platform.addImageGate = gate;
 
         final first = map.onStyleLoaded();
-        await _until(() => platform.names.contains('addImage'));
+        await platform.addImageEntered;
         final second = map.onStyleLoaded();
         await second;
         final before = List.of(platform.names);
@@ -350,6 +345,30 @@ void main() {
         expect(platform.argsOf('setGeoJsonSource'), hasLength(3));
       },
     );
+
+    test('a new controller drops a style load still running', () async {
+      final (map, first) = _mapOnPlatform();
+      map.showRoute(const [_a, _b], const []);
+      final gate = Completer<void>();
+      first.addImageGate = gate;
+      final loading = map.onStyleLoaded();
+      await first.addImageEntered;
+
+      // The view is recreated: a new controller, its style not loaded yet.
+      final second = RecordingPlatform();
+      map.onMapCreated(_controller(second));
+      gate.complete();
+      await loading;
+      expect(first.argsOf('addGeoJsonSource'), isEmpty, reason: 'dropped');
+
+      // Not ready: nothing goes to the new controller before its style.
+      second.calls.clear();
+      map.showVehicle(_a, 0);
+      await _settle();
+      expect(second.argsOf('setGeoJsonSource'), isEmpty);
+      await map.onStyleLoaded();
+      expect(second.argsOf('setGeoJsonSource'), hasLength(3));
+    });
 
     test(
       'a failure while adding layers does not escape and is retried',

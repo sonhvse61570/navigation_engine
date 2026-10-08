@@ -7,6 +7,10 @@ import '../../flow/trip_progress.dart';
 import '../navigation_strings.dart';
 import 'mapbox_style_colors.dart';
 
+/// The least scale of the time left when it shrinks to fit beside the
+/// buttons; past it the text is ellipsized.
+const _minDurationScale = 0.5;
+
 const _lightIcon = Color(0xFFFFFFFF);
 
 /// The near-black of the night banner.
@@ -103,26 +107,36 @@ class MapboxStyleTripProgress extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Large text scales stop at 1.6 here, so the time
-                      // left fits beside the buttons on a narrow phone.
+                      // The time left follows the text scale up to 1.6,
+                      // then shrinks to fit beside the buttons rather than
+                      // being cut: down to [_minDurationScale], past which
+                      // it is ellipsized.
                       MediaQuery(
                         data: MediaQuery.of(context).copyWith(
                           textScaler: MediaQuery.textScalerOf(
                             context,
                           ).clamp(maxScaleFactor: 1.6),
                         ),
-                        // The time left shrinks rather than being cut.
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Text(
-                            formatter.duration(progress.remainingDuration),
-                            maxLines: 1,
-                            softWrap: false,
-                            style: TextStyle(
-                              color: colors.etaText,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w700,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) => FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    constraints.maxWidth / _minDurationScale,
+                              ),
+                              child: Text(
+                                formatter.duration(progress.remainingDuration),
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.etaText,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                           ),
                         ),

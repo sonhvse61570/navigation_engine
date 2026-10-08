@@ -398,7 +398,7 @@ void main() {
     final speed = tester.getRect(find.byType(GoogleStyleSpeedometer));
     expect(button.left, closeTo(16, 1));
     expect(button.center.dx, lessThan(400 / 2));
-    expect(button.bottom, lessThanOrEqualTo(speed.top));
+    expect(button.bottom, closeTo(speed.top - 8, 1), reason: '8 above');
     expect(speed.bottom, closeTo(footer.top - 16, 1));
     await tester.tap(find.text('Re-center'));
     await tester.pump(const Duration(milliseconds: 16));
@@ -869,6 +869,15 @@ void main() {
       expect(find.byType(GoogleStyleTripFooter), findsOneWidget);
       expect(find.byType(GoogleStyleSpeedometer), findsOneWidget);
       expect(tester.takeException(), isNull, reason: 'navigating');
+      // Vertically too: inside the screen, the speedometer between the
+      // header and the footer.
+      final header = tester.getRect(find.byType(GoogleStyleManeuverHeader));
+      final footer = tester.getRect(find.byType(GoogleStyleTripFooter));
+      final speed = tester.getRect(find.byType(GoogleStyleSpeedometer));
+      expect(header.top, greaterThanOrEqualTo(0));
+      expect(footer.bottom, lessThanOrEqualTo(640));
+      expect(speed.top, greaterThanOrEqualTo(header.bottom), reason: '$speed');
+      expect(speed.bottom, closeTo(footer.top - 16, 1));
     });
 
     for (final scale in [1.0, 1.3]) {
@@ -913,6 +922,12 @@ void main() {
         expect(recenter.overlaps(speed), isFalse, reason: '$recenter');
         expect(recenter.overlaps(footer), isFalse, reason: '$recenter');
         expect(speed.overlaps(footer), isFalse, reason: '$speed');
+        // The header spans the width: the stack would reach into it, so
+        // the recenter sits beside the speed.
+        final header = tester.getRect(find.byType(GoogleStyleManeuverHeader));
+        expect(recenter.overlaps(header), isFalse, reason: '$recenter');
+        expect(speed.overlaps(header), isFalse, reason: '$speed');
+        expect(recenter.left, greaterThan(speed.right));
       });
     }
   }

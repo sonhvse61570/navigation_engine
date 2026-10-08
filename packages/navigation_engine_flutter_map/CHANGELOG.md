@@ -27,3 +27,6 @@
   `NavigationFlowController`, `NavigationStrings`, `MapboxStyleColors`,
   `SpeedLimitSign`, `RouteColors` and `CarPuck` from
   navigation_engine_flutter.
+- `FlutterMapNavigationMap.routeLabel`: a change while options are shown
+  rebuilds the labels. A change of the attribution's bottom inset keeps
+  its state (an open popup stays open).

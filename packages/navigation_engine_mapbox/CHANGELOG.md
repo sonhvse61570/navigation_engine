@@ -31,3 +31,11 @@
   `NavigationFlowController`, `NavigationStrings`, `MapboxStyleColors`,
   `SpeedLimitSign`, `RouteColors`, `CarPuck` and `VehicleImageBuilder`
   from navigation_engine_flutter.
+- A new selection restyles and reorders the route option lines in place
+  and keeps the labels until the new ones are ready (no flicker); a failed
+  layer move is reported and redone on the next update, and a clear still
+  removes the layer. The label image cache drops the least recently used
+  image.
+- On the Standard style the view sets the light preset (`day` or
+  `night`) at each style load; `MapboxNavigationMap.lightPreset` sets
+  another one for a custom view.

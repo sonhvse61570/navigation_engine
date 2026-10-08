@@ -90,11 +90,13 @@ final class GoogleStyleColors {
 /// The route label colours of a Google-style theme.
 extension GoogleStyleRouteLabelColors on GoogleStyleColors {
   /// The route label colours: the selected bubble in [accent] / [onAccent],
-  /// the others in [surface] / [onSurface].
+  /// the others in [surface] / [onSurface], with a border of [onSurface] at
+  /// 20 % (dark by day, light at night, so it shows on both).
   RouteLabelColors get routeLabelColors => RouteLabelColors(
     selectedFill: accent,
     selectedText: onAccent,
     fill: surface,
     text: onSurface,
+    border: onSurface.withAlpha(0x33),
   );
 }

@@ -198,6 +198,40 @@ void main() {
     expect(h.session.frame, isNotNull);
   });
 
+  test('followChanges emits each change of follow, not a repeat', () async {
+    final h = Harness();
+    final seen = <bool>[];
+    final sub = h.session.followChanges.listen(seen.add);
+    h.session.follow = false;
+    h.session.follow = false;
+    h.session.follow = true;
+    await pumpEventQueue();
+    expect(seen, [false, true]);
+    await sub.cancel();
+    h.session.dispose();
+    h.session.follow = false; // after dispose: no throw
+    expect(h.session.follow, isFalse);
+  });
+
+  test('dispose ends the camera it created, not one it was given', () async {
+    final own = Harness();
+    var ownDone = false;
+    own.session.camera.headingUpChanges.listen(
+      null,
+      onDone: () => ownDone = true,
+    );
+    final given = FollowCamera();
+    final other = NavigationSession(fixes: FakeFixSource(), camera: given);
+    var givenDone = false;
+    given.headingUpChanges.listen(null, onDone: () => givenDone = true);
+    own.session.dispose();
+    other.dispose();
+    await pumpEventQueue();
+    expect(ownDone, isTrue);
+    expect(givenDone, isFalse, reason: 'the caller owns it');
+    given.dispose();
+  });
+
   test('the route line is redrawn at most once per second', () async {
     final map = FakeMap();
     final h = Harness(map: map)..session.start(route: route);

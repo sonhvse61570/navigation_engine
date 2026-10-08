@@ -1,13 +1,19 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'google_style_colors.dart';
 
+/// The height of the bar where the height it is given is unbounded.
+const double _unboundedHeight = 120;
+
 /// A thin vertical bar showing how much of the trip is driven: the driven
 /// part in [GoogleStyleColors.etaText], filled from the bottom, on a track
 /// in [GoogleStyleColors.alternative], with a vehicle dot at the current
-/// fraction. It fills the height it is given; the dot is wider than the bar
-/// and, at 0 and 1, reaches half its size past the bar's ends (nothing clips
-/// it).
+/// fraction. It fills the height it is given, or is 120 high where the
+/// height is unbounded (in a column or a scroll view). The dot is
+/// wider than the bar and travels inside its length: flush with the bottom
+/// at 0 and with the top at 1.
 class GoogleStyleTripProgressBar extends StatelessWidget {
   /// Creates a bar filled to [fraction].
   const GoogleStyleTripProgressBar({
@@ -30,14 +36,15 @@ class GoogleStyleTripProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final f = fraction.isNaN ? 0.0 : fraction.clamp(0.0, 1.0);
     final dot = width + 6;
-    return SizedBox(
-      width: width,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final height = constraints.hasBoundedHeight
-              ? constraints.maxHeight
-              : 0.0;
-          return Stack(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : _unboundedHeight;
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Stack(
             clipBehavior: Clip.none,
             children: [
               Positioned.fill(
@@ -64,7 +71,8 @@ class GoogleStyleTripProgressBar extends StatelessWidget {
               ),
               Positioned(
                 left: (width - dot) / 2,
-                bottom: f * height - dot / 2,
+                // Inside the bar's length: no overhang at 0 or 1.
+                bottom: f * math.max(0, height - dot),
                 width: dot,
                 height: dot,
                 child: DecoratedBox(
@@ -77,9 +85,9 @@ class GoogleStyleTripProgressBar extends StatelessWidget {
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

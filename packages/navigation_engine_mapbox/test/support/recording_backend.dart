@@ -6,15 +6,16 @@ import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'package:navigation_engine_mapbox/src/mapbox_navigation_map.dart' as mba;
 
-/// A layer of the fake style: the layer and the id it was added below.
+/// A layer of the fake style: the layer and the id it was last moved below
+/// (null when it was only added, on top).
 typedef FakeLayer = ({mb.Layer layer, String? below});
 
 /// A backend that records what the adapter sends and can be told to fail
 /// or to hold a call back.
 ///
 /// It also keeps a small model of the style: [sources] with their (decoded)
-/// data, [layers] bottom to top (a layer added `below` another goes right
-/// below it), [images] and the import [config]. Adding a source or layer
+/// data, [layers] bottom to top (a layer is added on top; `moveLayer` puts
+/// it right below another), [images] and the import [config]. Adding a source or layer
 /// twice fails the way the native SDK does; so do removing or updating
 /// something that is not there, and removing a source a layer still uses.
 /// [resetStyle] empties the model, as a new style does. The tap
@@ -41,13 +42,27 @@ class RecordingBackend implements mba.MapboxBackend {
   final taps = <String, mba.FeatureTap>{};
 
   /// Held back until completed; consumed by the first addImage call.
-  Completer<void>? addImageGate;
+  Completer<void>? get addImageGate => _addImageGate;
+  set addImageGate(Completer<void>? gate) {
+    _addImageGate = gate;
+    _gateReached = Completer<void>();
+  }
+
+  Completer<void>? _addImageGate;
+  Completer<void> _gateReached = Completer<void>();
+
+  /// Completes when an addImage call takes the [addImageGate] (it is held
+  /// back from then on): a signal to wait on instead of polling.
+  Future<void> get addImageGateReached => _gateReached.future;
 
   /// Methods that throw once, by name.
   final failOnce = <String>{};
 
   /// A layer id whose add throws once (before the layer is added).
   String? failLayerOnce;
+
+  /// A layer id whose move throws once (the layer stays where it is).
+  String? failMoveOf;
 
   /// A new style: the sources, layers, images and config so far are gone.
   void resetStyle() {
@@ -107,7 +122,8 @@ class RecordingBackend implements mba.MapboxBackend {
 
   final _imageWaiters = <String, Completer<void>>{};
 
-  /// Completes once the image [imageId] is in the style (at once if it is).
+  /// Completes once the image [imageId] is in the style (at once if it is),
+  /// or with the error of an addImage of it that fails.
   Future<void> imageAdded(String imageId) {
     if (images.containsKey(imageId)) return Future.value();
     return (_imageWaiters[imageId] ??= Completer<void>()).future;
@@ -119,13 +135,21 @@ class RecordingBackend implements mba.MapboxBackend {
     double scale,
     mb.StyleImage image,
   ) async {
-    final gate = addImageGate;
-    addImageGate = null;
-    await _record('addImage', (imageId, scale, image));
+    final gate = _addImageGate;
+    _addImageGate = null;
+    try {
+      await _record('addImage', (imageId, scale, image));
+    } catch (e, st) {
+      _imageWaiters.remove(imageId)?.completeError(e, st);
+      rethrow;
+    }
     imageAdds.add(imageId);
     images[imageId] = (scale, image);
     _imageWaiters.remove(imageId)?.complete();
-    if (gate != null) await gate.future;
+    if (gate != null) {
+      if (!_gateReached.isCompleted) _gateReached.complete();
+      await gate.future;
+    }
   }
 
   @override
@@ -160,7 +184,7 @@ class RecordingBackend implements mba.MapboxBackend {
   };
 
   @override
-  Future<void> addLayer(mb.Layer layer, {String? below}) async {
+  Future<void> addLayer(mb.Layer layer) async {
     await _record('addLayer', layer);
     if (layer.id == failLayerOnce) {
       failLayerOnce = null;
@@ -169,18 +193,30 @@ class RecordingBackend implements mba.MapboxBackend {
     if (layerIds.contains(layer.id)) {
       _fail('Layer ${layer.id} already exists.');
     }
-    final entry = (layer: layer, below: below);
-    if (below == null) {
-      layers.add(entry);
-      return;
-    }
-    final at = layerIds.indexOf(below);
-    if (at < 0) _fail('Layer $below not found.');
-    layers.insert(at, entry);
+    layers.add((layer: layer, below: null));
   }
 
   @override
-  Future<void> updateLayer(mb.Layer layer) => _record('updateLayer', layer);
+  Future<void> moveLayer(String layerId, {required String below}) async {
+    await _record('moveLayer', (layerId, below));
+    if (layerId == failMoveOf) {
+      failMoveOf = null;
+      _fail('move of $layerId failed');
+    }
+    final from = layerIds.indexOf(layerId);
+    if (from < 0) _fail('Layer $layerId not found.');
+    if (!layerIds.contains(below)) _fail('Layer $below not found.');
+    final moved = layers.removeAt(from);
+    layers.insert(layerIds.indexOf(below), (layer: moved.layer, below: below));
+  }
+
+  @override
+  Future<void> updateLayer(mb.Layer layer) async {
+    await _record('updateLayer', layer);
+    final at = layerIds.indexOf(layer.id);
+    if (at < 0) _fail('Layer ${layer.id} not found.');
+    layers[at] = (layer: layer, below: layers[at].below);
+  }
 
   @override
   Future<void> removeLayer(String layerId) async {

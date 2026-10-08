@@ -2,6 +2,10 @@
 
 - `FollowCamera.headingUp` (default `true`): when false the camera stays
   north-up and flat (bearing 0, tilt 0), with the zoom logic unchanged.
+- `NavigationSession.followChanges` and `FollowCamera.headingUpChanges`
+  emit each change of `follow` and `headingUp`, so a UI can show it
+  without waiting for a frame. `FollowCamera.dispose` ends its stream; a
+  session disposes the camera it created.
 - Initial release: route snapping, predict-and-correct motion
   (`RouteMotionEngine`, `FreeMotionEngine`), `FollowCamera`, turn-by-turn
   guidance with English and Vietnamese formatters, `NavigationSession`, and

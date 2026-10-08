@@ -9,7 +9,7 @@ import 'package:navigation_engine_mapbox/navigation_engine_mapbox.dart';
 import 'package:navigation_engine_mapbox/src/mapbox_navigation_map.dart'
     show MapboxNavigationMapTesting;
 import 'package:navigation_engine_mapbox/src/mapbox_navigation_view.dart'
-    show dayNightStyle;
+    show MapboxViewBinding;
 
 import 'recording_backend.dart';
 
@@ -19,11 +19,11 @@ import 'recording_backend.dart';
 ///
 /// Pass [build] as `MapboxStyleNavigation.mapViewBuilder`. It records each
 /// [MapboxNavigationView] the drop-in builds ([built]) and shows a
-/// [FakeMapboxView] for it, which does what the real view does with a
-/// [MapboxNavigationMap] on the [backend] in place of the SDK's map: it
-/// attaches the adapter to the session, forwards the view's parameters,
-/// ticks the session through a [NavigationMapFrame], sets the light preset
-/// and changes the style by `night`. [createMap] and [loadStyle] play the
+/// [FakeMapboxView] for it, which runs the real view's [MapboxViewBinding]
+/// (attaching the adapter to the session, forwarding the view's
+/// parameters, the light preset and the style by `night`) with a
+/// [MapboxNavigationMap] on the [backend] in place of the SDK's map, and
+/// ticks the session through a [NavigationMapFrame]. [createMap] and [loadStyle] play the
 /// SDK's `onMapCreated` and `onStyleLoadedListener`; `onMapCreated` gets no
 /// map (null), as no `MapboxMap` can be made without the SDK's platform.
 class FakeMapboxViews {
@@ -71,42 +71,29 @@ class FakeMapboxView extends StatefulWidget {
 }
 
 class FakeMapboxViewState extends State<FakeMapboxView> {
-  late final MapboxNavigationMap adapter = MapboxNavigationMap(
-    routeColors: _view.routeColors,
+  /// The real view's binding: the same adapter logic as the view.
+  late final MapboxViewBinding binding = MapboxViewBinding(
+    _view,
     // Rendered without the engine.
-    vehicleImage: _view.vehicleImage ?? (_) async => Uint8List(4),
+    fallbackVehicleImage: (_) async => Uint8List(4),
   );
 
-  MapboxNavigationView get _view => widget.view;
+  /// The adapter the view draws with.
+  MapboxNavigationMap get adapter => binding.adapter;
 
-  ({String styleUri, String? lightPreset}) _dayNight(MapboxNavigationView v) =>
-      dayNightStyle(v.styleUri, v.nightStyleUri, night: v.night);
+  MapboxNavigationView get _view => widget.view;
 
   @override
   void initState() {
     super.initState();
     widget.owner.mounted.add(this);
-    _sync();
-    adapter.lightPreset = _dayNight(_view).lightPreset;
-    _view.session.map = adapter;
-  }
-
-  void _sync() {
-    adapter
-      ..routeLabel = _view.routeLabel
-      ..onRouteOptionTap = _view.onRouteOptionTap
-      ..routeColors = _view.routeColors
-      ..alternativeColor = _view.alternativeRouteColor
-      ..labelColors = _view.labelColors
-      ..bottomInset = _view.bottomInset;
+    binding; // Creates the adapter and attaches it now.
   }
 
   /// What the real view does in `MapWidget.onMapCreated`.
   void createMap() {
-    adapter
-      ..attachBackend(widget.owner.backend)
-      ..hideOrnaments()
-      ..placeOrnaments();
+    adapter.attachBackend(widget.owner.backend);
+    binding.mapCreated();
     // There is no MapboxMap without the SDK's platform: the drop-in's hook
     // takes a nullable map, so it can be called with none.
     final onMapCreated = _view.onMapCreated;
@@ -129,26 +116,14 @@ class FakeMapboxViewState extends State<FakeMapboxView> {
   @override
   void didUpdateWidget(FakeMapboxView old) {
     super.didUpdateWidget(old);
-    if (!identical(old.view.session, _view.session)) {
-      if (identical(old.view.session.map, adapter)) old.view.session.map = null;
-      _view.session.map = adapter;
-    }
-    _sync();
-    final shown = _dayNight(_view);
-    if (_dayNight(old.view).styleUri != shown.styleUri) {
-      adapter.changeStyle(shown.styleUri);
-    }
-    adapter.lightPreset = shown.lightPreset;
+    binding.update(old.view, _view);
   }
 
   @override
   void dispose() {
-    if (identical(_view.session.map, adapter)) _view.session.map = null;
-    adapter.dispose();
+    binding.dispose(_view);
     super.dispose();
   }
-
-  Size? _reportedSize;
 
   @override
   Widget build(BuildContext context) => NavigationMapFrame(
@@ -161,15 +136,7 @@ class FakeMapboxViewState extends State<FakeMapboxView> {
       adapter.padding = padding;
       return LayoutBuilder(
         builder: (context, constraints) {
-          final size = constraints.biggest;
-          if (size != _reportedSize) {
-            _reportedSize = size;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && _reportedSize == size) {
-                adapter.viewportSize = size;
-              }
-            });
-          }
+          binding.reportViewport(constraints.biggest, mounted: () => mounted);
           return const SizedBox.expand();
         },
       );

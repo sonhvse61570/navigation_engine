@@ -50,3 +50,22 @@
   Mapbox-style pieces, the shared screen of the adapters' Mapbox-style
   drop-ins. Its `mapBuilder` gets the colours, the route line colours and
   the route label of the moment.
+- `NavigationFlowScaffold.headerBuilder` gets the guarded
+  `NavigationFlowActions`, as `topEndBuilder` does.
+- The scaffold shows a follow change through
+  `NavigationSession.followChanges`, without waiting for a frame or a
+  touch. The step sheet's background (`stepSheetColor`) and list follow
+  the night mode while the sheet is open.
+- The speed and the recenter button share one bottom: the footer or the
+  bottom inset, whichever is higher, plus 16. At the bottom start the
+  recenter button sits beside the speed where the stack would reach into
+  the header, and is hidden where neither fits; it comes back once it
+  fits.
+- `recenterAlignment` is directional: in a right-to-left app the recenter
+  button mirrors (bottom end is the bottom left).
+- `LaneGuidanceRow`: the lane arrows of the styled banners.
+- `MapboxStyleColors` has `==` and `hashCode`; its `routeLabelColors`
+  border is `onSurface` at 20 %, visible by day and at night.
+- `NavigationStrings.copyWith`.
+- `MapboxStyleTripProgress` shrinks the time left to half size at most,
+  then ellipsizes it.

@@ -41,3 +41,14 @@
   `RouteColors`, `CarPuck`, `VehicleImageBuilder`, `RouteLabelColors`,
   `fitCameraToBounds`, `paintRouteLabel` and `laneDirectionIcon` from
   navigation_engine_flutter.
+- The compass shows a heading up / north up switch the app makes at once
+  (`FollowCamera.headingUpChanges`); its tooltip is its one accessibility
+  label.
+- `GoogleStyleTripProgressBar`: the vehicle dot stays inside the bar at 0
+  and 1, and an unbounded height gives a 120 high bar.
+- `GoogleStyleLaneGuidance` draws the shared `LaneGuidanceRow`.
+- In landscape, where the recenter button stacked above the speedometer
+  would reach into the turn card, it sits beside the speedometer.
+- The route label border of `GoogleStyleColors.routeLabelColors` is
+  `onSurface` at 20 %, visible by day and at night. The label image cache
+  drops the least recently used image.

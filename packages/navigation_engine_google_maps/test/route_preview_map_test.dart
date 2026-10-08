@@ -699,6 +699,40 @@ void main() {
       expect(map.routeOptionMarkers.value, hasLength(routes.length));
     });
 
+    test('the label image cache evicts the least recently used', () async {
+      addTearDown(map.dispose);
+      final painted = <String>[];
+      var text = 'keep';
+      map
+        ..routeLabel = ((_) => text)
+        ..labelPainter =
+            (
+              t, {
+              required selected,
+              required pixelRatio,
+              required colors,
+            }) async {
+              painted.add(t);
+              return png;
+            };
+      void show(String t) {
+        text = t;
+        map.showRouteOptions([routes.first], 0);
+      }
+
+      show('keep');
+      // More new labels than the cache holds (32), with 'keep' used again
+      // in between: it stays, the others go oldest first.
+      for (var i = 0; i < 40; i++) {
+        show('label $i');
+        show('keep');
+      }
+      expect(painted.where((t) => t == 'keep'), hasLength(1));
+      show('label 0');
+      expect(painted.where((t) => t == 'label 0'), hasLength(2));
+      await pumpEventQueue();
+    });
+
     test('another selection or ratio paints again', () async {
       addTearDown(map.dispose);
       final keys = <String>[];
@@ -759,7 +793,7 @@ void main() {
       expect(map.routeOptionMarkers.value, hasLength(2));
     });
 
-    test('holds up to 32 images and drops the oldest', () async {
+    test('holds up to 32 images and drops the least recently used', () async {
       addTearDown(map.dispose);
       var calls = 0;
       var prefix = 0;
@@ -793,13 +827,17 @@ void main() {
       await show();
       expect(calls, 32, reason: 'the oldest is still there: 32 fit');
 
-      // One more round evicts the two oldest images (prefix 0).
+      // One more round evicts the two least recently used images: prefix 1
+      // (prefix 0 was just used again).
       prefix = 16;
       await show();
       expect(calls, 34);
       prefix = 0;
       await show();
-      expect(calls, 36, reason: 'prefix 0 was dropped');
+      expect(calls, 34, reason: 'used again, so kept');
+      prefix = 1;
+      await show();
+      expect(calls, 36, reason: 'prefix 1 was dropped');
       prefix = 15;
       await show();
       expect(calls, 36, reason: 'a newer one is kept');

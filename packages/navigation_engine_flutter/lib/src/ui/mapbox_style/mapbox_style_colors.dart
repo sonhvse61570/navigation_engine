@@ -114,11 +114,45 @@ final class MapboxStyleColors {
   );
 
   /// The route label colours: the selected bubble in [accent] / [onAccent],
-  /// the others in [surface] / [onSurface].
+  /// the others in [surface] / [onSurface], with a border of [onSurface] at
+  /// 20 % (dark by day, light at night, so it shows on both).
   RouteLabelColors get routeLabelColors => RouteLabelColors(
     selectedFill: accent,
     selectedText: onAccent,
     fill: surface,
     text: onSurface,
+    border: onSurface.withAlpha(0x33),
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is MapboxStyleColors &&
+      other.banner == banner &&
+      other.bannerSecondary == bannerSecondary &&
+      other.onBanner == onBanner &&
+      other.surface == surface &&
+      other.onSurface == onSurface &&
+      other.onSurfaceVariant == onSurfaceVariant &&
+      other.accent == accent &&
+      other.onAccent == onAccent &&
+      other.alternative == alternative &&
+      other.etaText == etaText &&
+      other.warning == warning &&
+      other.end == end;
+
+  @override
+  int get hashCode => Object.hash(
+    banner,
+    bannerSecondary,
+    onBanner,
+    surface,
+    onSurface,
+    onSurfaceVariant,
+    accent,
+    onAccent,
+    alternative,
+    etaText,
+    warning,
+    end,
   );
 }

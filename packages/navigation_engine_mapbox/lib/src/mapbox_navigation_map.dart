@@ -69,8 +69,11 @@ abstract interface class MapboxBackend {
   /// Removes a style source; no layer may use it any more.
   Future<void> removeSource(String sourceId);
 
-  /// Adds [layer] on top, or right below the layer [below].
-  Future<void> addLayer(Layer layer, {String? below});
+  /// Adds [layer] on top.
+  Future<void> addLayer(Layer layer);
+
+  /// Moves the existing layer [layerId] right below the layer [below].
+  Future<void> moveLayer(String layerId, {required String below});
 
   /// Replaces the properties of the existing layer with [layer]'s id.
   Future<void> updateLayer(Layer layer);
@@ -142,15 +145,14 @@ class _MapboxMapBackend implements MapboxBackend {
   Future<void> removeSource(String sourceId) => map.removeStyleSource(sourceId);
 
   // `MapboxMap.addLayer` ignores its position argument in 3.0.0 (and the
-  // layer's JSON encoding is internal), so the layer is added on top and
-  // then moved below [below].
+  // layer's JSON encoding is internal), so a layer is added on top and then
+  // moved (see MapboxNavigationMap._addLayer).
   @override
-  Future<void> addLayer(Layer layer, {String? below}) async {
-    await map.addLayer(layer);
-    if (below != null) {
-      await map.moveStyleLayer(layer.id, LayerPosition(below: below));
-    }
-  }
+  Future<void> addLayer(Layer layer) => map.addLayer(layer);
+
+  @override
+  Future<void> moveLayer(String layerId, {required String below}) =>
+      map.moveStyleLayer(layerId, LayerPosition(below: below));
 
   @override
   Future<void> updateLayer(Layer layer) => map.updateLayer(layer);
@@ -235,11 +237,19 @@ const _labelImageLimit = 32;
 /// together; a newer [showRouteOptions] or [clearRouteOptions] drops renders
 /// still pending.
 ///
+/// A new selection of the same routes restyles the lines and moves them
+/// into the new order in place (nothing is removed or added, so nothing
+/// flickers); a move that fails is reported and done again on the next
+/// update.
+///
 /// A tap reaches [onRouteOptionTap] only through the option layers and the
 /// label layer (a tap interaction on each of them); the session's own
-/// layers take no taps. [fitRoutes] needs the map and [viewportSize];
-/// called earlier, it is kept and applied once both exist. Fits account
-/// for [padding], the camera insets the view sets.
+/// layers take no taps. So a tap on the vehicle where it sits over an
+/// option line selects that option, as on MapLibre and flutter_map.
+///
+/// [fitRoutes] needs the map and [viewportSize]; called earlier, it is kept
+/// and applied once both exist. Fits account for [padding], the camera
+/// insets the view sets.
 ///
 /// ## Night
 ///
@@ -333,8 +343,9 @@ class MapboxNavigationMap
   // style reload; null until they are rendered.
   _Labels? _labels;
 
-  // Label images by (text, selected, pixel ratio, colours), oldest first.
-  // The futures are kept, so a render still running is shared too.
+  // Label images by (text, selected, pixel ratio, colours), least recently
+  // used first. The futures are kept, so a render still running is shared
+  // too.
   final _labelImages = <_LabelKey, Future<Uint8List>>{};
 
   // What the current style holds of the route options. Emptied when the
@@ -686,13 +697,14 @@ class MapboxNavigationMap
   }
 
   /// Same as [_addSource], for layers.
-  Future<void> _addLayer(
-    MapboxBackend backend,
-    Layer layer, {
-    String? below,
-  }) async {
+  /// Adds [layer] on top; one left over from an earlier attempt is kept.
+  /// The callers record the layer as drawn right after, before they move
+  /// it into place: a failed move is not swallowed (it reaches [_guard],
+  /// which reports it), and the layer is still known, so a clear removes
+  /// it and the next update moves it again.
+  Future<void> _addLayer(MapboxBackend backend, Layer layer) async {
     try {
-      await backend.addLayer(layer, below: below);
+      await backend.addLayer(layer);
     } catch (_) {
       if (!await backend.styleLayerExists(layer.id)) rethrow;
     }
@@ -764,13 +776,25 @@ class MapboxNavigationMap
   @override
   void showRouteOptions(List<NavRoute> routes, int selected) {
     final generation = ++_labelGeneration;
+    final sameRoutes = _sameRoutes(_shownRoutes, routes);
     _shownRoutes = routes;
     _shownSelected = selected;
-    _labels = null;
+    // The same routes (a selection change): the old labels stay drawn until
+    // the new ones are ready, so they do not blink. Other routes: the old
+    // labels would sit on routes no longer shown, so they go at once.
+    if (!sameRoutes || routeLabel == null) _labels = null;
     _fireOptions(_syncOptions);
     if (routeLabel != null) {
       unawaited(_renderLabels(routes, selected, generation));
     }
+  }
+
+  static bool _sameRoutes(List<NavRoute>? a, List<NavRoute> b) {
+    if (a == null || a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!identical(a[i], b[i])) return false;
+    }
+    return true;
   }
 
   @override
@@ -914,37 +938,103 @@ class MapboxNavigationMap
         generation == _styleGeneration && identical(backend, _backend);
     final routes = _shownRoutes ?? const <NavRoute>[];
     final selected = _shownSelected;
+    final order = _lineOrder(routes.length, selected);
 
-    // The lines are added again: a new selection changes their order.
-    for (final line in List.of(drawn.lines.reversed)) {
-      await backend.removeLayer(line.id);
-      if (!current()) return;
-      drawn.lines.remove(line);
+    // The same lines (a new selection): restyled and reordered in place,
+    // nothing removed or added, so nothing flickers.
+    final inPlace =
+        drawn.lines.isNotEmpty &&
+        drawn.lines.length == order.length &&
+        {
+          for (final l in drawn.lines) l.id,
+        }.containsAll([for (final l in order) l.id]);
+    // A failing step does not stop the others: what is left is redone on
+    // the next update, and the labels still follow (a clear removes them).
+    // The first error is rethrown at the end, for [_guard] to report.
+    final errors = <(Object, StackTrace)>[];
+    Future<void> step(Future<void> Function() f) async {
+      try {
+        await f();
+      } catch (e, st) {
+        errors.add((e, st));
+      }
+    }
+
+    if (!inPlace) {
+      // Other lines: removed, then added in the new order.
+      for (final line in List.of(drawn.lines.reversed)) {
+        await step(() async {
+          await backend.removeLayer(line.id);
+          drawn.lines.remove(line);
+        });
+        if (!current()) return;
+      }
     }
     final wanted = {for (var i = 0; i < routes.length; i++) optionSource(i)};
     for (final id in drawn.sources.difference(wanted)) {
-      await backend.removeSource(id);
+      await step(() async {
+        await backend.removeSource(id);
+        drawn.sources.remove(id);
+      });
       if (!current()) return;
-      drawn.sources.remove(id);
     }
-    for (var i = 0; i < routes.length; i++) {
-      final id = optionSource(i);
-      await _putSource(
-        backend,
-        id,
-        lineFeatureCollection(routes[i].points),
-        exists: drawn.sources.contains(id),
-      );
+    await step(() async {
+      for (var i = 0; i < routes.length; i++) {
+        final id = optionSource(i);
+        await _putSource(
+          backend,
+          id,
+          lineFeatureCollection(routes[i].points),
+          exists: drawn.sources.contains(id),
+        );
+        if (!current()) return;
+        drawn.sources.add(id);
+      }
+      if (inPlace) {
+        await _reorderLines(backend, drawn, order, current);
+        return;
+      }
+      for (final line in order) {
+        await _addLayer(backend, _optionLayer(line));
+        if (!current()) return;
+        // Known before the move: a clear removes it whatever happens next.
+        drawn.lines.add(line);
+        _listenTaps(backend, line.id);
+        await backend.moveLayer(line.id, below: drivenLayer);
+        if (!current()) return;
+      }
+    });
+    if (!current()) return;
+    await step(() => _drawLabels(backend, drawn, current));
+    if (errors.isNotEmpty) {
+      Error.throwWithStackTrace(errors.first.$1, errors.first.$2);
+    }
+  }
+
+  /// Restyles the drawn lines whose selection changed and moves each line
+  /// into [order], from the top down (the top one right below the session's
+  /// route). The drawn lines are updated once all moves are done; a failure
+  /// leaves them as they were, so the next render does it all again.
+  Future<void> _reorderLines(
+    MapboxBackend backend,
+    _Drawn drawn,
+    List<_OptionLine> order,
+    bool Function() current,
+  ) async {
+    final was = {for (final l in drawn.lines) l.id: l};
+    var below = drivenLayer;
+    for (final line in order.reversed) {
+      if (was[line.id]?.selected != line.selected) {
+        await backend.updateLayer(_optionLayer(line));
+        if (!current()) return;
+      }
+      await backend.moveLayer(line.id, below: below);
       if (!current()) return;
-      drawn.sources.add(id);
+      below = line.id;
     }
-    for (final line in _lineOrder(routes.length, selected)) {
-      await _addLayer(backend, _optionLayer(line), below: drivenLayer);
-      if (!current()) return;
-      drawn.lines.add(line);
-      _listenTaps(backend, line.id);
-    }
-    await _drawLabels(backend, drawn, current);
+    drawn.lines
+      ..clear()
+      ..addAll(order);
   }
 
   Future<void> _syncLabels() async {
@@ -972,6 +1062,7 @@ class MapboxNavigationMap
         await backend.removeLayer(optionLabels);
         if (!current()) return;
         drawn.labelLayer = false;
+        drawn.labelLayerPlaced = false;
       }
       if (drawn.labelSource) {
         await backend.removeSource(optionLabels);
@@ -1000,25 +1091,31 @@ class MapboxNavigationMap
       current,
       keep: {for (final (id, _) in labels.images) id},
     );
-    if (!current() || drawn.labelLayer) return;
-    await _addLayer(
-      backend,
-      SymbolLayer(
-        id: optionLabels,
-        sourceId: optionLabels,
-        iconImageExpression: ['get', 'image'],
-        iconAnchor: IconAnchor.BOTTOM,
-        iconSize: 1,
-        iconAllowOverlap: true,
-        iconIgnorePlacement: true,
-        // The selected label is the last feature: drawn on top.
-        symbolZOrder: SymbolZOrder.SOURCE,
-      ),
-      below: vehicleLayer,
-    );
     if (!current()) return;
-    drawn.labelLayer = true;
-    _listenTaps(backend, optionLabels);
+    if (!drawn.labelLayer) {
+      await _addLayer(
+        backend,
+        SymbolLayer(
+          id: optionLabels,
+          sourceId: optionLabels,
+          iconImageExpression: ['get', 'image'],
+          iconAnchor: IconAnchor.BOTTOM,
+          iconSize: 1,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          // The selected label is the last feature: drawn on top.
+          symbolZOrder: SymbolZOrder.SOURCE,
+        ),
+      );
+      if (!current()) return;
+      // Known before the move: a clear removes it whatever happens next.
+      drawn.labelLayer = true;
+      _listenTaps(backend, optionLabels);
+    }
+    if (drawn.labelLayerPlaced) return;
+    await backend.moveLayer(optionLabels, below: vehicleLayer);
+    if (!current()) return;
+    drawn.labelLayerPlaced = true;
   }
 
   /// Removes the drawn label images not in [keep].
@@ -1105,7 +1202,12 @@ class MapboxNavigationMap
           _labelImage(label(routes[i]), i == selected, ratio, colors),
       ]);
     } on Object {
-      // No labels for this generation; the lines are still shown.
+      // No labels for this generation (the old ones, of another selection,
+      // go too); the lines are still shown.
+      if (generation == _labelGeneration && _labels != null) {
+        _labels = null;
+        _fireOptions(_syncLabels);
+      }
       return;
     }
     if (generation != _labelGeneration) return;
@@ -1120,8 +1222,12 @@ class MapboxNavigationMap
     RouteLabelColors colors,
   ) {
     final key = (text, selected, ratio, colors);
-    final cached = _labelImages[key];
-    if (cached != null) return cached;
+    final cached = _labelImages.remove(key);
+    if (cached != null) {
+      // Used again: it moves to the most recent end.
+      _labelImages[key] = cached;
+      return cached;
+    }
     final paint = labelPainter;
     final image = Future.sync(
       () => paint != null
@@ -1168,6 +1274,10 @@ class _Drawn {
   final images = <String>{};
   bool labelSource = false;
   bool labelLayer = false;
+
+  /// Whether the label layer was moved below the vehicle (a failed move is
+  /// done again on the next update).
+  bool labelLayerPlaced = false;
 }
 
 /// The rendered labels of the shown route options.

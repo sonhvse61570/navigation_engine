@@ -21,6 +21,7 @@ export 'src/navigation_map_frame.dart';
 export 'src/route_colors.dart';
 export 'src/ui/fit_camera.dart';
 export 'src/ui/lane_direction_icon.dart';
+export 'src/ui/lane_guidance_row.dart';
 export 'src/ui/mapbox_style/mapbox_style_arrival_panel.dart';
 export 'src/ui/mapbox_style/mapbox_style_colors.dart';
 export 'src/ui/mapbox_style/mapbox_style_flow_scaffold.dart';

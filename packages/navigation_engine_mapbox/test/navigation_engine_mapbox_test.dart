@@ -24,14 +24,15 @@ const _b = GeoPoint(10.001, 106.001);
 
 typedef _Map = mba.MapboxNavigationMap;
 
-Future<void> _settle() =>
-    Future<void>.delayed(const Duration(milliseconds: 20));
-
-Future<void> _until(bool Function() done) async {
-  for (var i = 0; i < 500 && !done(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 2));
+/// Lets the adapter and the fake backend finish their pending work.
+///
+/// The fake backend answers each call after a zero-delay timer, so a chain of
+/// calls needs one event-loop turn per link. Counting turns, not wall-clock
+/// time, makes this independent of machine load.
+Future<void> _settle() async {
+  for (var turn = 0; turn < 200; turn++) {
+    await Future<void>.delayed(Duration.zero);
   }
-  expect(done(), isTrue, reason: 'timed out waiting');
 }
 
 /// Runs [body] and returns the errors that escaped it into the zone.
@@ -326,7 +327,7 @@ void main() {
         backend.addImageGate = gate;
 
         final first = map.onStyleLoaded();
-        await _until(() => backend.names.contains('addImage'));
+        await backend.addImageGateReached;
         await map.onStyleLoaded();
         final before = List.of(backend.names);
         expect(
@@ -351,7 +352,7 @@ void main() {
         backend.addImageGate = gate;
 
         final first = map.onStyleLoaded();
-        await _until(() => backend.names.contains('addImage'));
+        await backend.addImageGateReached;
         map.onStyleChanging();
         gate.complete();
         await first;
@@ -467,7 +468,7 @@ void main() {
 
         // the SDK reports a reloaded style without onStyleChanging
         final reload = map.onStyleLoaded();
-        await _until(() => backend.names.contains('addImage'));
+        await backend.addImageGateReached;
         map.showVehicle(_a, 0);
         await _settle();
         expect(backend.argsOf('setStyleSourceProperty'), isEmpty);
@@ -485,7 +486,7 @@ void main() {
       backend.addImageGate = gate;
 
       final load = map.onStyleLoaded();
-      await _until(() => backend.names.contains('addImage'));
+      await backend.addImageGateReached;
       map.dispose();
       gate.complete();
       await load;
@@ -501,7 +502,7 @@ void main() {
         old.addImageGate = gate;
 
         final load = map.onStyleLoaded();
-        await _until(() => old.names.contains('addImage'));
+        await old.addImageGateReached;
         final fresh = RecordingBackend();
         map.attachBackend(fresh);
         gate.complete();
@@ -696,18 +697,22 @@ void main() {
 
     test('a ratio change while the first image renders wins', () async {
       final gate = Completer<void>();
+      final firstRender = Completer<void>();
       final ratios = <double>[];
       final (map, backend) = _mapOnBackend(
         map: _Map(
           vehicleImage: (r) async {
             ratios.add(r);
-            if (ratios.length == 1) await gate.future;
+            if (ratios.length == 1) {
+              firstRender.complete();
+              await gate.future;
+            }
             return CarPuck.toPngBytes(size: 10, pixelRatio: r);
           },
         ),
       );
       final load = map.onStyleLoaded();
-      await _until(() => ratios.isNotEmpty);
+      await firstRender.future;
       map.pixelRatio = 2;
       gate.complete();
       await load;

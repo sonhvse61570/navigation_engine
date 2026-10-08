@@ -73,7 +73,7 @@ void main() {
     );
     expect(find.byType(GoogleStyleLaneGuidance), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('google_style_lane_cell')),
+      find.byKey(const ValueKey('navigation_engine_lane_cell')),
       findsNWidgets(3),
     );
 

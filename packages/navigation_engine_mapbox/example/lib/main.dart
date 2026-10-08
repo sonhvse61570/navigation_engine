@@ -6,6 +6,8 @@ import 'package:navigation_engine/testing.dart';
 import 'package:navigation_engine_mapbox/navigation_engine_mapbox.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import 'mapbox_style_demo.dart';
+
 void main() {
   // Mapbox registers platform channels in setAccessToken, so the binding must exist first.
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,6 +78,19 @@ class _DrivingScreenState extends State<DrivingScreen> {
             child: NavigationBanner(
               session: _session,
               showLastAnnouncement: true,
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 96,
+            right: 12,
+            child: FilledButton.tonalIcon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const MapboxStyleDemoScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.navigation_outlined),
+              label: const Text('Mapbox-style UI'),
             ),
           ),
         ],

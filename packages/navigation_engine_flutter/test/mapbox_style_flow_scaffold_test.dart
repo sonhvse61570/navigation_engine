@@ -177,7 +177,7 @@ void main() {
     expect(progress.onEnd, isNotNull);
     expect(progress.onSteps, isNotNull);
     expect(progress.onOverview, isNotNull);
-    // The scaffold reads the follow mode on the session's next frames.
+    // The scaffold sees the follow change through the session.
     session.follow = false;
     for (var i = 0; i < 3; i++) {
       now = now.add(const Duration(microseconds: 16667));
@@ -201,13 +201,34 @@ void main() {
       tester.widget<BottomSheet>(find.byType(BottomSheet)).backgroundColor,
       teal.surface,
     );
+    Color sheetColor() => tester
+        .widget<Material>(
+          find.byKey(const ValueKey('navigation_engine_step_sheet')),
+        )
+        .color!;
+    expect(sheetColor(), teal.surface);
+    expect(
+      tester
+          .widget<MapboxStyleStepList>(find.byType(MapboxStyleStepList))
+          .colors,
+      same(teal),
+    );
+
+    // At night: the night colours, and the night route colours override.
+    // The open sheet follows: its surface and its list.
+    flow.nightMode = NightMode.alwaysNight;
+    await tester.pump();
+    expect(find.byType(MapboxStyleStepList), findsOneWidget);
+    expect(sheetColor(), MapboxStyleColors.night.surface);
+    expect(
+      tester
+          .widget<MapboxStyleStepList>(find.byType(MapboxStyleStepList))
+          .colors,
+      same(MapboxStyleColors.night),
+    );
     Navigator.of(tester.element(find.byType(MapboxStyleStepList))).pop();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-
-    // At night: the night colours, and the night route colours override.
-    flow.nightMode = NightMode.alwaysNight;
-    await tester.pump();
     final night = builds.last;
     expect(night.config.isNight, isTrue);
     expect(night.colors, same(MapboxStyleColors.night));
@@ -320,9 +341,6 @@ void main() {
         expect(flow.state.value, isA<FlowNavigating>());
       }
       session.follow = false;
-      // The scaffold reads the follow mode on the session's frames, and on
-      // a touch on the map (when idle there are no frames).
-      if (!navigate) await tester.tapAt(Offset(size.width / 2, 100));
       await frames(4);
       return session;
     }
@@ -378,27 +396,38 @@ void main() {
       }
     }
 
-    testWidgets('320x480 at 2x text: the recenter keeps its touch target', (
-      tester,
-    ) async {
-      await drive(
-        tester,
-        size: const Size(320, 480),
-        padding: const FakeViewPadding(),
-        textScale: 2,
-      );
-      final speed = tester.getRect(find.byType(MapboxStyleSpeedLimit));
-      final recenter = tester.getRect(find.byType(MapboxStyleRecenterButton));
-      final footer = tester.getRect(find.byType(MapboxStyleTripProgress));
-      expect(recenter.height, greaterThanOrEqualTo(48));
-      expect(recenter.overlaps(speed), isFalse, reason: '$recenter $speed');
-      expect(recenter.overlaps(footer), isFalse, reason: '$recenter');
-      expect(recenter.left, greaterThanOrEqualTo(0));
-      expect(recenter.right, lessThanOrEqualTo(320));
-      expect(recenter.top, greaterThanOrEqualTo(0));
-      expect(tester.takeException(), isNull);
-      await end!();
-    });
+    for (final (size, shown) in [
+      (const Size(320, 480), false),
+      (const Size(320, 560), true),
+    ]) {
+      testWidgets('$size at 2x text: the recenter keeps its touch target and '
+          'never covers the banner (shown: $shown)', (tester) async {
+        await drive(
+          tester,
+          size: size,
+          padding: const FakeViewPadding(),
+          textScale: 2,
+        );
+        final button = find.byType(MapboxStyleRecenterButton);
+        final speed = tester.getRect(find.byType(MapboxStyleSpeedLimit));
+        final footer = tester.getRect(find.byType(MapboxStyleTripProgress));
+        final banner = tester.getRect(find.byType(MapboxStyleManeuverBanner));
+        expect(speed.overlaps(banner), isFalse, reason: '$speed $banner');
+        // Where it cannot fit anywhere, it is hidden rather than overlap.
+        expect(button, shown ? findsOneWidget : findsNothing);
+        if (shown) {
+          final recenter = tester.getRect(button);
+          expect(recenter.height, greaterThanOrEqualTo(48));
+          expect(recenter.overlaps(speed), isFalse, reason: '$recenter');
+          expect(recenter.overlaps(footer), isFalse, reason: '$recenter');
+          expect(recenter.overlaps(banner), isFalse, reason: '$recenter');
+          expect(recenter.left, greaterThanOrEqualTo(0));
+          expect(recenter.right, lessThanOrEqualTo(size.width));
+        }
+        expect(tester.takeException(), isNull);
+        await end!();
+      });
+    }
 
     testWidgets('portrait: the idle recenter keeps above the bottom inset', (
       tester,

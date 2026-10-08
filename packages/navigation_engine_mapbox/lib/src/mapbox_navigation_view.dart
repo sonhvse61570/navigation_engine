@@ -106,6 +106,12 @@ class MapboxNavigationView extends StatefulWidget {
   /// style's `night` light preset, applied without a style reload; on other
   /// styles it loads [nightStyleUri] (when set). Either way the route, the
   /// vehicle and the route options stay.
+  ///
+  /// On [MapboxStyles.STANDARD] the view owns the light preset: `day` by
+  /// day and `night` at night, set at each style load, so a preset set on
+  /// the `MapboxMap` (such as `dusk`) does not stay. For another preset use
+  /// your own [MapboxNavigationMap] and its
+  /// [MapboxNavigationMap.lightPreset].
   final bool night;
 
   /// The style loaded while [night] is true, for styles other than
@@ -141,11 +147,90 @@ class MapboxNavigationView extends StatefulWidget {
   State<MapboxNavigationView> createState() => _MapboxNavigationViewState();
 }
 
+/// What a [MapboxNavigationView] does with its [MapboxNavigationMap], apart
+/// from building the SDK's map: it creates the adapter, attaches it to the
+/// session, forwards the view's parameters, switches day and night, places
+/// the ornaments once the map exists, reports the view's size and detaches
+/// on dispose. The view and the tests' stand-in view share it, so the two
+/// cannot drift. Not part of the public API (hidden by the library export).
+class MapboxViewBinding {
+  /// Creates the adapter of [view] and attaches it to the view's session.
+  /// The vehicle image is the view's, else [fallbackVehicleImage], else
+  /// the view's puck rendered.
+  MapboxViewBinding(
+    MapboxNavigationView view, {
+    VehicleImageBuilder? fallbackVehicleImage,
+  }) : adapter = MapboxNavigationMap(
+         routeColors: view.routeColors,
+         vehicleImage:
+             view.vehicleImage ??
+             fallbackVehicleImage ??
+             vehicleImageFor(view.puck),
+       ) {
+    _sync(view);
+    adapter.lightPreset = view._dayNight.lightPreset;
+    view.session.map = adapter;
+  }
+
+  /// The adapter the view draws with.
+  final MapboxNavigationMap adapter;
+
+  // What the adapter takes from the view's properties.
+  void _sync(MapboxNavigationView view) {
+    adapter
+      ..routeLabel = view.routeLabel
+      ..onRouteOptionTap = view.onRouteOptionTap
+      ..routeColors = view.routeColors
+      ..alternativeColor = view.alternativeRouteColor
+      ..labelColors = view.labelColors
+      ..bottomInset = view.bottomInset;
+  }
+
+  /// The view was rebuilt from [old] to [view].
+  void update(MapboxNavigationView old, MapboxNavigationView view) {
+    if (!identical(old.session, view.session)) {
+      if (identical(old.session.map, adapter)) old.session.map = null;
+      view.session.map = adapter;
+    }
+    _sync(view);
+    // MapWidget reads styleUri only when the map is created. The style
+    // change comes first: a light preset for the new style then waits for
+    // it to load.
+    final shown = view._dayNight;
+    if (old._dayNight.styleUri != shown.styleUri) {
+      adapter.changeStyle(shown.styleUri);
+    }
+    adapter.lightPreset = shown.lightPreset;
+  }
+
+  /// The map exists (the adapter has it): the compass and the scale bar
+  /// go, the logo and the attribution keep above the bottom inset.
+  void mapCreated() => adapter
+    ..hideOrnaments()
+    ..placeOrnaments();
+
+  Size? _reportedSize;
+
+  /// Tells the adapter the size of the map, after the frame (a pending fit
+  /// moves the camera, which must not happen while building).
+  void reportViewport(Size size, {required bool Function() mounted}) {
+    if (size == _reportedSize) return;
+    _reportedSize = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted() && _reportedSize == size) adapter.viewportSize = size;
+    });
+  }
+
+  /// The view of [view] is gone: detaches and disposes the adapter.
+  void dispose(MapboxNavigationView view) {
+    if (identical(view.session.map, adapter)) view.session.map = null;
+    adapter.dispose();
+  }
+}
+
 class _MapboxNavigationViewState extends State<MapboxNavigationView> {
-  late final _map = MapboxNavigationMap(
-    routeColors: widget.routeColors,
-    vehicleImage: widget.vehicleImage ?? vehicleImageFor(widget.puck),
-  );
+  late final _binding = MapboxViewBinding(widget);
+  MapboxNavigationMap get _map => _binding.adapter;
 
   /// Created once: a new viewport state on every rebuild would move the
   /// camera back to the initial position.
@@ -157,32 +242,7 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   @override
   void initState() {
     super.initState();
-    _syncMap();
-    _map.lightPreset = widget._dayNight.lightPreset;
-    widget.session.map = _map;
-  }
-
-  // What the adapter takes from the widget's properties.
-  void _syncMap() {
-    _map
-      ..routeLabel = widget.routeLabel
-      ..onRouteOptionTap = widget.onRouteOptionTap
-      ..routeColors = widget.routeColors
-      ..alternativeColor = widget.alternativeRouteColor
-      ..labelColors = widget.labelColors
-      ..bottomInset = widget.bottomInset;
-  }
-
-  Size? _reportedSize;
-
-  // Tells the adapter the size of the map, after the frame (a pending fit
-  // moves the camera, which must not happen while building).
-  void _reportViewport(Size size) {
-    if (size == _reportedSize) return;
-    _reportedSize = size;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _reportedSize == size) _map.viewportSize = size;
-    });
+    _binding; // Creates the adapter and attaches it now.
   }
 
   @override
@@ -194,25 +254,12 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
   @override
   void didUpdateWidget(MapboxNavigationView old) {
     super.didUpdateWidget(old);
-    if (!identical(old.session, widget.session)) {
-      if (identical(old.session.map, _map)) old.session.map = null;
-      widget.session.map = _map;
-    }
-    _syncMap();
-    // MapWidget reads styleUri only when the map is created. The style
-    // change comes first: a light preset for the new style then waits for
-    // it to load.
-    final shown = widget._dayNight;
-    if (old._dayNight.styleUri != shown.styleUri) {
-      _map.changeStyle(shown.styleUri);
-    }
-    _map.lightPreset = shown.lightPreset;
+    _binding.update(old, widget);
   }
 
   @override
   void dispose() {
-    if (identical(widget.session.map, _map)) widget.session.map = null;
-    _map.dispose();
+    _binding.dispose(widget);
     super.dispose();
   }
 
@@ -228,17 +275,18 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
         _map.padding = padding;
         return LayoutBuilder(
           builder: (context, constraints) {
-            _reportViewport(constraints.biggest);
+            _binding.reportViewport(
+              constraints.biggest,
+              mounted: () => mounted,
+            );
             return MapWidget(
               // Read only when the map is created; changes go through
-              // changeStyle (see didUpdateWidget).
+              // changeStyle (see MapboxViewBinding.update).
               styleUri: widget._dayNight.styleUri,
               viewport: _initialViewport,
               onMapCreated: (map) {
-                _map
-                  ..onMapCreated(map)
-                  ..hideOrnaments()
-                  ..placeOrnaments();
+                _map.onMapCreated(map);
+                _binding.mapCreated();
                 widget.onMapCreated?.call(map);
               },
               onStyleLoadedListener: (_) => unawaited(_map.onStyleLoaded()),

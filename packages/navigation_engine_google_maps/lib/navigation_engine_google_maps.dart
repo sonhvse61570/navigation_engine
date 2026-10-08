@@ -20,8 +20,8 @@ export 'src/google_maps_navigation_map.dart'
     hide routePolylines, toCameraPosition, toLatLng, vehicleIconFrom;
 export 'src/google_maps_navigation_view.dart';
 export 'src/ui/google_style_colors.dart';
-export 'src/ui/google_style_compass_button.dart';
 export 'src/ui/google_style_arrival_panel.dart';
+export 'src/ui/google_style_compass_button.dart';
 export 'src/ui/google_style_lane_guidance.dart';
 export 'src/ui/google_style_maneuver_header.dart';
 export 'src/ui/google_style_navigation.dart';

@@ -21,5 +21,5 @@ export 'src/mapbox_navigation_map.dart'
         toCameraOptions,
         toInitialViewport,
         toPoint;
-export 'src/mapbox_navigation_view.dart' hide dayNightStyle;
+export 'src/mapbox_navigation_view.dart' hide MapboxViewBinding, dayNightStyle;
 export 'src/mapbox_style_navigation.dart';

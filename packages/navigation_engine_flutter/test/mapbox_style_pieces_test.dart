@@ -138,6 +138,53 @@ void main() {
       expect(labels.text, c.onSurface);
     });
 
+    for (final (name, c) in [
+      ('day', MapboxStyleColors.day),
+      ('night', MapboxStyleColors.night),
+      (
+        'teal dark',
+        MapboxStyleColors.fromColorScheme(
+          ColorScheme.fromSeed(
+            seedColor: Colors.teal,
+            brightness: Brightness.dark,
+          ),
+        ),
+      ),
+    ]) {
+      test('routeLabelColors border is visible on the label ($name)', () {
+        final labels = c.routeLabelColors;
+        final edge = Color.alphaBlend(labels.border, labels.fill);
+        expect(contrastRatio(edge, labels.fill), greaterThanOrEqualTo(1.5));
+      });
+    }
+
+    test('== and hashCode compare every field', () {
+      MapboxStyleColors teal() => MapboxStyleColors.fromColorScheme(
+        ColorScheme.fromSeed(seedColor: Colors.teal),
+      );
+      expect(teal(), teal());
+      expect(teal().hashCode, teal().hashCode);
+      expect(teal(), isNot(MapboxStyleColors.day));
+      const d = MapboxStyleColors.day;
+      MapboxStyleColors withEnd(Color end) => MapboxStyleColors(
+        banner: d.banner,
+        bannerSecondary: d.bannerSecondary,
+        onBanner: d.onBanner,
+        surface: d.surface,
+        onSurface: d.onSurface,
+        onSurfaceVariant: d.onSurfaceVariant,
+        accent: d.accent,
+        onAccent: d.onAccent,
+        alternative: d.alternative,
+        etaText: d.etaText,
+        warning: d.warning,
+        end: end,
+      );
+      expect(withEnd(d.end), d);
+      expect(withEnd(d.end).hashCode, d.hashCode);
+      expect(withEnd(const Color(0xFF000000)), isNot(d));
+    });
+
     test('contrastRatio helper: black on white is 21, equal colours 1', () {
       expect(contrastRatio(Colors.black, Colors.white), closeTo(21, 0.01));
       expect(contrastRatio(Colors.teal, Colors.teal), 1);
@@ -268,7 +315,7 @@ void main() {
         _host(MapboxStyleManeuverBanner(state: _state(lyTuTrong))),
       );
       expect(
-        find.byKey(const ValueKey('mapbox_style_lane_cell')),
+        find.byKey(const ValueKey('navigation_engine_lane_cell')),
         findsNWidgets(3),
       );
 
@@ -276,7 +323,7 @@ void main() {
         _host(MapboxStyleManeuverBanner(state: _state(sampleRoute.steps[2]))),
       );
       expect(
-        find.byKey(const ValueKey('mapbox_style_lane_cell')),
+        find.byKey(const ValueKey('navigation_engine_lane_cell')),
         findsNothing,
       );
     });
@@ -486,13 +533,26 @@ void main() {
         final icon = IconTheme.of(tester.element(find.byIcon(Icons.close)));
         expect(icon.color, isNotNull);
         expect(contrastRatio(icon.color!, colors.end), greaterThanOrEqualTo(3));
+        // The higher-contrast one of white and the night near-black, so a
+        // fixed colour fails in some of these cases.
+        const white = Color(0xFFFFFFFF);
+        const dark = Color(0xFF0F1720);
+        expect(
+          icon.color,
+          contrastRatio(white, colors.end) >= contrastRatio(dark, colors.end)
+              ? white
+              : dark,
+        );
       });
     }
 
     testWidgets(
-      '1 h 25 min shrinks instead of truncating at 320 dp, 2x text, all buttons',
+      '1 h 25 min shrinks instead of truncating at 2x text, all buttons',
       (tester) async {
-        _size(tester, const Size(320, 640));
+        // The test font's glyphs are one em wide, about twice a phone
+        // font's: at 480 dp it needs the scale a phone font needs at 320 dp
+        // (the 320 dp case in this font is the ellipsis test below).
+        _size(tester, const Size(480, 640));
         final long = TripProgress(
           remainingDistance: 54321,
           remainingDuration: const Duration(minutes: 85),
@@ -512,14 +572,55 @@ void main() {
           ),
         );
         expect(tester.takeException(), isNull);
+        final paragraph = tester.renderObject<RenderParagraph>(find.text(text));
+        expect(paragraph.didExceedMaxLines, isFalse);
+        // Laid out at its full width (not cut to the column), then scaled
+        // down to fit beside the buttons, but not below the least scale.
         expect(
-          tester
-              .renderObject<RenderParagraph>(find.text(text))
-              .didExceedMaxLines,
-          isFalse,
+          paragraph.size.width,
+          closeTo(paragraph.getMaxIntrinsicWidth(double.infinity), 0.5),
         );
+        final shown = tester.getRect(find.text(text));
+        final overview = tester.getRect(find.byTooltip('Overview'));
+        expect(shown.right, lessThanOrEqualTo(overview.left));
+        final scale = shown.height / paragraph.size.height;
+        expect(scale, lessThan(1), reason: 'it had to shrink');
+        expect(scale, greaterThanOrEqualTo(0.5));
       },
     );
+
+    testWidgets('a duration too long for the least scale is ellipsized', (
+      tester,
+    ) async {
+      _size(tester, const Size(320, 640));
+      final huge = TripProgress(
+        remainingDistance: 54321,
+        remainingDuration: const Duration(hours: 123456789),
+        eta: DateTime(2026, 10, 7, 14, 35),
+        fraction: 0.2,
+      );
+      final text = _formatter.duration(huge.remainingDuration);
+      await tester.pumpWidget(
+        _host(
+          MapboxStyleTripProgress(
+            progress: huge,
+            onEnd: () {},
+            onSteps: () {},
+            onOverview: () {},
+          ),
+          textScale: 2,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(text));
+      final shown = tester.getRect(find.text(text));
+      expect(shown.height / paragraph.size.height, closeTo(0.5, 0.01));
+      expect(paragraph.didExceedMaxLines, isTrue, reason: 'ellipsized');
+      expect(
+        shown.right,
+        lessThanOrEqualTo(tester.getRect(find.byTooltip('Overview')).left),
+      );
+    });
 
     testWidgets('each button is independent', (tester) async {
       await tester.pumpWidget(
@@ -1221,7 +1322,7 @@ void main() {
           );
           expect(tester.takeException(), isNull);
           expect(
-            find.byKey(const ValueKey('mapbox_style_lane_cell')),
+            find.byKey(const ValueKey('navigation_engine_lane_cell')),
             findsWidgets,
           );
           expect(find.text(strings.then), findsOneWidget);

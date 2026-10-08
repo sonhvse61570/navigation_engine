@@ -96,7 +96,11 @@ true by default and take effect on rebuild:
 `onMuteToggle` (with `muted`) adds a sound button and `onReportIncident` a
 report button, both below the header; the app owns the sound and the report.
 The compass needle follows the camera bearing, and a tap switches between
-heading up and north up (`session.camera.headingUp`).
+heading up and north up (`session.camera.headingUp`); a switch the app makes
+shows at once. The bearing is the one the follow camera sends, not one read
+back from the map, so it is right while following, the only time the compass
+shows (a gesture that rotates the map stops following and hides it). Its
+accessibility label is its tooltip, the mode a tap switches to.
 
 The Re-center button sits at the bottom start, above the speedometer, as in
 Google's navigation UI. It shows once the user has moved the map.

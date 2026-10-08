@@ -436,10 +436,14 @@ void main() {
           closeTo(track.center.dx, 0.01),
           reason: 'centred',
         );
+        // The dot travels inside the bar: flush with its bottom at 0 and
+        // with its top at 1, no overhang.
         expect(
           dot.center.dy,
-          closeTo(track.bottom - expected * track.height, 1),
+          closeTo(track.bottom - 6 - expected * (track.height - 12), 0.01),
         );
+        expect(dot.top, greaterThanOrEqualTo(track.top - 0.01));
+        expect(dot.bottom, lessThanOrEqualTo(track.bottom + 0.01));
         final decoration =
             tester.widget<DecoratedBox>(find.byKey(_dotKey)).decoration
                 as BoxDecoration;
@@ -450,6 +454,26 @@ void main() {
         expect(border.top.width, 2);
       });
     }
+
+    testWidgets('an unbounded height gives a 120 high bar, dot inside', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [GoogleStyleTripProgressBar(fraction: 1)],
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final track = tester.getRect(bar);
+      final dot = tester.getRect(find.byKey(_dotKey));
+      expect(track.height, closeTo(120, 0.01));
+      expect(dot.top, closeTo(track.top, 0.01));
+    });
 
     for (final (name, colors) in [
       ('day', GoogleStyleColors.day),
@@ -582,6 +606,16 @@ void main() {
       expect(find.byTooltip(strings.headingUp), findsOneWidget);
     });
 
+    testWidgets('screen readers get one label: the tap action', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpCompass(tester, bearing: 0);
+      final node = tester.getSemantics(find.byType(IconButton));
+      expect(node.label, isEmpty);
+      expect(node.tooltip, strings.northUp);
+      expect(find.bySemanticsLabel(strings.compass), findsNothing);
+      handle.dispose();
+    });
+
     testWidgets('a tap calls onPressed', (tester) async {
       var taps = 0;
       await pumpCompass(tester, bearing: 10, onPressed: () => taps++);
@@ -655,6 +689,30 @@ void main() {
         await h.run(tester, 1, fixAt: (_) => h.fixOn(1990 + 10.0 * s));
       }
       expect(_degrees(tester, find.byKey(_needleKey)).abs(), lessThan(0.01));
+    });
+
+    _controlsTest('it follows a headingUp change made without frames', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester);
+      await h.drive(tester, moved: false, from: 1950);
+      for (var s = 0; s < 6; s++) {
+        await h.run(tester, 1, fixAt: (_) => h.fixOn(1990 + 10.0 * s));
+      }
+      final turned = _degrees(tester, find.byKey(_needleKey));
+      expect(turned.abs(), greaterThan(1), reason: 'heading up, turned');
+      var frames = 0;
+      final sub = h.session.frames.listen((_) => frames++);
+      addTearDown(sub.cancel);
+      // The app switches the camera; no time passes, so the session sends
+      // no frame.
+      h.session.camera.headingUp = false;
+      await tester.pump();
+      await tester.pump();
+      expect(frames, 0, reason: 'no frame flowed');
+      expect(_degrees(tester, find.byKey(_needleKey)).abs(), lessThan(0.01));
+      expect(find.byTooltip(strings.headingUp), findsOneWidget);
     });
 
     _controlsTest('it stops listening when it leaves the screen', (
@@ -748,8 +806,29 @@ void main() {
       expect(button.center.dx, lessThan(400 / 2), reason: 'left of centre');
       expect(button.left, closeTo(16, 1));
       expect(button.bottom, lessThanOrEqualTo(footerRect.top - 16 + 1));
-      expect(button.bottom, lessThanOrEqualTo(speed.top), reason: 'above');
+      expect(button.bottom, closeTo(speed.top - 8, 1), reason: '8 above');
       expect(speed.bottom, closeTo(footerRect.top - 16, 1));
+    });
+
+    _controlsTest('a speedometer that shows nothing leaves no space', (
+      tester,
+      h,
+    ) async {
+      // The limit sign alone, on a route without speed limits: the piece
+      // shows nothing.
+      await h.mount(tester, app: h.app(speedometerEnabled: false));
+      final noLimits = NavRoute.fromPoints(sampleRoute.points);
+      h.flow.previewRoutes([noLimits]);
+      await tester.pump();
+      await tester.tap(find.text('Start'));
+      await tester.pump();
+      await h.run(tester, 4, fixAt: (s) => h.fixOn(500 + 10 * s));
+      h.session.follow = false;
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.getSize(speedometer), Size.zero);
+      final button = tester.getRect(recenter);
+      expect(button.bottom, closeTo(tester.getRect(footer).top - 16, 1));
     });
 
     _controlsTest('the compass, sound and report stack under the header', (
@@ -793,14 +872,31 @@ void main() {
           final rect = tester.getRect(finder.first);
           expect(rect.left, greaterThanOrEqualTo(0), reason: '$finder $rect');
           expect(rect.right, lessThanOrEqualTo(320), reason: '$finder $rect');
+          expect(rect.top, greaterThanOrEqualTo(0), reason: '$finder $rect');
+          expect(rect.bottom, lessThanOrEqualTo(640), reason: '$finder $rect');
+        }
+      }
+
+      // Vertically: the controls keep clear of the header and the footer,
+      // and of each other.
+      void apart(Finder a, List<Finder> others) {
+        final rect = tester.getRect(a);
+        for (final other in others) {
+          final o = tester.getRect(other.first);
+          expect(rect.overlaps(o), isFalse, reason: '$a $rect / $other $o');
         }
       }
 
       insideScreen([header, footer, bar, speedometer, compass, mute, report]);
+      apart(speedometer, [header, footer]);
+      apart(compass, [header, footer, speedometer]);
+      apart(bar, [header, footer]);
       h.session.follow = false;
       await h.run(tester, 0.1);
       expect(tester.takeException(), isNull, reason: 'moved away');
       insideScreen([header, footer, bar, speedometer, recenter, mute, report]);
+      apart(recenter, [header, footer, speedometer]);
+      apart(speedometer, [header, footer]);
       await h.run(tester, 2, fixAt: (s) => h.fixOn(540 + 10 * s));
       expect(tester.takeException(), isNull, reason: 'after more frames');
     });

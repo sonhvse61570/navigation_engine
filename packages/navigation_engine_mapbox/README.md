@@ -32,9 +32,11 @@ layers (`navigation_engine_*` ids) added when the style loads.
 widgets do not draw over the map on Android, try `MapWidget(textureView:
 true)` via your own `MapboxNavigationMap` + `NavigationMapFrame` (wire
 `onMapCreated` and `onStyleLoaded` to the `MapWidget` callbacks, and call
-`onStyleChanging` when you switch the style). `MapboxNavigationMap` itself
+`changeStyle` when you switch the style). `MapboxNavigationMap` itself
 leaves the ornaments alone; call `hideOrnaments()` after `onMapCreated` if
-you want them off there too.
+you want them off there too. On the Standard style, set
+`MapboxNavigationMap.lightPreset` (`day`, `dawn`, `dusk` or `night`) for
+its light: it is applied at each style load, without a reload.
 
 ## Mapbox-style navigation UI
 
@@ -84,22 +86,29 @@ documents the pieces (`MapboxStyleManeuverBanner`, `MapboxStyleRoutePanel`,
 (`NavigationStrings.vietnamese()` is included) and numbers from `formatter`.
 
 The Mapbox logo and the attribution button keep above the panel, the trip
-progress (and the speed sign) and the arrival panel, as Mapbox's terms require; with your own
-`MapboxNavigationView`, set its `bottomInset`.
+progress (and the speed sign) and the arrival panel, as Mapbox's terms
+require; with your own `MapboxNavigationView`, set its `bottomInset`.
 
 ### Day and night
 
 `flow.isNight` switches the look. On the default `MapboxStyles.STANDARD`
 style, night sets the style's `lightPreset` to `night` without reloading the
-style. Any other style stays as it is at night unless you pass
-`nightStyleUri`, which is then loaded (a reload: the route, the vehicle and the
-route options are drawn again once it has loaded).
+style. The view owns that preset: it sets `day` by day and `night` at night,
+at each style load, so a preset the app sets on the `MapboxMap` (such as
+`dusk`) does not stay; for another preset use your own
+`MapboxNavigationMap` and its `lightPreset`. Any other style stays as it is
+at night unless you pass `nightStyleUri`, which is then loaded (a reload:
+the route, the vehicle and the route options are drawn again once it has
+loaded).
 
 ### Route options
 
 `MapboxNavigationMap` implements `RoutePreviewMap`, so `flow.preview` and
 `flow.select` draw the options on the map, and a tap on an option line or its
-label selects that route. Taps elsewhere are ignored.
+label selects that route. Taps elsewhere are ignored. The vehicle takes no
+taps: a tap on it where it sits over an option line selects that option, as
+on MapLibre and flutter_map. A new selection restyles and reorders the lines
+in place, so they do not flicker.
 
 ### Trademark
 

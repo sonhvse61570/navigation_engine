@@ -95,12 +95,20 @@ class CountingFlow extends NavigationFlowController {
   }
 }
 
-/// A map that records its configs and reports itself ready once.
+/// A map that records its configs and reports itself ready once. Like a map
+/// view, it calls [onTouch] on a pointer down (a map view stops following
+/// there).
 class FakeMapWidget extends StatefulWidget {
-  const FakeMapWidget({super.key, required this.config, this.ready = true});
+  const FakeMapWidget({
+    super.key,
+    required this.config,
+    this.ready = true,
+    this.onTouch,
+  });
 
   final NavigationMapConfig config;
   final bool ready;
+  final VoidCallback? onTouch;
 
   @override
   State<FakeMapWidget> createState() => _FakeMapWidgetState();
@@ -118,8 +126,10 @@ class _FakeMapWidgetState extends State<FakeMapWidget> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      const ColoredBox(color: Color(0xFF808080));
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (_) => widget.onTouch?.call(),
+    child: const ColoredBox(color: Color(0xFF808080)),
+  );
 }
 
 const _long =
@@ -160,6 +170,9 @@ class Harness {
   /// The actions the top end slot got at its last build.
   NavigationFlowActions? topEndActions;
 
+  /// The actions the header got at its last build.
+  NavigationFlowActions? headerActions;
+
   /// The step list's last current step and route.
   int? currentStep;
   NavRoute? stepRoute;
@@ -178,6 +191,7 @@ class Harness {
     bool recenter = true,
     bool speed = true,
     String speedText = 'SPEED',
+    bool emptySpeed = false,
     TextDirection? textDirection,
   }) {
     Widget text(String key, String value) =>
@@ -190,7 +204,11 @@ class Harness {
       onEnd: onEnd,
       mapBuilder: (context, config) {
         configs.add(config);
-        return FakeMapWidget(config: config, ready: mapReady);
+        return FakeMapWidget(
+          config: config,
+          ready: mapReady,
+          onTouch: () => session.follow = false,
+        );
       },
       idleBuilder: (context) =>
           Align(alignment: Alignment.topCenter, child: text('idle', 'IDLE')),
@@ -202,13 +220,21 @@ class Harness {
           child: text('panel_text', 'PANEL ${state.runtimeType}'),
         );
       },
-      headerBuilder: (context, guidance) =>
-          text('header', 'HEADER ${guidance.stepIndex}'),
+      headerBuilder: (context, guidance, actions) {
+        headerActions = actions;
+        return text('header', 'HEADER ${guidance.stepIndex}');
+      },
       footerBuilder: (context, progress, rerouting, actions) {
         this.actions = actions;
         return text('footer', 'FOOTER $rerouting');
       },
-      speedBuilder: speed ? (context, speed) => text('speed', speedText) : null,
+      speedBuilder: !speed
+          ? null
+          : emptySpeed
+          // A speed piece that shows nothing (such as a limit sign alone
+          // with no known limit).
+          ? (context, speed) => const SizedBox.shrink(key: ValueKey('speed'))
+          : (context, speed) => text('speed', speedText),
       topEndBuilder: (context, actions) {
         topEndActions = actions;
         return text('topEnd', 'TOPEND');
@@ -269,6 +295,7 @@ class Harness {
     bool recenter = true,
     bool speed = true,
     String speedText = 'SPEED',
+    bool emptySpeed = false,
   }) async {
     tester.view
       ..physicalSize = size
@@ -286,6 +313,7 @@ class Harness {
         recenter: recenter,
         speed: speed,
         speedText: speedText,
+        emptySpeed: emptySpeed,
       ),
     );
     if (pushed) {
@@ -757,13 +785,37 @@ void main() {
     scaffoldTest('a touch on the map shows it at once', (tester, h) async {
       await h.mount(tester);
       h.session.start();
-      // What a map view does on a touch.
-      h.session.follow = false;
-      await tester.pump();
-      expect(key('recenter'), findsNothing, reason: 'no frame, no touch');
+      expect(key('recenter'), findsNothing);
+      // The map's own touch handler stops following; the scaffold sees it
+      // through the session, whatever order the pointer listeners run in.
       await tester.tap(find.byType(FakeMapWidget));
       await tester.pump();
+      expect(h.session.follow, isFalse);
       expect(key('recenter'), findsOneWidget);
+    });
+
+    scaffoldTest('an app change of follow shows without a frame or a touch', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester);
+      h.session.start();
+      var frames = 0;
+      final sub = h.session.frames.listen((_) => frames++);
+      addTearDown(sub.cancel);
+      // The change comes as a stream event (a microtask), then a frame.
+      Future<void> settle() async {
+        await tester.pump();
+        await tester.pump();
+      }
+
+      h.session.follow = false;
+      await settle();
+      expect(key('recenter'), findsOneWidget);
+      h.session.follow = true;
+      await settle();
+      expect(key('recenter'), findsNothing);
+      expect(frames, 0, reason: 'no frame flowed');
     });
   });
 
@@ -813,6 +865,25 @@ void main() {
     stale.backToOverview();
     expect(ended, 1, reason: 'a stale action does nothing');
     expect(h.flow.state.value, isA<FlowIdle>());
+  });
+
+  scaffoldTest('the header gets guarded actions', (tester, h) async {
+    var ended = 0;
+    await h.mount(tester, onEnd: () => ended++);
+    h.flow.previewRoutes([route]);
+    await tester.pump();
+    await h.startDriving(tester, route);
+    final stale = h.headerActions!;
+    stale.end();
+    expect(ended, 1);
+
+    h.flow.stop();
+    await tester.pump();
+    stale.end();
+    stale.showSteps();
+    await tester.pump();
+    expect(ended, 1, reason: 'a stale action does nothing');
+    expect(key('steps'), findsNothing);
   });
 
   scaffoldTest('changing overviewMargin on rebuild re-applies the padding', (
@@ -1159,6 +1230,37 @@ void main() {
       });
     }
 
+    scaffoldTest('a footer lower than the bottom inset: the speed and the '
+        'recenter share one bottom', (tester, h) async {
+      // The fixture's footer has no SafeArea and is lower than the inset.
+      tester.view
+        ..padding = const FakeViewPadding(bottom: 100)
+        ..viewPadding = const FakeViewPadding(bottom: 100);
+      await h.mount(
+        tester,
+        size: const Size(1600, 900),
+        recenterAlignment: AlignmentDirectional.bottomEnd,
+        speedText: 'S',
+      );
+      h.flow.previewRoutes([route]);
+      await tester.pump();
+      await h.startDriving(tester, route);
+      h.session.follow = false;
+      await h.run(tester, 0.1, fixAt: (_) => h.fixOn(route, 545));
+      final footer = tester.getRect(key('footer'));
+      final speed = tester.getRect(key('speed'));
+      final recenter = tester.getRect(key('recenter'));
+      expect(footer.height, lessThan(100), reason: 'the case under test');
+      expect(recenter.overlaps(speed), isFalse);
+      expect(speed.right, lessThan(recenter.left), reason: 'beside');
+      expect(speed.bottom, closeTo(900 - 100 - 16, 1));
+      expect(recenter.bottom, closeTo(speed.bottom, 1));
+      expect(
+        h.config.bottomOverlayHeight.value,
+        closeTo(100 + speed.height + 16, 1),
+      );
+    });
+
     scaffoldTest('right to left: start and end follow the text direction', (
       tester,
       h,
@@ -1191,6 +1293,139 @@ void main() {
     });
   });
 
+  for (final (height, placement) in [
+    (300.0, 'above'),
+    (200.0, 'beside'),
+    (150.0, 'hidden'),
+  ]) {
+    scaffoldTest('a low screen ($height): the bottom-start recenter is '
+        '$placement (the speed), never on the header', (tester, h) async {
+      await h.mount(tester, size: Size(1600, height), speedText: 'S');
+      h.flow.previewRoutes([route]);
+      await tester.pump();
+      await h.startDriving(tester, route);
+      h.session.follow = false;
+      await h.run(tester, 0.1, fixAt: (_) => h.fixOn(route, 545));
+      final header = tester.getRect(key('header'));
+      final speed = tester.getRect(key('speed'));
+      final footer = tester.getRect(key('footer'));
+      expect(speed.bottom, closeTo(footer.top - 16, 1));
+      if (placement == 'hidden') {
+        expect(key('recenter'), findsNothing);
+        return;
+      }
+      final recenter = tester.getRect(key('recenter'));
+      expect(recenter.top, greaterThanOrEqualTo(header.bottom));
+      expect(recenter.overlaps(speed), isFalse);
+      if (placement == 'above') {
+        expect(recenter.bottom, closeTo(speed.top - 8, 1));
+      } else {
+        expect(recenter.left, closeTo(speed.right + 8, 1));
+        expect(recenter.bottom, closeTo(speed.bottom, 1));
+      }
+    });
+  }
+
+  scaffoldTest('the speed does not move between its first frames (review '
+      'm2)', (tester, h) async {
+    await h.mount(tester);
+    h.flow.previewRoutes([route]);
+    await tester.pump();
+    h.actions!.start();
+    await tester.pump();
+    Rect? first;
+    for (var i = 0; i < 4 * 60 && first == null; i++) {
+      if (i % 60 == 0) h.source.add(h.fixOn(route, 500.0 + 10 * (i ~/ 60)));
+      h.now = h.now.add(const Duration(microseconds: 16667));
+      h.session.tick(1 / 60);
+      await tester.pump(const Duration(microseconds: 16667));
+      if (key('speed').evaluate().isNotEmpty) {
+        first = tester.getRect(key('speed'));
+      }
+    }
+    expect(first, isNotNull, reason: 'the speed showed');
+    await tester.pump(const Duration(microseconds: 16667));
+    expect(tester.getRect(key('speed')), first);
+    final footer = tester.getRect(key('footer'));
+    expect(first!.bottom, closeTo(footer.top - 16, 1));
+  });
+
+  scaffoldTest('the recenter never covers the header, also on its first '
+      'frame (review m1)', (tester, h) async {
+    await h.mount(tester, size: const Size(1600, 200), speedText: 'S');
+    h.flow.previewRoutes([route]);
+    await tester.pump();
+    await h.startDriving(tester, route);
+    h.session.follow = false;
+    final header = tester.getRect(key('header'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(microseconds: 16667));
+      if (key('recenter').evaluate().isEmpty) continue;
+      final recenter = tester.getRect(key('recenter'));
+      expect(
+        recenter.top,
+        greaterThanOrEqualTo(header.bottom),
+        reason: 'frame $i: $recenter',
+      );
+    }
+    expect(key('recenter'), findsOneWidget);
+  });
+
+  scaffoldTest('a hidden recenter comes back when the text scale shrinks '
+      '(review m1)', (tester, h) async {
+    Future<void> show(double scale) async {
+      await tester.pumpWidget(
+        h.app(speedText: 'S', textScaler: TextScaler.linear(scale)),
+      );
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(microseconds: 16667));
+      }
+    }
+
+    // At 0.3x the pieces are about 14 high: the button fits above the
+    // speed on 1600x100, but a 1.5x button (72 high) fits nowhere.
+    tester.view
+      ..physicalSize = const Size(1600, 100)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      h.app(speedText: 'S', textScaler: const TextScaler.linear(0.3)),
+    );
+    await tester.pump();
+    h.flow.previewRoutes([route]);
+    await tester.pump();
+    await h.startDriving(tester, route);
+    h.session.follow = false;
+    await show(0.3);
+    await show(1.5);
+    expect(key('recenter'), findsNothing, reason: 'fits nowhere at 1.5x');
+    await show(0.3);
+    expect(key('recenter'), findsOneWidget, reason: 'fits again');
+    final recenter = tester.getRect(key('recenter'));
+    expect(
+      recenter.top,
+      greaterThanOrEqualTo(tester.getRect(key('header')).bottom),
+    );
+  });
+
+  scaffoldTest('a speed piece that shows nothing takes no space', (
+    tester,
+    h,
+  ) async {
+    await h.mount(tester, emptySpeed: true);
+    h.flow.previewRoutes([route]);
+    await tester.pump();
+    await h.startDriving(tester, route);
+    h.session.follow = false;
+    await h.run(tester, 0.1, fixAt: (_) => h.fixOn(route, 545));
+    expect(key('speed'), findsOneWidget);
+    final footer = tester.getRect(key('footer'));
+    final recenter = tester.getRect(key('recenter'));
+    // No 8 above an empty speed, no band for it.
+    expect(recenter.bottom, closeTo(footer.top - 16, 1));
+    expect(h.config.bottomOverlayHeight.value, closeTo(footer.height, 1));
+  });
+
   scaffoldTest('320 dp at 2x text with long texts does not overflow', (
     tester,
     h,
@@ -1213,8 +1448,11 @@ void main() {
     await h.run(tester, 0.1);
     expect(
       slots(),
-      containsAll(['header', 'footer', 'speed', 'topEnd', 'edge', 'recenter']),
+      containsAll(['header', 'footer', 'speed', 'topEnd', 'edge']),
     );
+    // The texts are taller than the screen: the recenter fits nowhere, so
+    // it is hidden rather than cover the header.
+    expect(key('recenter'), findsNothing);
     expect(tester.takeException(), isNull, reason: 'navigating');
     // Inside the screen horizontally. (The fixture's texts have no
     // Material ancestor, so they use the 48 px fallback style and are far

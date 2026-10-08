@@ -24,8 +24,9 @@ typedef FakeLayer = ({
 ///
 /// It also keeps a small model of the style: [sources] with their data,
 /// [layers] bottom to top (a layer added with a `belowLayerId` goes right
-/// below that layer) and [images]. Adding a source or layer twice throws as
-/// the SDK does; removing a source a layer still uses throws.
+/// below that layer) and [images]. Adding a layer twice throws as the SDK
+/// does, and so does adding a source twice unless [silentDuplicateSources]
+/// (Android); removing a source a layer still uses throws.
 /// [reloadStyle] empties the model, as a new style does.
 class RecordingPlatform extends ml.MapLibrePlatform {
   final calls = <(String, Object?)>[];
@@ -45,8 +46,18 @@ class RecordingPlatform extends ml.MapLibrePlatform {
   /// Held back until completed; consumed by the first addImage call.
   Completer<void>? addImageGate;
 
+  /// Completes when an `addImage` call arrives (the first one), a signal
+  /// to wait on instead of polling.
+  Future<void> get addImageEntered => _addImageEntered.future;
+  final _addImageEntered = Completer<void>();
+
   /// Methods that throw once, by name.
   final failOnce = <String>{};
+
+  /// How `addGeoJsonSource` treats a source that exists: false (the
+  /// default) throws `sourceAlreadyExists` as the iOS SDK does; true does
+  /// nothing and keeps the old data, as the Android plugin does.
+  bool silentDuplicateSources = false;
 
   // Everything not overridden below is not expected to be called.
   @override
@@ -61,6 +72,15 @@ class RecordingPlatform extends ml.MapLibrePlatform {
 
   /// The layer [id]; fails when it is not in the style.
   FakeLayer layer(String id) => layers.singleWhere((l) => l.id == id);
+
+  final _imageAdded = <String, Completer<void>>{};
+
+  /// Completes once the image [name] has been added (at once when it is in
+  /// the style), a signal to wait on instead of polling.
+  Future<void> imageAdded(String name) {
+    if (images.containsKey(name)) return Future.value();
+    return (_imageAdded[name] ??= Completer<void>()).future;
+  }
 
   /// Drops the style's sources, layers and images, as a new style does.
   void reloadStyle() {
@@ -153,9 +173,11 @@ class RecordingPlatform extends ml.MapLibrePlatform {
   ]) async {
     final gate = addImageGate;
     addImageGate = null;
+    if (!_addImageEntered.isCompleted) _addImageEntered.complete();
     await _record('addImage', bytes);
     imageAdds.add(name);
     images[name] = bytes;
+    _imageAdded[name]?.complete();
     if (gate != null) await gate.future;
   }
 
@@ -167,6 +189,7 @@ class RecordingPlatform extends ml.MapLibrePlatform {
   }) async {
     await _record('addGeoJsonSource', sourceId);
     if (sources.containsKey(sourceId)) {
+      if (silentDuplicateSources) return;
       throw PlatformException(code: 'sourceAlreadyExists');
     }
     sources[sourceId] = geojson;

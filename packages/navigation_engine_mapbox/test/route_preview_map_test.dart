@@ -1,8 +1,8 @@
 // ignore_for_file: implementation_imports
 
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
@@ -159,6 +159,20 @@ List<GeoPoint> _allPoints(List<NavRoute> routes) => [
 ];
 
 void main() {
+  test('the test backend: imageAdded fails with the error of a failing '
+      'addImage (no timeout)', () async {
+    final backend = RecordingBackend()..failOnce.add('addImage');
+    final added = backend.imageAdded('x');
+    await expectLater(
+      backend.addImage('x', 1, mb.StyleImage.bytes(Uint8List(4))),
+      throwsA(isA<PlatformException>()),
+    );
+    await expectLater(
+      added.timeout(const Duration(seconds: 1)),
+      throwsA(isA<PlatformException>()),
+    );
+  });
+
   group('sources and layers', () {
     test('each option gets a source, a casing and a line, below the session '
         'route: muted casings, muted lines, then the selected pair', () async {
@@ -249,6 +263,125 @@ void main() {
         backend.argsOf('addTapInteraction').where((id) => id == _line(0)),
         hasLength(1),
       );
+    });
+
+    test('a selection change reorders the lines in place: no remove, no '
+        'add (no flicker)', () async {
+      final (map, backend) = await _loaded();
+      map.showRouteOptions(_three, 0);
+      await _settle();
+      backend.calls.clear();
+
+      map.showRouteOptions(_three, 2);
+      await _settle();
+      expect(backend.argsOf('removeLayer'), isEmpty);
+      expect(backend.argsOf('addLayer'), isEmpty);
+      expect(backend.argsOf('removeSource'), isEmpty);
+      expect(backend.argsOf('addGeoJsonSource'), isEmpty);
+      expect(backend.layerIds, [
+        _casing(0),
+        _casing(1),
+        _line(0),
+        _line(1),
+        _casing(2),
+        _line(2),
+        _driven,
+        _ahead,
+        _vehicle,
+      ]);
+      // The paint follows the selection.
+      expect(
+        _lineOf(backend, _line(2)).lineColor,
+        const RouteColors().ahead.toARGB32(),
+      );
+      expect(_lineOf(backend, _line(0)).lineColor, _alternative.toARGB32());
+      expect(
+        _lineOf(backend, _casing(2)).lineColor,
+        _selectedCasing.toARGB32(),
+      );
+      expect(_lineOf(backend, _casing(0)).lineColor, _mutedCasing.toARGB32());
+    });
+
+    test('a failed move of a new line is reported and redone on the next '
+        'render', () async {
+      final log = <String>[];
+      final (map, backend) = await _loaded(log: log);
+      backend.failOnce.add('moveLayer');
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      expect(log, [contains('moveLayer failed')]);
+
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      expect(backend.layerIds, [
+        _casing(1),
+        _line(1),
+        _casing(0),
+        _line(0),
+        _driven,
+        _ahead,
+        _vehicle,
+      ]);
+    });
+
+    test('a failed move, then a clear, leaves no option layers or sources '
+        '(review I1)', () async {
+      final log = <String>[];
+      final (map, backend) = await _loaded(
+        log: log,
+        labels: true,
+        painter: _Painter(),
+      );
+      backend.failOnce.add('moveLayer');
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      expect(log, [contains('moveLayer failed')]);
+
+      map.clearRouteOptions();
+      await _settle();
+      expect(_optionLayerIds(backend), isEmpty);
+      expect(_optionSourceIds(backend), isEmpty);
+      expect(backend.layerIds, [_driven, _ahead, _vehicle]);
+    });
+
+    test(
+      'a failed move of the label layer is redone on the next update',
+      () async {
+        final (map, backend) = await _loaded(labels: true, painter: _Painter());
+        map.showRouteOptions(_routes, 0);
+        await _settle();
+        map.clearRouteOptions();
+        await _settle();
+        // The lines move first; the label layer's move is the last one.
+        backend.failMoveOf = _labels;
+        map.showRouteOptions(_routes, 1);
+        await _settle();
+        expect(backend.failMoveOf, isNull, reason: 'the move failed once');
+        map.showRouteOptions(_routes, 0);
+        await _settle();
+        expect(backend.layerIds.sublist(backend.layerIds.length - 3), [
+          _ahead,
+          _labels,
+          _vehicle,
+        ]);
+      },
+    );
+
+    test('a failing step of a clear does not stop the rest of it', () async {
+      final (map, backend) = await _loaded(labels: true, painter: _Painter());
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      expect(backend.layerIds, contains(_labels));
+      backend.failOnce.add('removeSource');
+      map.clearRouteOptions();
+      await _settle();
+      expect(_optionLayerIds(backend), isEmpty);
+      expect(backend.layerIds, isNot(contains(_labels)));
+      expect(backend.sources.containsKey(_labels), isFalse);
+      // The source left over goes with the next update.
+      map.clearRouteOptions();
+      await _settle();
+      expect(_optionSourceIds(backend), isEmpty);
     });
 
     test('fewer routes remove the extra layers and sources', () async {
@@ -436,6 +569,73 @@ void main() {
         _labels,
         _vehicle,
       ]);
+    });
+
+    test('a selection change keeps the labels until the new ones are '
+        'ready (no blink)', () async {
+      final painter = _Painter();
+      final (map, backend) = await _loaded(labels: true, painter: painter);
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      expect(backend.layerIds, contains(_labels));
+      backend.calls.clear();
+
+      painter.gate = Completer<void>();
+      map.showRouteOptions(_routes, 1);
+      await _settle();
+      // The new labels are still rendering: the old ones stay drawn.
+      expect(backend.layerIds, contains(_labels));
+      expect(backend.sources.containsKey(_labels), isTrue);
+      expect(backend.argsOf('removeLayer'), isNot(contains(_labels)));
+      expect(backend.argsOf('removeSource'), isNot(contains(_labels)));
+
+      painter.gate!.complete();
+      await _settle();
+      expect(
+        [for (final f in _labelFeatures(backend)) f['properties']],
+        [
+          {'index': 0, 'image': _image(0, selected: false)},
+          {'index': 1, 'image': _image(1, selected: true)},
+        ],
+      );
+      expect(backend.argsOf('removeLayer'), isNot(contains(_labels)));
+    });
+
+    test('new routes drop the old labels at once', () async {
+      final painter = _Painter();
+      final (map, backend) = await _loaded(labels: true, painter: painter);
+      map.showRouteOptions(_routes, 0);
+      await _settle();
+      painter.gate = Completer<void>();
+      map.showRouteOptions(_three, 0);
+      await _settle();
+      expect(backend.layerIds, isNot(contains(_labels)));
+      painter.gate!.complete();
+      await _settle();
+      expect(_labelFeatures(backend), hasLength(3));
+    });
+
+    test('the label image cache evicts the least recently used', () async {
+      final painter = _Painter();
+      final (map, _) = await _loaded(labels: true, painter: painter);
+      var text = 'keep';
+      map.routeLabel = (_) => text;
+      void show(String t) {
+        text = t;
+        map.showRouteOptions([_west], 0);
+      }
+
+      show('keep');
+      // More new labels than the cache holds (32), with 'keep' used again
+      // in between: it stays, the others go oldest first.
+      for (var i = 0; i < 40; i++) {
+        show('label $i');
+        show('keep');
+      }
+      expect(painter.calls.where((c) => c.$1 == 'keep'), hasLength(1));
+      show('label 0');
+      expect(painter.calls.where((c) => c.$1 == 'label 0'), hasLength(2));
+      await _settle();
     });
 
     test('labels are painted at the pixel ratio in labelColors', () async {

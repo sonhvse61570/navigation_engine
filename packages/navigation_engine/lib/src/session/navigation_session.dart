@@ -44,6 +44,7 @@ class NavigationSession {
     DateTime Function() clock = DateTime.now,
   }) : _source = fixes,
        _map = map,
+       _ownsCamera = camera == null,
        camera = camera ?? FollowCamera(),
        _filter = filter ?? FixFilter(),
        _clock = clock;
@@ -55,7 +56,11 @@ class NavigationSession {
   final FixSource _source;
   NavigationMap? _map;
   final RouteProvider? routeProvider;
+
+  /// The follow camera. One created by the session is disposed with it;
+  /// one passed in belongs to the caller.
   final FollowCamera camera;
+  final bool _ownsCamera;
   final FixFilter _filter;
   final DateTime Function() _clock;
 
@@ -70,13 +75,22 @@ class NavigationSession {
   final double guidanceDistanceResolution;
 
   /// Whether the camera follows the vehicle. Turn it off while the user pans
-  /// the map; frames, guidance and rerouting continue.
-  bool follow = true;
+  /// the map; frames, guidance and rerouting continue. Each change is also
+  /// emitted on [followChanges].
+  bool get follow => _follow;
+  set follow(bool value) {
+    if (value == _follow) return;
+    _follow = value;
+    if (!_followChanges.isClosed) _followChanges.add(value);
+  }
+
+  bool _follow = true;
 
   final _frames = StreamController<MotionFrame>.broadcast();
   final _guidance = StreamController<GuidanceState?>.broadcast();
   final _announcements = StreamController<GuidanceAnnouncement>.broadcast();
   final _events = StreamController<SessionEvent>.broadcast();
+  final _followChanges = StreamController<bool>.broadcast();
 
   StreamSubscription<NavFix>? _sub;
   bool _paused = false;
@@ -120,6 +134,11 @@ class NavigationSession {
   Stream<GuidanceAnnouncement> get announcements => _announcements.stream;
 
   Stream<SessionEvent> get events => _events.stream;
+
+  /// The new value of [follow] each time it changes (setting the same value
+  /// emits nothing), so a UI can show it without waiting for a frame. Ends
+  /// with [dispose].
+  Stream<bool> get followChanges => _followChanges.stream;
 
   /// Between [start] and [stop], paused or not.
   bool get isRunning => _sub != null;
@@ -219,7 +238,8 @@ class NavigationSession {
   }
 
   /// Stops and closes the streams. The fix source is stopped but not
-  /// disposed: it belongs to the caller.
+  /// disposed: it belongs to the caller, as does a camera passed in (the
+  /// session disposes the one it created).
   void dispose() {
     if (_disposed) return;
     stop();
@@ -228,6 +248,8 @@ class NavigationSession {
     unawaited(_guidance.close());
     unawaited(_announcements.close());
     unawaited(_events.close());
+    unawaited(_followChanges.close());
+    if (_ownsCamera) camera.dispose();
   }
 
   /// Switches to [route] (null: free driving): a new engine and guidance,

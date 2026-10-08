@@ -884,6 +884,78 @@ void main() {
     flow.dispose();
   });
 
+  testWidgets('the view forwards its parameters to the adapter (shared '
+      'with the real view)', (tester) async {
+    final session = NavigationSession(fixes: FakeFixSource());
+    addTearDown(session.dispose);
+    final views = FakeMapboxViews();
+    String label(NavRoute r) => 'L';
+    void tap(int i) {}
+    MapboxNavigationView view({
+      bool night = false,
+      String styleUri = mb.MapboxStyles.STANDARD,
+      double bottomInset = 0,
+      Color alternative = const Color(0xFF123456),
+    }) => MapboxNavigationView(
+      session: session,
+      initialCenter: sampleRoute.points.first,
+      styleUri: styleUri,
+      nightStyleUri: 'night-style',
+      night: night,
+      routeLabel: label,
+      onRouteOptionTap: tap,
+      routeColors: const RouteColors(ahead: Color(0xFFFF0000)),
+      labelColors: const RouteLabelColors(selectedFill: Color(0xFF00FF00)),
+      alternativeRouteColor: alternative,
+      bottomInset: bottomInset,
+    );
+    Widget host(MapboxNavigationView v) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Builder(builder: (context) => views.build(context, v)),
+    );
+
+    await tester.pumpWidget(host(view()));
+    final adapter = views.current.adapter;
+    expect(session.map, same(adapter));
+    expect(adapter.routeLabel, same(label));
+    expect(adapter.onRouteOptionTap, same(tap));
+    expect(adapter.routeColors.ahead, const Color(0xFFFF0000));
+    expect(adapter.labelColors.selectedFill, const Color(0xFF00FF00));
+    expect(adapter.alternativeColor, const Color(0xFF123456));
+    expect(adapter.bottomInset, 0);
+    expect(adapter.lightPreset, 'day');
+
+    // A rebuild forwards the changes; night on Standard is its preset.
+    await tester.pumpWidget(
+      host(
+        view(
+          night: true,
+          bottomInset: 120,
+          alternative: const Color(0xFF654321),
+        ),
+      ),
+    );
+    expect(views.current.adapter, same(adapter), reason: 'one adapter');
+    expect(adapter.bottomInset, 120);
+    expect(adapter.alternativeColor, const Color(0xFF654321));
+    expect(adapter.lightPreset, 'night');
+
+    // On another style night loads the night style.
+    views.createMap();
+    await tester.pumpWidget(host(view(styleUri: 'day-style')));
+    views.backend.calls.clear();
+    await tester.pumpWidget(host(view(styleUri: 'day-style', night: true)));
+    await tester.pump();
+    expect(views.backend.argsOf('loadStyleURI'), ['night-style']);
+    expect(adapter.lightPreset, isNull);
+
+    // Unmounted: the session lets the adapter go.
+    await tester.pumpWidget(const SizedBox());
+    expect(session.map, isNull);
+    // The fake backend answers through zero-length timers.
+    await tester.pump(Duration.zero);
+  });
+
   navTest('onMapCreated: the overview refreshes; no map, no app call', (
     tester,
     h,
