@@ -30,3 +30,6 @@
 - `NavRoute.fromPoints` throws `ArgumentError` for a `fallbackSpeed` that is
   not positive and finite, and for invalid per-segment durations or speed
   limits.
+- `GuidanceFormatter.speedValue` and `speedUnit` (whole km/h by default)
+  let a UI show the number and the unit apart, and another unit such as mph;
+  `speed()` composes them and reads as before.

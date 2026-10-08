@@ -87,6 +87,7 @@ class FakeRouteProvider extends RouteProvider {
 
   /// Calls to [routes] (the flow's requests; reroutes use [route]).
   var calls = 0;
+  GeoPoint? lastFrom;
   int? lastMaxAlternatives;
   double? lastHeading;
 
@@ -102,6 +103,7 @@ class FakeRouteProvider extends RouteProvider {
     int maxAlternatives = 2,
   }) {
     calls++;
+    lastFrom = from;
     lastMaxAlternatives = maxAlternatives;
     lastHeading = heading;
     return handler(from, to);
@@ -319,6 +321,49 @@ void main() {
       expect(provider.calls, 2);
     });
 
+    test('retry repeats the failed request as it was made', () async {
+      final provider = offline();
+      final h = harness(provider: provider);
+      // A last fix elsewhere, which a retry must not start from.
+      h.session.start();
+      await h.run(1, fixAt: (_) => h.fixOn(alt, 300));
+      expect(h.session.lastFix, isNotNull);
+      final a = route.pointAt(1000);
+      await h.flow.preview(from: a, to: to, heading: 90, maxAlternatives: 1);
+      expect(h.flow.state.value, isA<FlowError>());
+      provider.lastFrom = null;
+      provider.lastHeading = null;
+      provider.lastMaxAlternatives = null;
+
+      await h.flow.retry();
+      expect(provider.calls, 2);
+      expect(provider.lastFrom, a);
+      expect(provider.lastHeading, 90);
+      expect(provider.lastMaxAlternatives, 1);
+    });
+
+    test('retry outside an error throws', () async {
+      final h = harness(provider: both());
+      await expectLater(h.flow.retry(), throwsStateError);
+      h.flow.previewRoutes([route]);
+      await expectLater(h.flow.retry(), throwsStateError);
+      expect(h.flow.state.value, isA<FlowOverview>());
+    });
+
+    test('a retry that fails again keeps the error and its previous', () async {
+      final provider = offline();
+      final h = harness(provider: provider);
+      h.flow.previewRoutes([route]);
+      await h.flow.preview(from: from, to: to);
+      final first = h.flow.state.value as FlowError;
+      await h.flow.retry();
+      final again = h.flow.state.value as FlowError;
+      expect(again, isNot(same(first)));
+      expect(again.previous, same(first.previous));
+      expect(again.to, to);
+      expect(provider.calls, 2);
+    });
+
     test('a newer request or call supersedes a pending one', () async {
       final first = Completer<List<NavRoute>>();
       final provider = FakeRouteProvider((_, _) => first.future);
@@ -460,6 +505,42 @@ void main() {
       h.flow.start();
       expect(h.flow.cancel, throwsStateError);
       expect(h.flow.state.value, isA<FlowNavigating>());
+    });
+  });
+
+  group('closeOverview', () {
+    test('leaves a preview overview for idle, session untouched', () {
+      final h = harness();
+      h.session.start();
+      expect(h.session.isRunning, isTrue);
+      h.flow.previewRoutes([route, alt]);
+      h.previewMap.calls.clear();
+      h.flow.closeOverview();
+      expect(h.flow.state.value, isA<FlowIdle>());
+      expect(h.previewMap.calls, ['clearRouteOptions']);
+      expect(h.previewMap.options, isNull);
+      expect(h.session.isRunning, isTrue, reason: 'session untouched');
+      expect(h.session.route, isNull);
+    });
+
+    test('a stopped session stays stopped', () {
+      final h = harness();
+      h.flow.previewRoutes([route]);
+      h.flow.closeOverview();
+      expect(h.flow.state.value, isA<FlowIdle>());
+      expect(h.session.isRunning, isFalse);
+    });
+
+    test('throws in the trip overview and outside an overview', () {
+      final h = harness();
+      expect(h.flow.closeOverview, throwsStateError, reason: 'idle');
+      h.flow.previewRoutes([route]);
+      h.flow.start();
+      expect(h.flow.closeOverview, throwsStateError, reason: 'navigating');
+      h.flow.backToOverview();
+      expect(h.flow.closeOverview, throwsStateError, reason: 'trip overview');
+      expect(h.flow.state.value, isA<FlowOverview>());
+      expect(h.session.route, same(route));
     });
   });
 

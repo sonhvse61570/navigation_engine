@@ -1,6 +1,7 @@
 // ignore_for_file: implementation_imports
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,167 +13,10 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
+import 'package:navigation_engine_google_maps/src/google_maps_navigation_map.dart'
+    show toCameraPosition;
 
-/// A platform implementation without platform channels: builds a plain
-/// widget, creates the map view only when the test says so, and records the
-/// camera moves and the map objects of the last build.
-class FakeGoogleMapsPlatform extends gmp.GoogleMapsFlutterPlatform {
-  final cameraMoves = <gmp.CameraUpdate>[];
-  gmp.MapObjects? lastObjects;
-  void Function(int)? _onCreated;
-  int? _mapId;
-
-  /// What the native view does once it exists.
-  void createView() => _onCreated!(_mapId!);
-
-  Set<gmp.Marker> get markers => lastObjects!.markers;
-
-  @override
-  Future<void> init(int mapId) async {}
-
-  @override
-  Widget buildViewWithConfiguration(
-    int creationId,
-    void Function(int) onPlatformViewCreated, {
-    required gmp.MapWidgetConfiguration widgetConfiguration,
-    gmp.MapConfiguration mapConfiguration = const gmp.MapConfiguration(),
-    gmp.MapObjects mapObjects = const gmp.MapObjects(),
-  }) {
-    _mapId = creationId;
-    _onCreated = onPlatformViewCreated;
-    lastObjects = mapObjects;
-    return const SizedBox.expand();
-  }
-
-  @override
-  Future<void> updateMapConfiguration(
-    gmp.MapConfiguration configuration, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updateMarkers(
-    gmp.MarkerUpdates markerUpdates, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updatePolylines(
-    gmp.PolylineUpdates polylineUpdates, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updatePolygons(
-    gmp.PolygonUpdates polygonUpdates, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updateCircles(
-    gmp.CircleUpdates circleUpdates, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updateHeatmaps(
-    gmp.HeatmapUpdates heatmapUpdates, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updateTileOverlays({
-    required Set<gmp.TileOverlay> newTileOverlays,
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updateClusterManagers(
-    gmp.ClusterManagerUpdates clusterManagerUpdates, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> updateGroundOverlays(
-    gmp.GroundOverlayUpdates groundOverlayUpdates, {
-    required int mapId,
-  }) async {}
-
-  @override
-  Future<void> moveCamera(
-    gmp.CameraUpdate cameraUpdate, {
-    required int mapId,
-  }) async => cameraMoves.add(cameraUpdate);
-
-  @override
-  void dispose({required int mapId}) {}
-
-  // The map events: none happen in these tests.
-  @override
-  Stream<gmp.CameraMoveStartedEvent> onCameraMoveStarted({
-    required int mapId,
-  }) => const Stream.empty();
-
-  @override
-  Stream<gmp.CameraMoveEvent> onCameraMove({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.CameraIdleEvent> onCameraIdle({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.MarkerTapEvent> onMarkerTap({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.InfoWindowTapEvent> onInfoWindowTap({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.MarkerDragStartEvent> onMarkerDragStart({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.MarkerDragEvent> onMarkerDrag({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.MarkerDragEndEvent> onMarkerDragEnd({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.PolylineTapEvent> onPolylineTap({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.PolygonTapEvent> onPolygonTap({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.CircleTapEvent> onCircleTap({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.PointOfInterestTapEvent> onPointOfInterestTap({
-    required int mapId,
-  }) => const Stream.empty();
-
-  @override
-  Stream<gmp.MapTapEvent> onTap({required int mapId}) => const Stream.empty();
-
-  @override
-  Stream<gmp.MapLongPressEvent> onLongPress({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.ClusterTapEvent> onClusterTap({required int mapId}) =>
-      const Stream.empty();
-
-  @override
-  Stream<gmp.GroundOverlayTapEvent> onGroundOverlayTap({required int mapId}) =>
-      const Stream.empty();
-}
+import 'support/fake_google_maps_platform.dart';
 
 class FakeFixSource implements FixSource {
   final _controller = StreamController<NavFix>.broadcast(sync: true);
@@ -203,6 +47,12 @@ Widget app(
   Widget puck = const CarPuck(),
   VehicleImageBuilder? vehicleImage,
   RouteColors routeColors = const RouteColors(),
+  String? style,
+  bool showRecenterButton = true,
+  String Function(NavRoute route)? routeLabel,
+  void Function(int index)? onRouteOptionTap,
+  Color? alternativeRouteColor,
+  GoogleStyleColors? labelColors,
 }) => MaterialApp(
   home: GoogleMapsNavigationView(
     session: session,
@@ -211,6 +61,12 @@ Widget app(
     puck: puck,
     vehicleImage: vehicleImage,
     routeColors: routeColors,
+    style: style,
+    showRecenterButton: showRecenterButton,
+    routeLabel: routeLabel,
+    onRouteOptionTap: onRouteOptionTap,
+    alternativeRouteColor: alternativeRouteColor,
+    labelColors: labelColors,
   ),
 );
 
@@ -441,5 +297,288 @@ void main() {
 
     expect(colorOf('navigation_engine_ahead'), red);
     expect(platform.lastObjects!.polylines.map((p) => p.color), contains(red));
+  });
+  testWidgets('style reaches the map configuration', (tester) async {
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(app(session, style: googleStyleNightMapStyle));
+    expect(platform.mapConfiguration.style, googleStyleNightMapStyle);
+
+    // Updates reach the platform once the native view exists.
+    platform.createView();
+    await tester.pump();
+    await tester.pumpWidget(app(session, style: '[]'));
+    await tester.pump();
+    expect(platform.mapConfiguration.style, '[]');
+  });
+
+  testWidgets('route options are drawn with the route', (tester) async {
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(app(session));
+    final map = session.map! as GoogleMapsNavigationMap;
+    ids() => platform.polylines.map((p) => p.polylineId.value).toSet();
+    expect(ids(), isNot(contains('navigation_engine_option_0')));
+
+    map.showRouteOptions([sampleRoute, ...sampleRouteAlternatives], 0);
+    await tester.pump();
+    expect(
+      ids(),
+      containsAll([
+        'navigation_engine_option_0',
+        'navigation_engine_option_1',
+        'navigation_engine_option_casing_0',
+        'navigation_engine_ahead',
+      ]),
+    );
+
+    map.clearRouteOptions();
+    await tester.pump();
+    expect(ids(), isNot(contains('navigation_engine_option_0')));
+  });
+
+  testWidgets('the option labels are drawn with the app markers', (
+    tester,
+  ) async {
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    const mine = gm.Marker(markerId: gm.MarkerId('mine'));
+    await tester.pumpWidget(
+      app(session, markers: {mine}, routeLabel: (r) => 'x'),
+    );
+    final map = session.map! as GoogleMapsNavigationMap
+      ..labelPainter = (
+        text, {
+        required selected,
+        required pixelRatio,
+        required colors,
+      }) async => Uint8List.fromList([1, 2, 3]);
+
+    map.showRouteOptions([sampleRoute, ...sampleRouteAlternatives], 0);
+    await tester.pump();
+    await tester.pump();
+    expect(
+      platform.markers.map((m) => m.markerId.value),
+      containsAll([
+        'mine',
+        'navigation_engine_option_label_0',
+        'navigation_engine_option_label_1',
+      ]),
+    );
+  });
+
+  group('recenter button', () {
+    Future<void> dragMap(WidgetTester tester) async {
+      // The map takes pointers once its native view exists.
+      platform.createView();
+      await tester.pump();
+      await tester.drag(find.byType(gm.GoogleMap), const Offset(0, -50));
+      await tester.pump();
+    }
+
+    testWidgets('showRecenterButton false hides it', (tester) async {
+      final session = NavigationSession(fixes: source)
+        ..start(route: sampleRoute);
+      addTearDown(session.dispose);
+      await tester.pumpWidget(app(session, showRecenterButton: false));
+      await dragMap(tester);
+      expect(session.follow, isFalse);
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.byTooltip('Recenter'), findsNothing);
+    });
+
+    testWidgets('it is there by default', (tester) async {
+      final session = NavigationSession(fixes: source)
+        ..start(route: sampleRoute);
+      addTearDown(session.dispose);
+      await tester.pumpWidget(app(session));
+      expect(find.byType(FloatingActionButton), findsNothing);
+      await dragMap(tester);
+      expect(session.follow, isFalse);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.byTooltip('Recenter'), findsOneWidget);
+    });
+  });
+
+  testWidgets('viewportSize follows the layout', (tester) async {
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    Widget sized(Size size) => MaterialApp(
+      home: Center(
+        child: SizedBox.fromSize(
+          size: size,
+          child: GoogleMapsNavigationView(
+            session: session,
+            initialCenter: sampleRoute.points.first,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(sized(const Size(300, 600)));
+    final map = session.map! as GoogleMapsNavigationMap;
+    expect(map.viewportSize, const Size(300, 600));
+
+    await tester.pumpWidget(sized(const Size(200, 400)));
+    expect(map.viewportSize, const Size(200, 400));
+  });
+
+  testWidgets('the map padding is the focus padding of the frame', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(400, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 400,
+            height: 800,
+            child: GoogleMapsNavigationView(
+              session: session,
+              initialCenter: sampleRoute.points.first,
+            ),
+          ),
+        ),
+      ),
+    );
+    platform.createView();
+    await tester.pump();
+    final map = session.map! as GoogleMapsNavigationMap;
+    final routes = [sampleRoute, ...sampleRouteAlternatives];
+    map.showRouteOptions(routes, 0);
+    await map.fitRoutes(routes, EdgeInsets.zero);
+    await tester.pump();
+
+    final focus = focusPadding(const Size(400, 800), 0.7);
+    expect(map.mapPadding.top, focus.top);
+    expect(map.mapPadding, focus);
+    expect(platform.mapConfiguration.padding, focus);
+    final fitted = toCameraPosition(
+      fitCameraToBounds(
+        [for (final r in routes) ...r.points],
+        const Size(400, 800),
+        EdgeInsets.zero,
+        mapPadding: focus,
+      ),
+    );
+    final camera =
+        (platform.cameraAnimations.last as gmp.CameraUpdateNewCameraPosition)
+            .cameraPosition;
+    expect(camera.target.latitude, closeTo(fitted.target.latitude, 1e-9));
+    expect(camera.zoom, closeTo(fitted.zoom, 1e-9));
+  });
+
+  testWidgets('labelColors are forwarded; null keeps the map\'s', (
+    tester,
+  ) async {
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(app(session));
+    final map = session.map! as GoogleMapsNavigationMap;
+    expect(map.labelColors, same(GoogleStyleColors.day));
+
+    await tester.pumpWidget(app(session, labelColors: GoogleStyleColors.night));
+    expect(map.labelColors, same(GoogleStyleColors.night));
+
+    await tester.pumpWidget(app(session));
+    expect(map.labelColors, same(GoogleStyleColors.night));
+  });
+
+  testWidgets('routeLabel and onRouteOptionTap are forwarded', (tester) async {
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    final taps = <int>[];
+    await tester.pumpWidget(
+      app(session, routeLabel: (r) => 'a', onRouteOptionTap: taps.add),
+    );
+    final map = session.map! as GoogleMapsNavigationMap;
+    expect(map.routeLabel!(sampleRoute), 'a');
+    map.onRouteOptionTap!(2);
+    expect(taps, [2]);
+
+    // A rebuild with new callbacks replaces them.
+    final more = <int>[];
+    await tester.pumpWidget(
+      app(session, routeLabel: (r) => 'b', onRouteOptionTap: more.add),
+    );
+    expect(map.routeLabel!(sampleRoute), 'b');
+    map.onRouteOptionTap!(1);
+    expect(taps, [2]);
+    expect(more, [1]);
+  });
+
+  testWidgets('alternativeRouteColor recolours the drawn options', (
+    tester,
+  ) async {
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(app(session));
+    final map = session.map! as GoogleMapsNavigationMap;
+    map.showRouteOptions([sampleRoute, ...sampleRouteAlternatives], 1);
+    await tester.pump();
+    Color drawn() => platform.polylines
+        .singleWhere((p) => p.polylineId.value == 'navigation_engine_option_0')
+        .color;
+    expect(drawn(), const Color(0xFF9AA0A6));
+
+    await tester.pumpWidget(
+      app(session, alternativeRouteColor: const Color(0xFF123456)),
+    );
+    await tester.pump();
+    expect(drawn(), const Color(0xFF123456));
+
+    // Null keeps the colour the map has.
+    await tester.pumpWidget(app(session));
+    await tester.pump();
+    expect(drawn(), const Color(0xFF123456));
+  });
+
+  testWidgets('the label pixel ratio is the device pixel ratio', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 2.5;
+    addTearDown(tester.view.reset);
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(app(session));
+    final map = session.map! as GoogleMapsNavigationMap;
+    expect(map.labelPixelRatio, 2.5);
+
+    tester.view.devicePixelRatio = 3;
+    await tester.pump();
+    expect(map.labelPixelRatio, 3);
+  });
+
+  test('googleStyleNightMapStyle is valid JSON', () {
+    final rules = jsonDecode(googleStyleNightMapStyle);
+    expect(rules, isA<List<dynamic>>());
+    expect((rules as List<dynamic>).length, greaterThanOrEqualTo(12));
+    for (final rule in rules) {
+      expect(rule, isA<Map<String, dynamic>>());
+      expect((rule as Map<String, dynamic>)['stylers'], isNotEmpty);
+    }
+  });
+
+  test('googleStyleNightMapStyle uses an original palette', () {
+    const sample = [
+      '#242f3e',
+      '#38414e',
+      '#212a37',
+      '#746855',
+      '#17263c',
+      '#2f3948',
+      '#515c6d',
+      '#263c3f',
+      '#1f2835',
+    ];
+    final style = googleStyleNightMapStyle.toLowerCase();
+    for (final hex in sample) {
+      expect(style, isNot(contains(hex)));
+    }
   });
 }

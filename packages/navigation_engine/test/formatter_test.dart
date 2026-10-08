@@ -225,6 +225,23 @@ void main() {
       expect(const _Minimal().duration(const Duration(minutes: 3)), '3 min');
     });
 
+    test('speedValue and speedUnit default to whole km/h', () {
+      const en = EnglishGuidanceFormatter();
+      expect(en.speedValue(11.7), '42');
+      expect(en.speedUnit, 'km/h');
+      const vi = VietnameseGuidanceFormatter();
+      expect(vi.speedValue(11.7), '42');
+      expect(vi.speedUnit, 'km/h');
+      expect(const _Minimal().speedValue(0), '0');
+      expect(const _Minimal().speedUnit, 'km/h');
+    });
+
+    test('speed composes speedValue and speedUnit', () {
+      expect(const _Mph().speedValue(11.7), '26');
+      expect(const _Mph().speedUnit, 'mph');
+      expect(const _Mph().speed(11.7), '26 mph');
+    });
+
     test('splitDuration is exported for third-party formatters', () {
       expect(splitDuration(const Duration(seconds: 45)), (
         seconds: 45,
@@ -248,4 +265,13 @@ class _Minimal extends GuidanceFormatter {
   String announcement(GuidanceAnnouncement a) => '';
   @override
   String distance(double metres) => '';
+}
+
+class _Mph extends _Minimal {
+  const _Mph();
+  @override
+  String speedValue(double metresPerSecond) =>
+      '${(metresPerSecond * 2.23694).round()}';
+  @override
+  String get speedUnit => 'mph';
 }

@@ -90,6 +90,10 @@ class NavigationFlowController {
   /// measures the previous route until the next tick.
   MotionFrame? _staleFrame;
 
+  /// The last [preview] request, as it was passed: what [retry] repeats.
+  ({GeoPoint to, GeoPoint? from, double? heading, int maxAlternatives})?
+  _lastRequest;
+
   DateTime? _lastProgressAt;
   DateTime? _lastSpeedAt;
   int? _lastStepIndex;
@@ -145,6 +149,12 @@ class NavigationFlowController {
         'preview() while navigating: call backToOverview() first',
       );
     }
+    _lastRequest = (
+      to: to,
+      from: from,
+      heading: heading,
+      maxAlternatives: maxAlternatives,
+    );
     final generation = ++_generation;
     final previous = _settled;
     final start = from ?? session.lastFix?.position;
@@ -176,6 +186,26 @@ class NavigationFlowController {
       if (_disposed || generation != _generation) return;
       _set(FlowError(e, previous, to));
     }
+  }
+
+  /// Repeats the request that failed, with its origin, heading and
+  /// alternatives: the last [preview] call, with its arguments as they were
+  /// passed (a request without `from` again starts from the session's last
+  /// fix). Like [preview] it goes through [FlowLoading] to [FlowOverview], or
+  /// to a new [FlowError] with the same `previous`. Throws [StateError] (as a
+  /// failed future) outside [FlowError].
+  Future<void> retry() async {
+    _checkNotDisposed();
+    final request = _lastRequest;
+    if (_state.value is! FlowError || request == null) {
+      throw StateError('retry() needs FlowError');
+    }
+    return preview(
+      to: request.to,
+      from: request.from,
+      heading: request.heading,
+      maxAlternatives: request.maxAlternatives,
+    );
   }
 
   /// Shows [routes] (best first) without a provider. Throws
@@ -285,6 +315,20 @@ class NavigationFlowController {
     }
     _generation++;
     _set(_settled);
+  }
+
+  /// Closes a route preview: from a [FlowOverview] that is not the trip
+  /// overview, back to [FlowIdle], removing the route options from the map.
+  /// The session is untouched (not stopped, no route set). Throws
+  /// [StateError] in the trip overview (where [start] resumes the trip) and
+  /// outside [FlowOverview].
+  void closeOverview() {
+    _checkNotDisposed();
+    if (_state.value is! FlowOverview || _tripOverview) {
+      throw StateError('closeOverview() needs a FlowOverview of a preview');
+    }
+    _generation++;
+    _set(const FlowIdle());
   }
 
   /// Shows the route options again and re-fits them on the session's

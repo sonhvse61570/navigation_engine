@@ -63,7 +63,7 @@ final class FlowArrived extends NavigationFlowState {
 
 /// Requesting routes to [to] failed. [previous] is the state before the
 /// request: `NavigationFlowController.cancel` goes back to it, and
-/// `preview(to: error.to)` retries.
+/// `NavigationFlowController.retry` repeats the failed request.
 final class FlowError extends NavigationFlowState {
   const FlowError(this.error, this.previous, this.to);
 

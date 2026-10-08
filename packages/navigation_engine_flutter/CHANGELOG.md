@@ -18,3 +18,7 @@
 - `NavigationFlowController.isTripOverview` is true for the running trip's
   own overview (entered through `backToOverview`), signaling that a UI shows
   'Resume' instead of 'Start'.
+- `NavigationFlowController.retry()` repeats the failed `preview()` request
+  with its origin, heading and alternatives.
+- `NavigationFlowController.closeOverview()` leaves a route preview
+  (not the trip overview) for `FlowIdle`, leaving the session alone.
