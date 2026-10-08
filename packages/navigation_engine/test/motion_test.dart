@@ -16,10 +16,13 @@ SimRun simulate(
   double seconds = 900,
   int seed = 7,
   bool withSpeed = true,
+  double cruise = 11,
+  double? Function(NavFix sampled)? reportedSpeed,
 }) {
   final sim = GpsSimulator(
     sampleRoute,
     seed: seed,
+    cruise: cruise,
     stops: sampleRouteRedLights,
   );
   final filter = FixFilter();
@@ -35,12 +38,13 @@ SimRun simulate(
       nextFix += 0.85 + (seed * t * 7919 % 300) / 1000; // 0.85–1.15 s
       final sampled = sim.sample(now);
       // Some receivers report no speed at all.
-      final fix = withSpeed
+      final fix = withSpeed && reportedSpeed == null
           ? sampled
           : NavFix(
               position: sampled.position,
               accuracy: sampled.accuracy,
               time: sampled.time,
+              speed: reportedSpeed?.call(sampled),
               heading: sampled.heading,
             );
       if (filter.accept(fix)) {
@@ -57,6 +61,15 @@ SimRun simulate(
     if (f != null) run.frames.add((t, sim.distance, f));
   }
   return run;
+}
+
+/// Median and 95th percentile of the along-route error of [frames].
+(double, double) errorPercentiles(
+  List<(double t, double truth, MotionFrame f)> frames,
+) {
+  final errors = [for (final r in frames) (r.$3.routeDistance! - r.$2).abs()]
+    ..sort();
+  return (errors[errors.length ~/ 2], errors[(errors.length * 0.95).floor()]);
 }
 
 void main() {
@@ -153,6 +166,63 @@ void main() {
       final p95 = errors[(errors.length * 0.95).floor()];
       expect(p95, lessThan(15), reason: 'p95 along-route error $p95 m');
     });
+  });
+
+  // Mock-location apps often report a speed of 0 (Android fills in 0 when
+  // a location has none) or one that does not match how far they move.
+  // Trusting it leaves the vehicle ever further behind until it teleports.
+  group('RouteMotionEngine when the reported speed is wrong', () {
+    // (cruise m/s, reported speed as a share of the true one)
+    final cases = <String, (double, double)>{
+      '0 at 45 km/h': (12.5, 0),
+      '0 at 35 km/h': (9.7, 0),
+      '60% at 45 km/h': (12.5, 0.6),
+      '60% at 60 km/h': (16.7, 0.6),
+      '150% at 45 km/h': (12.5, 1.5),
+    };
+    for (final c in cases.entries) {
+      test('${c.key}: no jump, stays close, covers the route', () {
+        final (cruise, share) = c.value;
+        final run = simulate(
+          RouteMotionEngine(sampleRoute),
+          cruise: cruise,
+          reportedSpeed: (f) => f.speed! * share,
+        );
+        final settled = run.frames.where((r) => r.$1 > 10).toList();
+        var worst = 0.0;
+        for (var i = 1; i < settled.length; i++) {
+          worst = math.max(
+            worst,
+            distanceBetween(settled[i - 1].$3.position, settled[i].$3.position),
+          );
+        }
+        // Until the drift gives the speed away, the vehicle moves at the
+        // reported speed when that is the faster one. A jump is 60 m.
+        final fastest = cruise * math.max(1, share);
+        expect(worst, lessThan((fastest + 8) / 60), reason: 'worst step');
+        // Once the speed is given away, the engine is as good as with no
+        // speed at all: compare with that drive.
+        final blind = simulate(
+          RouteMotionEngine(sampleRoute),
+          cruise: cruise,
+          withSpeed: false,
+        );
+        final (p50, p95) = errorPercentiles(settled);
+        final (_, blindP95) = errorPercentiles(
+          blind.frames.where((r) => r.$1 > 10).toList(),
+        );
+        expect(p50, lessThan(8), reason: 'p50 along-route error $p50 m');
+        expect(
+          p95,
+          lessThan(blindP95 + 3),
+          reason: 'p95 $p95 m vs $blindP95 m without speed',
+        );
+        expect(
+          settled.last.$3.routeDistance,
+          greaterThan(sampleRoute.length - 30),
+        );
+      });
+    }
   });
 
   test('no frame before the first fix', () {

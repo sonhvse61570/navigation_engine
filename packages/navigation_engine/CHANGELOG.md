@@ -14,6 +14,10 @@
   without losing the route, the vehicle or the guidance progress.
 - Fixes without a speed: the motion engines estimate it from the previous
   fixes, so the vehicle still moves smoothly.
+- `RouteMotionEngine` stops trusting a reported speed that does not match
+  how far the fixes move (mock-location apps often report 0), once the
+  vehicle drifts 15 m from the fixes, and uses the estimate instead; the
+  vehicle no longer falls behind and jumps ahead.
 - `testing.dart`: `GpsSimulator`, `SimulatedFixSource`, `sampleRoute`.
 - `NavigationSession.map` can be set after construction (map views attach
   themselves); the new map gets the route line at once.
