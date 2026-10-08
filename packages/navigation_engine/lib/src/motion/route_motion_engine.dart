@@ -96,11 +96,14 @@ class RouteMotionEngine implements MotionEngine {
     );
     final estimate = _estimateSpeed(snap.distance, fix.time);
     var speed = measured != null ? math.max(0.0, measured) : estimate;
+    final s = _s;
+    if (measured != null && s != null) {
+      speed = _checkMeasured(speed, estimate, snap.distance, age, s);
+    }
     var predicted = math.min(
       route.length,
       snap.distance + speed * (age + lead),
     );
-    final s = _s;
     final jumped = s == null || (predicted - s).abs() > 60;
     if (jumped && s != null) {
       // An estimate across the jump is meaningless: measure again from here.
@@ -147,6 +150,48 @@ class RouteMotionEngine implements MotionEngine {
     _vTarget = speed;
     _lastFixAt = now;
   }
+
+  /// Whether the fixes' own speed has been found not to match how far they
+  /// move (see [_checkMeasured]).
+  bool _measuredUnreliable = false;
+
+  /// Returns the speed to use for a fix that reports [measured].
+  ///
+  /// A receiver's speed is normally better than one estimated from
+  /// positions, but mock-location apps often report 0 (Android fills in 0
+  /// when a location has none) or a speed that does not match how far the
+  /// fixes move. Trusting it leaves the vehicle ever further from the fixes,
+  /// [maxCorrection] cannot close the gap, and it ends in a jump. So when
+  /// the vehicle has drifted more than [_driftLimit] metres from the fixes,
+  /// in the direction the [estimate] disagrees with [measured], the engine
+  /// uses the estimate instead, until the two agree again while moving. A
+  /// real receiver
+  /// stays within the limit (braking for a red light included), so it is
+  /// never second-guessed.
+  double _checkMeasured(
+    double measured,
+    double estimate,
+    double snapDistance,
+    double age,
+    double s,
+  ) {
+    final agree = (estimate - measured).abs() <= math.max(1.5, 0.25 * estimate);
+    if (agree) {
+      // Agreeing at a standstill says nothing (a source stuck at 0 agrees
+      // at every red light): only agreement while moving restores trust.
+      if (estimate > 3) _measuredUnreliable = false;
+    } else {
+      final drift = snapDistance + measured * (age + lead) - s;
+      if (drift.abs() > _driftLimit && (drift > 0) == (estimate > measured)) {
+        _measuredUnreliable = true;
+      }
+    }
+    return _measuredUnreliable ? estimate : measured;
+  }
+
+  /// Metres between the vehicle and the fixes beyond which a disagreeing
+  /// measured speed is no longer trusted.
+  static const _driftLimit = 15.0;
 
   /// Records the fix and returns the speed it implies, for fixes without
   /// one: the distance driven along the route since the fix about
@@ -217,6 +262,7 @@ class RouteMotionEngine implements MotionEngine {
     _offSince = null;
     _offRoute = false;
     _lastSnap = null;
+    _measuredUnreliable = false;
     _recent.clear();
   }
 }
