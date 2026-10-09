@@ -85,6 +85,5 @@ final class AlongRoutePlace {
 }
 
 /// Searches for places along the route: the app's own search back end.
-typedef AlongRouteSearch = Future<List<AlongRoutePlace>> Function(
-  AlongRouteQuery query,
-);
+typedef AlongRouteSearch =
+    Future<List<AlongRoutePlace>> Function(AlongRouteQuery query);

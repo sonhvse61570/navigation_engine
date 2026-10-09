@@ -7,7 +7,6 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_maps_navigation_map.dart';
-import 'ui/google_style_colors.dart';
 
 /// A ready-made navigation map on Google Maps: follows [session]'s vehicle
 /// heading-up, draws the route and the vehicle, and offers recenter.

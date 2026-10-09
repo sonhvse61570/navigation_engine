@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
+
+import '../route_label.dart';
 
 /// Colours of the Google-style navigation UI.
 final class GoogleStyleColors {
@@ -53,8 +54,8 @@ final class GoogleStyleColors {
 
   /// The accent colour (blue in day mode): the buttons and the selected
   /// route label. In the drop-in screen it also colours the selected route
-  /// option and the route ahead; a bare `GoogleMapsNavigationView` draws
-  /// those with its `routeColors.ahead` instead.
+  /// option and the route ahead; a bare map view draws those with its
+  /// `routeColors.ahead` instead.
   final Color accent;
 
   /// The colour for text on accents, such as the selected route label.

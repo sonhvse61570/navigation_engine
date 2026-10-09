@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 
 /// The pill that brings the camera back to the vehicle after the driver has

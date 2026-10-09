@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
-import '../along_route_search.dart';
+import '../../along_route_search.dart';
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 
 /// The search-along-the-route overlay. It fills its parent and leaves the
@@ -193,7 +193,7 @@ class _GoogleStyleSearchAlongRouteState
         FlutterErrorDetails(
           exception: error,
           stack: stack,
-          library: 'navigation_engine_google_maps',
+          library: 'navigation_engine_flutter',
           context: ErrorDescription('while calling onResults'),
         ),
       );

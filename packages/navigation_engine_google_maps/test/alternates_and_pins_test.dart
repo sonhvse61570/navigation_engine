@@ -428,6 +428,12 @@ void main() {
   });
 
   group('search pins', () {
+    test('the map is a SearchPinsMap', () {
+      final map = GoogleMapsNavigationMap();
+      addTearDown(map.dispose);
+      expect(map, isA<SearchPinsMap>());
+    });
+
     test(
       'one pin per place, the focused one on top; clear removes them',
       () async {

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../../flow/trip_progress.dart';
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 import 'speed_limit_sign_style.dart';
 
@@ -326,8 +327,9 @@ class _LimitSign extends StatelessWidget {
           // A fixed-size sign: its text does not grow past the normal size.
           child: MediaQuery(
             data: MediaQuery.of(context).copyWith(
-              textScaler: MediaQuery.textScalerOf(context)
-                  .clamp(maxScaleFactor: 1),
+              textScaler: MediaQuery.textScalerOf(
+                context,
+              ).clamp(maxScaleFactor: 1),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

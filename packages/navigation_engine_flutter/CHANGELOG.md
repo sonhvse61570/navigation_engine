@@ -50,6 +50,44 @@
   Mapbox-style pieces, the shared screen of the adapters' Mapbox-style
   drop-ins. Its `mapBuilder` gets the colours, the route line colours and
   the route label of the moment.
+- Google-style pieces, as the Mapbox-style ones, for any map:
+  `GoogleStyleManeuverHeader`, `GoogleStyleLaneGuidance`,
+  `GoogleStyleTripSheet`, `GoogleStyleSpeedCluster`,
+  `GoogleStyleRecenterButton`, `GoogleStyleTripProgressBar`,
+  `GoogleStyleCompassButton`, `GoogleStyleRoundButton`,
+  `GoogleStyleControlStack`, `GoogleStyleSoundButton`,
+  `GoogleStyleReportButton`, `GoogleStyleReportSheet`,
+  `GoogleStyleSearchAlongRoute`, `GoogleStyleOverviewPanel`,
+  `GoogleStyleStepList` and `GoogleStyleArrivalSheet`, coloured by
+  `GoogleStyleColors` (`day`, `night`, `routeLabelColors`), with
+  `AudioGuidance`, `IncidentType` (and its `GoogleStyleIncidentType`
+  extension), `showGoogleStyleReportSheet`, `GoogleStyleSheetAction`,
+  `SpeedLimitSignStyle`, `SpeedingLevel` and the search types
+  `AlongRouteQuery`, `AlongRoutePlace`, `AlongRouteCategory` and
+  `AlongRouteSearch`. An original palette; the look is inspired by Google
+  Maps and is not an official Google product. These names are exported
+  without a prefix (`AudioGuidance`, `IncidentType`, `SpeedingLevel`,
+  `SpeedLimitSignStyle`, `AlongRoute*`): if an app's other packages use one
+  of them, import this library with `hide` or `as`.
+- A `SearchPinsMap` call that throws, or whose future fails, is reported
+  through `FlutterError` by `GoogleStyleFlowScaffold` and never breaks the
+  screen; the same holds for its camera move to a focused place.
+- `GoogleStyleFlowScaffold`: `NavigationFlowScaffold` dressed with the
+  Google-style pieces, the whole Google-style screen: the turn card with
+  lanes, the "Then" tab and step preview, the end column, the speed
+  cluster, the trip sheet with its drag, the report and search along the
+  route, alternate routes, the landscape side panel, the toast, the back
+  handling and the logo inset. Its `mapBuilder` gets the
+  `NavigationMapConfig` and the `GoogleStyleMapLayers` of the moment:
+  traffic, satellite, the follow focus across the map, how much of the
+  map's bottom the screen covers, the day or night colours, the route
+  colours and the texts of the route and alternate bubbles. Any map can
+  wear the look by building itself from them.
+- `SearchPinsMap`: the interface of maps that pin the places found along
+  the route (`showSearchPins`, `clearSearchPins`), next to
+  `AlternateRoutesMap`. The scaffold uses it when the session's map
+  implements it and works without it; a place focused from the list or a
+  pin moves the camera through any map.
 - `NavigationFlowScaffold.headerBuilder` gets the guarded
   `NavigationFlowActions`, as `topEndBuilder` does.
 - The scaffold shows a follow change through

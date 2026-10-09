@@ -47,6 +47,83 @@ Use one of the adapters for a complete view:
   follow an app's theme; `routeLabelColors` converts them for the route
   labels. The palette is original to this package; the look is inspired by
   Mapbox's navigation apps and is not an official Mapbox product.
+- **Google-style UI** — `GoogleStyleFlowScaffold` is the scaffold dressed
+  with the Google-style pieces, the screen of the Google Maps adapter's
+  `GoogleStyleNavigation`. It works on any map: see
+  [Google-style pieces](#google-style-pieces).
+
+## Google-style pieces
+
+`GoogleStyleFlowScaffold` is a whole navigation screen in the style of a
+phone navigation app: a turn card with lanes and a "Then" tab, a step
+preview, an end column (report, compass, search along the route, sound,
+route options), a speed cluster, a trip sheet you drag up, alternate
+routes, a landscape side panel, a toast and back handling. It owns the
+flow binding and the look; you give it the map. Build the Google look on
+any map with a `mapBuilder`:
+
+```dart
+GoogleStyleFlowScaffold(
+  session: session,
+  flow: flow,
+  mapBuilder: (context, config, layers) => MyMap(
+    night: config.isNight,
+    onRouteTap: config.onRouteOptionTap,
+    onReady: config.onMapReady,
+    // What the screen asks of the map, every time it is built:
+    traffic: layers.traffic,
+    satellite: layers.satellite,
+    followFocusX: layers.horizontalFocus, // 0..1 from the left
+    attributionInset: layers.bottomOverlay,
+    alternateColor: layers.colors.alternative,
+    routeColors: layers.routeColors,
+    routeLabel: layers.routeLabel,         // the text of a route bubble
+    alternateLabel: layers.alternateLabel, // "2 min faster"
+  ),
+  idleBuilder: (_) => const MySearchBar(),
+  searchAlongRoute: (query) => myPlaces.along(query.route, query.text),
+  onAddStop: (place) => myTrip.addStop(place),
+)
+```
+
+`GoogleStyleMapLayers` is what the screen asks of the map beyond the
+`NavigationMapConfig`: the traffic and satellite switches of the trip
+sheet's menu, the follow focus across the map (beside a landscape side
+panel it is the middle of the uncovered part), how much of the map's
+bottom the screen covers (keep the map's logo above it), and the colours,
+route colours and bubble texts of the moment (day or night). Apply them
+on every build; the map may be built again with equal layers, never for
+progress ticks.
+
+The scaffold uses two optional interfaces of the session's map when it
+implements them, and works without them: `AlternateRoutesMap` (alternate
+routes while navigating) and `SearchPinsMap` (pins for the places found
+along the route; a place focused from the list or a pin still moves the
+camera through any map).
+
+The pieces are public, so a screen of your own can mix them:
+`GoogleStyleManeuverHeader`, `GoogleStyleLaneGuidance`,
+`GoogleStyleTripSheet`, `GoogleStyleSpeedCluster`,
+`GoogleStyleRecenterButton`, `GoogleStyleTripProgressBar`,
+`GoogleStyleCompassButton`, `GoogleStyleRoundButton`,
+`GoogleStyleControlStack`, `GoogleStyleSoundButton`,
+`GoogleStyleReportButton`, `GoogleStyleReportSheet`,
+`GoogleStyleSearchAlongRoute`, `GoogleStyleOverviewPanel`,
+`GoogleStyleStepList` and `GoogleStyleArrivalSheet` (with
+`showGoogleStyleReportSheet`, `GoogleStyleSheetAction`, `SpeedingLevel`
+and `SpeedLimitSignStyle`). Their colours are
+`GoogleStyleColors` (`day`, `night`; `routeLabelColors` converts them for
+the route labels), and the screen takes `dayColors` and `nightColors`
+(and `dayRouteColors` / `nightRouteColors`) to replace them. The app owns
+the audio (`AudioGuidance`), the reports (`IncidentType`), the search back
+end (`AlongRouteQuery`, `AlongRoutePlace`) and the stops. The palette is
+original to this package; the look is inspired by Google Maps and is not
+an official Google product.
+
+Some of these names are generic and carry no `Google` prefix:
+`AudioGuidance`, `IncidentType`, `SpeedingLevel`, `SpeedLimitSignStyle`
+and the `AlongRoute*` types. If an app's other packages define one of
+them, import this library with `hide` or `as`.
 
 ## Flow controller
 

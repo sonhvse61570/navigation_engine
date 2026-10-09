@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../../flow/place_label.dart';
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 import 'last_road.dart';
 

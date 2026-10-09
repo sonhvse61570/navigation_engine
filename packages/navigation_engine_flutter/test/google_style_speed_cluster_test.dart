@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
 
 class _Mph extends EnglishGuidanceFormatter {
   const _Mph();

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../navigation_strings.dart';
 import 'audio_guidance.dart';
 import 'google_style_colors.dart';
 import 'google_style_round_button.dart';
