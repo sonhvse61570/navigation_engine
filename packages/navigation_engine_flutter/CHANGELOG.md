@@ -64,6 +64,8 @@
 - `recenterAlignment` is directional: in a right-to-left app the recenter
   button mirrors (bottom end is the bottom left).
 - `LaneGuidanceRow`: the lane arrows of the styled banners.
+- `MapboxStyleColors.day` text meets WCAG AA (4.5:1): the accent is
+  `#2F5DE0` and the warning `#CF3339` (the end marker keeps `#E5484D`).
 - `MapboxStyleColors` has `==` and `hashCode`; its `routeLabelColors`
   border is `onSurface` at 20 %, visible by day and at night.
 - `NavigationStrings.copyWith`.
