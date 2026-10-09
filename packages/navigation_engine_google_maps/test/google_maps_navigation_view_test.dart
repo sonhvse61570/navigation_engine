@@ -473,6 +473,63 @@ void main() {
     expect(camera.zoom, closeTo(fitted.zoom, 1e-9));
   });
 
+  testWidgets('bottomOverlay lifts the map padding\'s bottom (the logo) and '
+      'its top alike (the focus); the fit is unchanged (M1)', (tester) async {
+    tester.view
+      ..physicalSize = const Size(400, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final session = NavigationSession(fixes: source)..start(route: sampleRoute);
+    addTearDown(session.dispose);
+    Widget view(double overlay) => MaterialApp(
+      home: GoogleMapsNavigationView(
+        session: session,
+        initialCenter: sampleRoute.points.first,
+        bottomOverlay: overlay,
+      ),
+    );
+    await tester.pumpWidget(view(180));
+    platform.createView();
+    await tester.pump();
+    final map = session.map! as GoogleMapsNavigationMap;
+    final focus = focusPadding(const Size(400, 800), 0.7);
+    final lifted = focus.copyWith(
+      top: focus.top + 180,
+      bottom: focus.bottom + 180,
+    );
+    expect(map.mapPadding, lifted);
+    expect(platform.mapConfiguration.padding, lifted);
+    final routes = [sampleRoute, ...sampleRouteAlternatives];
+    await map.fitRoutes(routes, EdgeInsets.zero);
+    final fitted = toCameraPosition(
+      fitCameraToBounds(
+        [for (final r in routes) ...r.points],
+        const Size(400, 800),
+        EdgeInsets.zero,
+        mapPadding: focus,
+      ),
+    );
+    final camera =
+        (platform.cameraAnimations.last as gmp.CameraUpdateNewCameraPosition)
+            .cameraPosition;
+    expect(camera.target.latitude, closeTo(fitted.target.latitude, 1e-9));
+    expect(camera.zoom, closeTo(fitted.zoom, 1e-9));
+
+    // Too tall for the room the focus leaves: capped so 48 dp stay.
+    await tester.pumpWidget(view(500));
+    await tester.pump();
+    final cap = (800 - focus.top - focus.bottom - 48) / 2;
+    expect(platform.mapConfiguration.padding!.bottom, closeTo(cap, 1e-9));
+    expect(
+      platform.mapConfiguration.padding!.top,
+      closeTo(focus.top + cap, 1e-9),
+    );
+
+    await tester.pumpWidget(view(0));
+    await tester.pump();
+    expect(platform.mapConfiguration.padding, focus);
+  });
+
   testWidgets('labelColors are forwarded; null keeps the map\'s', (
     tester,
   ) async {

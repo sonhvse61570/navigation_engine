@@ -10,6 +10,7 @@ import 'maneuver_icon.dart';
 /// manoeuvre, and optionally the last spoken prompt. Hidden while the
 /// session has no guidance. Red while the vehicle is off route.
 class NavigationBanner extends StatefulWidget {
+  /// Creates a banner for [session].
   const NavigationBanner({
     super.key,
     required this.session,
@@ -19,10 +20,19 @@ class NavigationBanner extends StatefulWidget {
     this.offRouteColor = const Color(0xFFB3261E),
   });
 
+  /// The session whose guidance is shown. Owned by the app.
   final NavigationSession session;
+
+  /// Formats the instructions and distances.
   final GuidanceFormatter formatter;
+
+  /// Whether the last spoken prompt shows under the instruction.
   final bool showLastAnnouncement;
+
+  /// The banner's background while on route.
   final Color color;
+
+  /// The banner's background while the vehicle is off route.
   final Color offRouteColor;
 
   @override

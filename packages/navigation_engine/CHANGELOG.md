@@ -1,5 +1,8 @@
 ## 0.1.0
 
+- `FollowCamera` defaults sit closer and flatter, like the common driving
+  apps: `zoomSlow` 18.7, `zoomFast` 17.1 (each half a level closer) and
+  `tilt` 35° (was 50°).
 - `FollowCamera.headingUp` (default `true`): when false the camera stays
   north-up and flat (bearing 0, tilt 0), with the zoom logic unchanged.
 - `NavigationSession.followChanges` and `FollowCamera.headingUpChanges`
@@ -43,3 +46,18 @@
 - `GuidanceFormatter.speedValue` and `speedUnit` (whole km/h by default)
   let a UI show the number and the unit apart, and another unit such as mph;
   `speed()` composes them and reads as before.
+- `testing.dart`: `GpsSimulator.setRoute(route, keepPosition: true)` places
+  the car by its nearest point on the whole new route, for a switch onto a
+  route that shares the road (an alternate picked mid trip); the default
+  still searches the new route's first 150 m, as a reroute starts at the
+  car.
+- "Then" step: `GuidanceState.thenStep` now shows the next manoeuvre
+  whenever the current step goes straight on (a depart, new name, continue
+  or turn whose modifier is straight or none), however far it is (the
+  arrival when no manoeuvre is left); otherwise the next manoeuvre within
+  `NavGuidance.thenWithin`, whose default is now 300 m (was 100 m). Both
+  skip straight-on steps, so it never reads "then continue straight"; a
+  roundabout, ramp, fork, merge or end of the road is a manoeuvre even
+  going straight.
+  Speech keeps its 100 m reach: `GuidanceAnnouncement.thenStep` follows
+  the new `NavGuidance.spokenThenWithin` (default 100 m) alone.

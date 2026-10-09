@@ -84,6 +84,33 @@ disposes it.
 - `stop()` stops the app's session too. To keep showing the vehicle
   afterwards, call `session.start()` again.
 
+### Destination, step preview and alternates
+
+```dart
+await flow.preview(to: to, destination: const PlaceLabel(name: 'Landmark 81'));
+flow.start();
+flow.previewStep(3);            // camera on step 3; follow off for 10 s
+flow.alternates.value;          // AlternateRoute(route, timeDelta, divergence)
+flow.selectAlternate(0);        // switch, no route request
+```
+
+- **Destination:** a `PlaceLabel` (a name and an optional address) passed
+  to `preview` or `previewRoutes` rides on `FlowOverview`, `FlowNavigating`
+  and `FlowArrived`, for an arrival card.
+- **Step preview:** `previewStep` turns follow off and moves the camera
+  once to that step's manoeuvre (`previewedStep` holds its index); a
+  Re-center, `endStepPreview`, a reroute, an alternate, arrival, stop or
+  `stepPreviewTimeout` (10 s) ends it. When the user touches the map during
+  a preview, call `endStepPreview(refollow: false)`: the camera stays where
+  the user moves it.
+- **Alternates:** the unselected routes of the overview are kept as
+  `alternates` while navigating, each dropped 20 m past where it leaves the
+  route, and requested again after a reroute (one more `routes` request per
+  reroute; `fetchAlternatesOnReroute: false` turns it off);
+  `selectAlternate` switches the session to one without a route request,
+  placing the vehicle on it (a refetched alternate starts where the vehicle
+  was), and maps that implement `AlternateRoutesMap` draw them.
+
 ## A screen in your own style
 
 `NavigationFlowScaffold` has no look. Give it the map and one builder per
@@ -127,6 +154,16 @@ header and the bottom pieces take their edge's insets (give the panel, the
 footer and the arrival panel a `SafeArea` for the bottom inset), the edge
 and top end slots and the recenter button the side insets.
 
+A style may opt into more, all off by default: `recenterReplacesSpeed`
+(the recenter button takes the speed's place while it shows),
+`bottomEndBuilder` (a piece at the bottom end, such as a report button,
+lifted above the speed when the two do not fit side by side),
+`arrivalHeaderBuilder` (a card at the top while arrived) and
+`landscapeSidePanel` (on a wide landscape screen, see `usesSidePanel` and
+`sidePanelWidth`, the header and the footer move to a column on the start
+side). The Google-style drop-in uses them; the other drop-ins use none of
+them.
+
 ### What the drop-ins give the app's map
 
 The adapters' drop-in screens are built on these scaffolds. Each adapter's
@@ -144,10 +181,15 @@ adapter. The app reaches the map through:
 
 Each callback runs after the route overview is drawn on the new map.
 
+A map builder also gets `config.startOverlayWidth`: the width a landscape
+side panel covers on the map's start side (0 without one). It changes
+without a new config; shift the follow focus to the middle of the rest.
+
 ## Shared vocabulary
 
-Used by every adapter. The Google Maps package re-exports all of it; the
-others re-export `NavigationStrings` and `SpeedLimitSign`:
+Used by every adapter. The Google Maps package re-exports all of it but
+`SpeedLimitSign` and `RouteLabelBubble`; the others re-export
+`NavigationStrings` and `SpeedLimitSign`:
 
 - `NavigationStrings`: the words of the UIs, English by default and
   `NavigationStrings.vietnamese()`. Distances, durations and speeds come from

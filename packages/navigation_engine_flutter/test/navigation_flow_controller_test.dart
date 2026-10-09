@@ -833,12 +833,12 @@ void main() {
     });
 
     test('a reroute switches the route and drives the indicator', () async {
-      late NavRoute fresh;
+      NavRoute? fresh;
       final gate = Completer<void>();
       final provider = FakeRouteProvider((from, to) async {
         await gate.future;
-        fresh = NavRoute.fromPoints([from, to]);
-        return [fresh];
+        fresh ??= NavRoute.fromPoints([from, to]);
+        return [fresh!];
       });
       final h = harness(provider: provider);
       h.flow.previewRoutes([route]);

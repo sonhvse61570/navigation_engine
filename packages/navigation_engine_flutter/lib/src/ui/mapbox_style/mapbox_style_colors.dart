@@ -4,6 +4,11 @@ import '../route_label.dart';
 
 /// Colours of the Mapbox-style navigation UI: a dark banner on top, light
 /// panels below and one accent. The palette is original to this package.
+///
+/// In the built-in [day] and [night] palettes every text colour reaches
+/// WCAG AA (4.5:1) on its background, the accent included (it is also used
+/// as text, on the surface and on its own 8% tint). [fromColorScheme] takes
+/// the app's colours as they are.
 final class MapboxStyleColors {
   /// Creates a set of colours for the Mapbox-style navigation UI.
   const MapboxStyleColors({
@@ -89,11 +94,11 @@ final class MapboxStyleColors {
     surface: Color(0xFFFFFFFF),
     onSurface: Color(0xFF1B1F24),
     onSurfaceVariant: Color(0xFF5C6773),
-    accent: Color(0xFF3B6CF6),
+    accent: Color(0xFF2F5DE0),
     onAccent: Color(0xFFFFFFFF),
     alternative: Color(0xFF9AA5B1),
     etaText: Color(0xFF1B1F24),
-    warning: Color(0xFFE5484D),
+    warning: Color(0xFFCF3339),
     end: Color(0xFFE5484D),
   );
 

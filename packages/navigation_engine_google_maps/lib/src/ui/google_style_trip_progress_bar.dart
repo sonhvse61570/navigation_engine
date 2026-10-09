@@ -7,20 +7,21 @@ import 'google_style_colors.dart';
 /// The height of the bar where the height it is given is unbounded.
 const double _unboundedHeight = 120;
 
-/// A thin vertical bar showing how much of the trip is driven: the driven
-/// part in [GoogleStyleColors.etaText], filled from the bottom, on a track
-/// in [GoogleStyleColors.alternative], with a vehicle dot at the current
-/// fraction. It fills the height it is given, or is 120 high where the
-/// height is unbounded (in a column or a scroll view). The dot is
-/// wider than the bar and travels inside its length: flush with the bottom
-/// at 0 and with the top at 1.
+/// A vertical bar showing how much of the trip is driven: a 12 dp capsule
+/// with the driven part in [GoogleStyleColors.progressDriven] from the
+/// bottom and the rest in [GoogleStyleColors.accent], a white dot with an
+/// accent ring at the vehicle, and a dot at the top for the destination. It
+/// fills the height it is given, or is 120 high where the height is
+/// unbounded (in a column or a scroll view). The dot is wider than the bar
+/// and travels inside its length: flush with the bottom at 0 and with the
+/// top at 1.
 class GoogleStyleTripProgressBar extends StatelessWidget {
   /// Creates a bar filled to [fraction].
   const GoogleStyleTripProgressBar({
     super.key,
     required this.fraction,
     this.colors = GoogleStyleColors.day,
-    this.width = 6,
+    this.width = 12,
   });
 
   /// The share of the trip driven, 0 to 1; values outside are clamped.
@@ -52,7 +53,7 @@ class GoogleStyleTripProgressBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(width / 2),
                   child: DecoratedBox(
                     key: const ValueKey('google_style_trip_progress_track'),
-                    decoration: BoxDecoration(color: colors.alternative),
+                    decoration: BoxDecoration(color: colors.accent),
                     child: Align(
                       alignment: Alignment.bottomCenter,
                       child: FractionallySizedBox(
@@ -62,9 +63,28 @@ class GoogleStyleTripProgressBar extends StatelessWidget {
                           key: const ValueKey(
                             'google_style_trip_progress_fill',
                           ),
-                          decoration: BoxDecoration(color: colors.etaText),
+                          decoration: BoxDecoration(
+                            color: colors.progressDriven,
+                          ),
                         ),
                       ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                top: 0,
+                width: width,
+                height: width,
+                child: DecoratedBox(
+                  key: const ValueKey('google_style_trip_progress_destination'),
+                  decoration: BoxDecoration(
+                    color: colors.accent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFFFFFFF),
+                      width: 2,
                     ),
                   ),
                 ),
@@ -78,9 +98,9 @@ class GoogleStyleTripProgressBar extends StatelessWidget {
                 child: DecoratedBox(
                   key: const ValueKey('google_style_trip_progress_dot'),
                   decoration: BoxDecoration(
-                    color: colors.surface,
+                    color: const Color(0xFFFFFFFF),
                     shape: BoxShape.circle,
-                    border: Border.all(color: colors.etaText, width: 2),
+                    border: Border.all(color: colors.accent, width: 2),
                   ),
                 ),
               ),

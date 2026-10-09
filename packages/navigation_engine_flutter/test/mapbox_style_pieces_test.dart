@@ -85,13 +85,45 @@ void main() {
       expect(c.surface, const Color(0xFFFFFFFF));
       expect(c.onSurface, const Color(0xFF1B1F24));
       expect(c.onSurfaceVariant, const Color(0xFF5C6773));
-      expect(c.accent, const Color(0xFF3B6CF6));
+      expect(c.accent, const Color(0xFF2F5DE0));
       expect(c.onAccent, const Color(0xFFFFFFFF));
       expect(c.alternative, const Color(0xFF9AA5B1));
       expect(c.etaText, const Color(0xFF1B1F24));
-      expect(c.warning, const Color(0xFFE5484D));
+      expect(c.warning, const Color(0xFFCF3339));
       expect(c.end, const Color(0xFFE5484D));
     });
+
+    // Text pairs meet WCAG AA (4.5:1) in the built-in palettes. The accent
+    // is also text ("Fastest" on the selected card's 8% accent tint).
+    for (final (name, c) in [
+      ('day', MapboxStyleColors.day),
+      ('night', MapboxStyleColors.night),
+    ]) {
+      test('$name text pairs reach 4.5:1', () {
+        final tint = Color.alphaBlend(
+          c.accent.withValues(alpha: 0.08),
+          c.surface,
+        );
+        final pairs = <String, (Color, Color)>{
+          'onBanner/banner': (c.onBanner, c.banner),
+          'onBanner/bannerSecondary': (c.onBanner, c.bannerSecondary),
+          'onSurface/surface': (c.onSurface, c.surface),
+          'onSurfaceVariant/surface': (c.onSurfaceVariant, c.surface),
+          'etaText/surface': (c.etaText, c.surface),
+          'accent/surface': (c.accent, c.surface),
+          'accent/tint': (c.accent, tint),
+          'onAccent/accent': (c.onAccent, c.accent),
+          'warning/surface': (c.warning, c.surface),
+        };
+        for (final e in pairs.entries) {
+          expect(
+            contrastRatio(e.value.$1, e.value.$2),
+            greaterThanOrEqualTo(4.5),
+            reason: e.key,
+          );
+        }
+      });
+    }
 
     test('night colors have exact values', () {
       const c = MapboxStyleColors.night;

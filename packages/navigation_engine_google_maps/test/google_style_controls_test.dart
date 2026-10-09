@@ -30,8 +30,6 @@ class _FakeFixSource implements FixSource {
 
 const _needleKey = ValueKey('google_style_compass_needle');
 const _fillKey = ValueKey('google_style_trip_progress_fill');
-const _trackKey = ValueKey('google_style_trip_progress_track');
-const _dotKey = ValueKey('google_style_trip_progress_dot');
 
 /// The rotation of the transform [finder] finds, in degrees.
 double _degrees(WidgetTester tester, Finder finder) {
@@ -73,9 +71,9 @@ class _Harness {
     bool recenterButtonEnabled = true,
     bool compassEnabled = true,
     bool routeOverviewButtonEnabled = true,
-    VoidCallback? onMuteToggle,
-    bool muted = false,
-    VoidCallback? onReportIncident,
+    ValueChanged<AudioGuidance>? onAudioGuidanceChanged,
+    AudioGuidance audioGuidance = AudioGuidance.sound,
+    ValueChanged<IncidentType>? onReportIncident,
     TextScaler? textScaler,
     double bottomInset = 0,
   }) => MaterialApp(
@@ -92,7 +90,7 @@ class _Harness {
       session: session,
       flow: flow,
       initialCenter: sampleRoute.points.first,
-      speedLimitSign: SpeedLimitSign.rectangular,
+      speedLimitSignStyle: SpeedLimitSignStyle.us,
       headerEnabled: headerEnabled,
       footerEnabled: footerEnabled,
       tripProgressBarEnabled: tripProgressBarEnabled,
@@ -101,8 +99,8 @@ class _Harness {
       recenterButtonEnabled: recenterButtonEnabled,
       compassEnabled: compassEnabled,
       routeOverviewButtonEnabled: routeOverviewButtonEnabled,
-      onMuteToggle: onMuteToggle,
-      muted: muted,
+      audioGuidance: audioGuidance,
+      onAudioGuidanceChanged: onAudioGuidanceChanged,
       onReportIncident: onReportIncident,
     ),
   );
@@ -187,26 +185,21 @@ void _controlsTest(
 
 void main() {
   const strings = NavigationStrings();
-  const formatter = EnglishGuidanceFormatter();
 
   final header = find.byType(GoogleStyleManeuverHeader);
-  final footer = find.byType(GoogleStyleTripFooter);
+  final footer = find.byType(GoogleStyleTripSheet);
   final bar = find.byType(GoogleStyleTripProgressBar);
-  final speedometer = find.byType(GoogleStyleSpeedometer);
-  final bubble = find.descendant(
-    of: speedometer,
-    matching: find.text(formatter.speedUnit),
-  );
+  final speedometer = find.byType(GoogleStyleSpeedCluster);
+  final bubble = find.byKey(const ValueKey('google_style_speedometer'));
   final limitSign = find.descendant(
     of: speedometer,
     matching: find.text(strings.speedLimit),
   );
   final recenter = find.byType(GoogleStyleRecenterButton);
   final compass = find.byType(GoogleStyleCompassButton);
-  final overview = find.byTooltip(strings.overview);
-  final mute = find.byTooltip(strings.mute);
-  final unmute = find.byTooltip(strings.unmute);
-  final report = find.byTooltip(strings.reportIncident);
+  final overview = find.byTooltip(strings.routeOptions);
+  final sound = find.byTooltip(strings.sound);
+  final report = find.byType(GoogleStyleReportButton);
 
   group('toggles', () {
     _controlsTest('by default every control shows', (tester, h) async {
@@ -223,8 +216,12 @@ void main() {
       h.session.follow = false;
       await h.run(tester, 0.1);
       expect(recenter, findsOneWidget, reason: 'moved away');
-      expect(mute, findsNothing, reason: 'no callback');
-      expect(unmute, findsNothing, reason: 'no callback');
+      expect(
+        speedometer,
+        findsNothing,
+        reason: 'Re-center replaces the speed (D4)',
+      );
+      expect(sound, findsNothing, reason: 'no callback');
       expect(report, findsNothing, reason: 'no callback');
     });
 
@@ -342,190 +339,61 @@ void main() {
       tester,
       h,
     ) async {
-      var muteTaps = 0;
-      var reportTaps = 0;
+      final audio = <AudioGuidance>[];
+      final reports = <IncidentType>[];
       await h.mount(
         tester,
         app: h.app(
-          onMuteToggle: () => muteTaps++,
-          onReportIncident: () => reportTaps++,
+          onAudioGuidanceChanged: audio.add,
+          onReportIncident: reports.add,
         ),
       );
-      await h.drive(tester);
-      expect(find.byIcon(Icons.volume_up), findsOneWidget);
-      expect(find.byIcon(Icons.volume_off), findsNothing);
-      expect(find.byIcon(Icons.report_outlined), findsOneWidget);
-      expect(mute, findsOneWidget);
+      await h.drive(tester, moved: false);
+      expect(sound, findsOneWidget);
       expect(report, findsOneWidget);
-      await tester.tap(mute);
+      await tester.tap(sound);
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('google_style_sound_option_muted')),
+      );
+      await tester.pump();
+      expect(audio, [AudioGuidance.muted]);
       await tester.tap(report);
-      expect(muteTaps, 1);
-      expect(reportTaps, 1);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(
+        find.byKey(const ValueKey('google_style_report_tile_crash')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(reports, [IncidentType.crash]);
     });
 
     _controlsTest('only the one with a callback shows', (tester, h) async {
-      await h.mount(tester, app: h.app(onReportIncident: () {}));
+      await h.mount(tester, app: h.app(onReportIncident: (_) {}));
       await h.drive(tester);
       expect(report, findsOneWidget);
-      expect(find.byIcon(Icons.volume_up), findsNothing);
-      expect(find.byIcon(Icons.volume_off), findsNothing);
+      expect(sound, findsNothing);
     });
 
-    _controlsTest('muted swaps the icon and the tooltip', (tester, h) async {
-      await h.mount(tester, app: h.app(onMuteToggle: () {}, muted: true));
+    _controlsTest('the sound icon follows audioGuidance', (tester, h) async {
+      await h.mount(
+        tester,
+        app: h.app(
+          onAudioGuidanceChanged: (_) {},
+          audioGuidance: AudioGuidance.muted,
+        ),
+      );
       await h.drive(tester);
       expect(find.byIcon(Icons.volume_off), findsOneWidget);
-      expect(find.byIcon(Icons.volume_up), findsNothing);
-      expect(unmute, findsOneWidget);
-      expect(mute, findsNothing);
-
-      await tester.pumpWidget(h.app(onMuteToggle: () {}));
+      expect(find.byTooltip(strings.muted), findsOneWidget);
+      await tester.pumpWidget(h.app(onAudioGuidanceChanged: (_) {}));
       await tester.pump();
       expect(find.byIcon(Icons.volume_up), findsOneWidget);
-      expect(mute, findsOneWidget);
     });
   });
 
   group('GoogleStyleTripProgressBar', () {
-    Future<void> pumpBar(WidgetTester tester, double fraction) =>
-        tester.pumpWidget(
-          MaterialApp(
-            home: Align(
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                height: 200,
-                child: GoogleStyleTripProgressBar(fraction: fraction),
-              ),
-            ),
-          ),
-        );
-
-    for (final (fraction, expected) in [
-      (0.0, 0.0),
-      (0.25, 0.25),
-      (1.0, 1.0),
-      (-0.5, 0.0),
-      (1.5, 1.0),
-      (double.nan, 0.0),
-    ]) {
-      testWidgets('fraction $fraction fills $expected of the height', (
-        tester,
-      ) async {
-        await pumpBar(tester, fraction);
-        final track = tester.getRect(bar);
-        expect(track.height, closeTo(200, 0.01));
-        expect(track.width, closeTo(6, 0.01), reason: 'the default width');
-        final fill = tester.getRect(find.byKey(_fillKey));
-        expect(fill.height, closeTo(expected * 200, 1));
-        expect(fill.width, closeTo(6, 0.01));
-        expect(fill.bottom, closeTo(track.bottom, 0.01), reason: 'from below');
-      });
-    }
-
-    for (final (fraction, expected) in [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)]) {
-      testWidgets('the vehicle dot is centred at fraction $fraction', (
-        tester,
-      ) async {
-        await pumpBar(tester, fraction);
-        final track = tester.getRect(bar);
-        final dot = tester.getRect(find.byKey(_dotKey));
-        expect(dot.width, closeTo(12, 0.01), reason: 'width + 6');
-        expect(dot.height, closeTo(12, 0.01));
-        expect(
-          dot.center.dx,
-          closeTo(track.center.dx, 0.01),
-          reason: 'centred',
-        );
-        // The dot travels inside the bar: flush with its bottom at 0 and
-        // with its top at 1, no overhang.
-        expect(
-          dot.center.dy,
-          closeTo(track.bottom - 6 - expected * (track.height - 12), 0.01),
-        );
-        expect(dot.top, greaterThanOrEqualTo(track.top - 0.01));
-        expect(dot.bottom, lessThanOrEqualTo(track.bottom + 0.01));
-        final decoration =
-            tester.widget<DecoratedBox>(find.byKey(_dotKey)).decoration
-                as BoxDecoration;
-        expect(decoration.shape, BoxShape.circle);
-        expect(decoration.color, GoogleStyleColors.day.surface);
-        final border = decoration.border! as Border;
-        expect(border.top.color, GoogleStyleColors.day.etaText);
-        expect(border.top.width, 2);
-      });
-    }
-
-    testWidgets('an unbounded height gives a 120 high bar, dot inside', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [GoogleStyleTripProgressBar(fraction: 1)],
-            ),
-          ),
-        ),
-      );
-      expect(tester.takeException(), isNull);
-      final track = tester.getRect(bar);
-      final dot = tester.getRect(find.byKey(_dotKey));
-      expect(track.height, closeTo(120, 0.01));
-      expect(dot.top, closeTo(track.top, 0.01));
-    });
-
-    for (final (name, colors) in [
-      ('day', GoogleStyleColors.day),
-      ('night', GoogleStyleColors.night),
-    ]) {
-      testWidgets(
-        '$name: etaText fills the driven part, alternative the rest',
-        (tester) async {
-          await tester.pumpWidget(
-            MaterialApp(
-              home: Align(
-                alignment: Alignment.topLeft,
-                child: SizedBox(
-                  height: 200,
-                  child: GoogleStyleTripProgressBar(
-                    fraction: 0.5,
-                    colors: colors,
-                  ),
-                ),
-              ),
-            ),
-          );
-          Color colorOf(Key key) =>
-              (tester.widget<DecoratedBox>(find.byKey(key)).decoration
-                      as BoxDecoration)
-                  .color!;
-          expect(colorOf(_fillKey), colors.etaText);
-          expect(colorOf(_trackKey), colors.alternative);
-          final decoration =
-              tester.widget<DecoratedBox>(find.byKey(_dotKey)).decoration
-                  as BoxDecoration;
-          expect(decoration.color, colors.surface);
-          expect((decoration.border! as Border).top.color, colors.etaText);
-        },
-      );
-    }
-
-    testWidgets('width sets the bar width', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              height: 100,
-              child: GoogleStyleTripProgressBar(fraction: 0.5, width: 10),
-            ),
-          ),
-        ),
-      );
-      expect(tester.getRect(bar).width, closeTo(10, 0.01));
-    });
-
     _controlsTest('in the screen it follows the trip fraction', (
       tester,
       h,
@@ -802,12 +670,14 @@ void main() {
       await h.drive(tester);
       final button = tester.getRect(recenter);
       final footerRect = tester.getRect(footer);
-      final speed = tester.getRect(speedometer);
       expect(button.center.dx, lessThan(400 / 2), reason: 'left of centre');
       expect(button.left, closeTo(16, 1));
-      expect(button.bottom, lessThanOrEqualTo(footerRect.top - 16 + 1));
-      expect(button.bottom, closeTo(speed.top - 8, 1), reason: '8 above');
-      expect(speed.bottom, closeTo(footerRect.top - 16, 1));
+      expect(
+        button.bottom,
+        closeTo(footerRect.top - 16, 1),
+        reason: 'in the speed slot (D4)',
+      );
+      expect(speedometer, findsNothing);
     });
 
     _controlsTest('a speedometer that shows nothing leaves no space', (
@@ -823,31 +693,36 @@ void main() {
       await tester.tap(find.text('Start'));
       await tester.pump();
       await h.run(tester, 4, fixAt: (s) => h.fixOn(500 + 10 * s));
+      expect(tester.getSize(speedometer), Size.zero);
       h.session.follow = false;
       await tester.pump(const Duration(milliseconds: 16));
       await tester.pump(const Duration(milliseconds: 16));
-      expect(tester.getSize(speedometer), Size.zero);
       final button = tester.getRect(recenter);
       expect(button.bottom, closeTo(tester.getRect(footer).top - 16, 1));
     });
 
-    _controlsTest('the compass, sound and report stack under the header', (
-      tester,
-      h,
-    ) async {
+    // The Google look fix round 2: one end column anchored above the
+    // footer: the report, the compass, sound, then route options.
+    _controlsTest('the end column above the footer: report, compass, sound, '
+        'route options', (tester, h) async {
       await h.mount(
         tester,
-        app: h.app(onMuteToggle: () {}, onReportIncident: () {}),
+        app: h.app(onAudioGuidanceChanged: (_) {}, onReportIncident: (_) {}),
       );
       await h.drive(tester, moved: false);
       final headerRect = tester.getRect(header);
       final c = tester.getRect(compass);
-      final m = tester.getRect(find.byType(GoogleStyleRoundButton).at(1));
-      final r = tester.getRect(find.byType(GoogleStyleRoundButton).at(2));
-      expect(c.top, greaterThanOrEqualTo(headerRect.bottom));
-      expect(c.right, closeTo(400 - 16, 1));
-      expect(m.top, closeTo(c.bottom + 8, 1));
-      expect(r.top, closeTo(m.bottom + 8, 1));
+      final s = tester.getRect(sound);
+      final r = tester.getRect(report);
+      final o = tester.getRect(overview);
+      expect(r.top, greaterThanOrEqualTo(headerRect.bottom));
+      expect(c.top, closeTo(r.bottom + 16, 1));
+      expect(s.top, closeTo(c.bottom + 16, 1));
+      expect(o.top, closeTo(s.bottom + 16, 1));
+      for (final rect in [r, c, s, o]) {
+        expect(rect.right, closeTo(400 - 16, 1));
+      }
+      expect(o.bottom, closeTo(tester.getRect(footer).top - 16, 1));
     });
 
     _controlsTest('320 dp at 2x text with every control: no overflow', (
@@ -858,8 +733,8 @@ void main() {
         tester,
         size: const Size(320, 640),
         app: h.app(
-          onMuteToggle: () {},
-          onReportIncident: () {},
+          onAudioGuidanceChanged: (_) {},
+          onReportIncident: (_) {},
           textScaler: const TextScaler.linear(2),
         ),
       );
@@ -887,16 +762,25 @@ void main() {
         }
       }
 
-      insideScreen([header, footer, bar, speedometer, compass, mute, report]);
+      // Deviation (B4, N22): for its first 5 s the report pill is too wide
+      // beside the speed at 2x, so it is lifted above it and leaves no room
+      // for even the compass. The pill is checked now, the compass once the
+      // pill is a circle (D3).
+      insideScreen([header, footer, bar, speedometer, report]);
+      apart(report, [footer, speedometer]);
+      await h.run(tester, 2, fixAt: (s) => h.fixOn(530 + 5 * s));
+      expect(tester.takeException(), isNull, reason: 'the pill collapsed');
+      insideScreen([header, footer, bar, speedometer, compass, report]);
       apart(speedometer, [header, footer]);
-      apart(compass, [header, footer, speedometer]);
+      apart(report, [footer, speedometer]);
+      apart(compass, [header, footer, speedometer, report]);
       apart(bar, [header, footer]);
       h.session.follow = false;
       await h.run(tester, 0.1);
       expect(tester.takeException(), isNull, reason: 'moved away');
-      insideScreen([header, footer, bar, speedometer, recenter, mute, report]);
-      apart(recenter, [header, footer, speedometer]);
-      apart(speedometer, [header, footer]);
+      insideScreen([header, footer, bar, recenter, report]);
+      apart(recenter, [header, footer, report]);
+      expect(speedometer, findsNothing);
       await h.run(tester, 2, fixAt: (s) => h.fixOn(540 + 10 * s));
       expect(tester.takeException(), isNull, reason: 'after more frames');
     });

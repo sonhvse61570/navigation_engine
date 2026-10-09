@@ -3,42 +3,63 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 import 'google_style_colors.dart';
+import 'last_road.dart';
 
-/// The bottom card shown when the destination is reached: the arrival message,
-/// the last road and a done button.
-class GoogleStyleArrivalPanel extends StatelessWidget {
-  /// Creates the arrival panel for [route].
-  const GoogleStyleArrivalPanel({
+/// The bottom sheet on arrival.
+///
+/// - It shows [destination]'s name and address, else the route's last named
+///   road, else [NavigationStrings.arrived].
+/// - Under it is a full-width [NavigationStrings.done] button that calls
+///   [onDone].
+///
+/// The key `google_style_arrival_done` (on the button) is a stable test
+/// hook.
+class GoogleStyleArrivalSheet extends StatelessWidget {
+  /// Creates the arrival sheet for [route].
+  const GoogleStyleArrivalSheet({
     super.key,
     required this.route,
+    this.destination,
     this.strings = const NavigationStrings(),
     this.colors = GoogleStyleColors.day,
     this.onDone,
+    this.floating = false,
   });
 
   /// The route that was driven.
   final NavRoute route;
 
-  /// The words of the panel.
+  /// Whether the sheet floats as a card (in a landscape side panel): all
+  /// four corners rounded alike. When false (the default) it is a bottom
+  /// sheet reaching the screen's bottom edge, rounded at the top only.
+  final bool floating;
+
+  /// The destination's label, when known.
+  final PlaceLabel? destination;
+
+  /// The words of the sheet.
   final NavigationStrings strings;
 
-  /// The colours of the panel.
+  /// The colours of the sheet.
   final GoogleStyleColors colors;
 
-  /// Called when the done button is pressed.
+  /// Called by the done button.
   final VoidCallback? onDone;
 
   @override
   Widget build(BuildContext context) {
-    final lastRoad = route.steps
-        .map((step) => step.roadName)
-        .where((name) => name.isNotEmpty)
-        .lastOrNull;
-
+    final lastRoad = lastRoadName(route);
+    final name = destination?.name;
+    final title = name != null && name.trim().isNotEmpty
+        ? name
+        : lastRoad ?? strings.arrived;
+    final address = destination?.address;
     return Material(
       color: colors.surface,
       elevation: 8,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      borderRadius: floating
+          ? BorderRadius.circular(24)
+          : const BorderRadius.vertical(top: Radius.circular(24)),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -49,30 +70,31 @@ class GoogleStyleArrivalPanel extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.flag, color: colors.guidance, size: 32),
+                  Icon(Icons.place, color: colors.warning, size: 28),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          strings.arrived,
-                          maxLines: 1,
+                          title,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: colors.onSurface,
-                            fontSize: 22,
+                            fontSize: 20,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        if (lastRoad != null)
+                        if (address != null && address.isNotEmpty)
                           Text(
-                            lastRoad,
-                            maxLines: 1,
+                            address,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: colors.onSurfaceVariant,
-                              fontSize: 15,
+                              fontSize: 14,
                             ),
                           ),
                       ],
@@ -80,12 +102,14 @@ class GoogleStyleArrivalPanel extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               FilledButton(
+                key: const ValueKey('google_style_arrival_done'),
                 onPressed: onDone,
                 style: FilledButton.styleFrom(
                   backgroundColor: colors.accent,
                   foregroundColor: colors.onAccent,
+                  minimumSize: const Size.fromHeight(48),
                 ),
                 child: Text(strings.done),
               ),

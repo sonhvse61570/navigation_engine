@@ -41,8 +41,10 @@ final class GuidanceAnnouncement {
   /// Actual metres to the manoeuvre when it fired.
   final double distance;
 
-  /// The manoeuvre that follows closely, to be announced along ("…, then
-  /// turn left").
+  /// The manoeuvre that follows within `NavGuidance.spokenThenWithin`, to be
+  /// announced along ("…, then turn left"). Unlike
+  /// [GuidanceState.thenStep], a far manoeuvre after a straight-on step is
+  /// never spoken here.
   final RouteStep? thenStep;
 }
 

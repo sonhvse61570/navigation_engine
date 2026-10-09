@@ -41,10 +41,16 @@ class GoogleStyleOverviewPanel extends StatelessWidget {
     this.onRetry,
     this.onCancel,
     this.onClose,
+    this.floating = false,
   });
 
   /// What to show.
   final NavigationFlowState state;
+
+  /// Whether the panel floats as a card (in a landscape side panel): all
+  /// four corners rounded alike. When false (the default) it is a bottom
+  /// panel, rounded at the top only.
+  final bool floating;
 
   /// Whether the overview is of the trip under way; the start button then
   /// reads "Resume".
@@ -93,7 +99,9 @@ class GoogleStyleOverviewPanel extends StatelessWidget {
     return Material(
       color: colors.surface,
       elevation: 8,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      borderRadius: floating
+          ? BorderRadius.circular(16)
+          : const BorderRadius.vertical(top: Radius.circular(16)),
       child: SafeArea(
         top: false,
         child: Padding(

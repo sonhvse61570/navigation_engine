@@ -377,20 +377,36 @@ void main() {
     });
   });
 
-  group('GoogleStyleArrivalPanel', () {
-    testWidgets('shows the arrival and the last road; done calls back', (
+  group('floating', () {
+    Material material(WidgetTester tester) => tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(GoogleStyleOverviewPanel),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+
+    testWidgets('a bottom panel by default: the top corners rounded 16', (
       tester,
     ) async {
-      var done = 0;
       await tester.pumpWidget(
-        _host(
-          GoogleStyleArrivalPanel(route: sampleRoute, onDone: () => done++),
-        ),
+        _host(GoogleStyleOverviewPanel(state: _overview)),
       );
-      expect(find.text('You have arrived'), findsOneWidget);
-      expect(find.text('Van Hoa 4'), findsOneWidget);
-      await tester.tap(find.text('Done'));
-      expect(done, 1);
+      expect(
+        material(tester).borderRadius,
+        const BorderRadius.vertical(top: Radius.circular(16)),
+      );
+    });
+
+    testWidgets('floating: a card with all four corners rounded 16', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(GoogleStyleOverviewPanel(state: _overview, floating: true)),
+      );
+      expect(material(tester).borderRadius, BorderRadius.circular(16));
+      expect(material(tester).elevation, 8);
     });
   });
 }

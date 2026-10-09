@@ -9,11 +9,11 @@ import 'camera_target.dart';
 /// the zoom smoothed so speed changes do not make it pump.
 class FollowCamera {
   FollowCamera({
-    this.zoomSlow = 18.2,
-    this.zoomFast = 16.6,
+    this.zoomSlow = 18.7,
+    this.zoomFast = 17.1,
     this.slowSpeed = 4,
     this.fastSpeed = 22,
-    this.tilt = 50,
+    this.tilt = 35,
     this.zoomTau = 1.5,
   });
 
@@ -24,6 +24,9 @@ class FollowCamera {
   final double zoomFast;
   final double slowSpeed;
   final double fastSpeed;
+
+  /// Degrees of tilt while [headingUp]: low, like the common driving apps,
+  /// so the road ahead reads without the horizon eating the screen.
   final double tilt;
 
   /// Seconds; time constant of the zoom smoothing.

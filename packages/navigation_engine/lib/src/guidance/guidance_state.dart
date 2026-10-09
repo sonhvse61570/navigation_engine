@@ -1,4 +1,5 @@
 import '../route/route_step.dart';
+import 'guidance_announcement.dart';
 
 /// What a turn-by-turn banner shows at one moment.
 final class GuidanceState {
@@ -24,8 +25,12 @@ final class GuidanceState {
   /// destination when [step] is null.
   final double distanceToStep;
 
-  /// The manoeuvre right after [step] when it follows closely ("then turn
-  /// left"), else null.
+  /// The manoeuvre to show after [step] ("Then" and its icon), else null:
+  /// the next manoeuvre whenever [step] goes straight on, skipping further
+  /// straight-on steps (the arrival when no manoeuvre is left), or the next
+  /// step when it follows within `NavGuidance.thenWithin`. Speech reads
+  /// [GuidanceAnnouncement.thenStep] instead, which reaches only
+  /// `NavGuidance.spokenThenWithin`.
   final RouteStep? thenStep;
 
   /// Metres along the route to the destination.

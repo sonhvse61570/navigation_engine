@@ -6,8 +6,9 @@ import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'google_style_colors.dart';
 import 'google_style_round_button.dart';
 
-/// A round compass button. Its needle points to north on the screen, and a
-/// tap switches the camera between heading up and north up.
+/// A round compass button: a red triangle over a bold "N", turned so the
+/// triangle points to north on the screen. A tap switches the camera
+/// between heading up and north up.
 class GoogleStyleCompassButton extends StatelessWidget {
   /// Creates a compass for a map turned to [bearing].
   const GoogleStyleCompassButton({
@@ -19,8 +20,8 @@ class GoogleStyleCompassButton extends StatelessWidget {
     this.colors = GoogleStyleColors.day,
   });
 
-  /// The map's bearing in degrees; the needle turns to `-bearing`, so it
-  /// points to north.
+  /// The map's bearing in degrees; the glyph turns to `-bearing`, so its
+  /// triangle points to north.
   final double bearing;
 
   /// Whether the camera turns with the vehicle. The tooltip, which is also
@@ -44,15 +45,37 @@ class GoogleStyleCompassButton extends StatelessWidget {
       tooltip: headingUp ? strings.northUp : strings.headingUp,
       onPressed: onPressed,
       colors: colors,
-      // The tooltip is the one accessibility label: what a tap does.
+      // The tooltip is the one accessibility label: what a tap does. The
+      // whole glyph turns, the triangle pointing to north.
       icon: Transform.rotate(
         key: const ValueKey('google_style_compass_needle'),
         angle: -bearing * math.pi / 180,
-        child: CustomPaint(
-          size: const Size(24, 24),
-          painter: _NeedlePainter(
-            north: colors.warning,
-            south: colors.alternative,
+        child: ExcludeSemantics(
+          child: SizedBox(
+            width: 24,
+            height: 32,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CustomPaint(
+                  key: const ValueKey('google_style_compass_north'),
+                  size: const Size(10, 12),
+                  painter: _TrianglePainter(colors.compassNorth),
+                ),
+                const SizedBox(height: 1),
+                // A glyph, not text: it keeps its size at any text scale.
+                Text(
+                  'N',
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    color: colors.buttonIcon,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -60,38 +83,24 @@ class GoogleStyleCompassButton extends StatelessWidget {
   }
 }
 
-/// A needle: the north half in [north], the south half in [south].
-class _NeedlePainter extends CustomPainter {
-  const _NeedlePainter({required this.north, required this.south});
+/// A filled triangle pointing up, in [color].
+class _TrianglePainter extends CustomPainter {
+  const _TrianglePainter(this.color);
 
-  final Color north;
-  final Color south;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final halfWidth = size.width * 0.22;
-    final halfHeight = size.height / 2;
-    canvas
-      ..drawPath(
-        Path()
-          ..moveTo(c.dx, c.dy - halfHeight)
-          ..lineTo(c.dx - halfWidth, c.dy)
-          ..lineTo(c.dx + halfWidth, c.dy)
-          ..close(),
-        Paint()..color = north,
-      )
-      ..drawPath(
-        Path()
-          ..moveTo(c.dx, c.dy + halfHeight)
-          ..lineTo(c.dx - halfWidth, c.dy)
-          ..lineTo(c.dx + halfWidth, c.dy)
-          ..close(),
-        Paint()..color = south,
-      );
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width / 2, 0)
+        ..lineTo(size.width, size.height)
+        ..lineTo(0, size.height)
+        ..close(),
+      Paint()..color = color,
+    );
   }
 
   @override
-  bool shouldRepaint(_NeedlePainter old) =>
-      old.north != north || old.south != south;
+  bool shouldRepaint(_TrianglePainter old) => old.color != color;
 }

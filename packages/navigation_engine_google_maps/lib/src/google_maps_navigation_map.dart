@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -6,8 +7,11 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import 'along_route_search.dart';
+import 'search_pin.dart';
 import 'ui/google_style_colors.dart';
 
+/// The Google Maps position of [p].
 LatLng toLatLng(GeoPoint p) => LatLng(p.lat, p.lng);
 
 /// The camera position a [CameraTarget] stands for.
@@ -81,8 +85,8 @@ Set<Polyline> _optionPolylines(
   };
 }
 
-/// [NavigationMap], [VehicleMarkerMap] and [RoutePreviewMap] on top of
-/// google_maps_flutter.
+/// [NavigationMap], [VehicleMarkerMap], [RoutePreviewMap] and
+/// [AlternateRoutesMap] on top of google_maps_flutter.
 ///
 /// ## Route options
 ///
@@ -100,25 +104,65 @@ Set<Polyline> _optionPolylines(
 /// [mapPadding]; camera errors are reported through [FlutterError], not
 /// thrown.
 ///
+/// ## Alternate routes
+///
+/// [showAlternates] fills [alternatePolylines] with one grey line per
+/// alternate (id `navigation_engine_alternate_<i>`), in [alternateColor] and
+/// 70 % as wide as the route, under the route (`zIndex` 0). With
+/// [alternateLabel] set, [alternateMarkers] also gets a bubble on each one
+/// (id `navigation_engine_alternate_label_<i>`), at the middle of the part
+/// after the divergence but at most [alternateLabelLead] metres past it, so
+/// it shows near the car at follow zoom, in [fasterLabelColors] or
+/// [slowerLabelColors]. A
+/// tap on a line or a bubble calls the `onTap` given to [showAlternates].
+/// Bubbles are rendered like the route option labels; a newer
+/// [showAlternates] or [clearAlternates] drops renders still pending. Until
+/// the new bubbles land the old ones stay, but a tap on one that labels
+/// another route than the alternate now at its index is ignored. A failed
+/// render removes the bubbles (the lines stay) and is reported through
+/// [FlutterError]. Bubble and pin taps do not move the camera. New bubble
+/// colours, or an [alternateLabel] that gives other texts, paint the shown
+/// bubbles again.
+///
+/// ## Search pins
+///
+/// [showSearchPins] fills [searchMarkers] with one pin per place found along
+/// the route (id `navigation_engine_search_<placeId>`), in [pinColor] and
+/// painted by [pinPainter]; the focused one is larger and on top. A newer
+/// [showSearchPins] or [clearSearchPins] drops renders still pending; a
+/// failed render clears the pins and is reported through [FlutterError]. A
+/// new [pinColor] paints the shown pins again.
+///
 /// Wire [onMapCreated] to `GoogleMap.onMapCreated`; camera updates before
 /// are dropped. Polylines and markers are widget properties in
 /// google_maps_flutter, so the route line and the vehicle marker are
 /// exposed as listenables for the view (or an app's own `GoogleMap`) to
 /// build from.
 class GoogleMapsNavigationMap
-    implements NavigationMap, VehicleMarkerMap, RoutePreviewMap {
+    implements
+        NavigationMap,
+        VehicleMarkerMap,
+        RoutePreviewMap,
+        AlternateRoutesMap {
+  /// Creates the map's drawing state, with the route drawn in
+  /// [routeColors].
   GoogleMapsNavigationMap({RouteColors routeColors = const RouteColors()})
     // A named parameter cannot be a private initializing formal.
     // ignore: prefer_initializing_formals
     : _routeColors = routeColors;
 
+  /// How far past its divergence an alternate's bubble sits at most, in
+  /// metres: the middle of a long alternate's own part is off screen at
+  /// follow zoom.
+  static const double alternateLabelLead = 400;
+
   RouteColors _routeColors;
   List<GeoPoint> _driven = const [];
   List<GeoPoint> _ahead = const [];
 
+  /// The route line colours and widths. Setting new ones rebuilds the drawn
+  /// route polylines, route options and alternates with them.
   RouteColors get routeColors => _routeColors;
-
-  /// Rebuilds the drawn route polylines with the new colours and widths.
   set routeColors(RouteColors value) {
     final old = _routeColors;
     if (value.driven == old.driven &&
@@ -132,9 +176,16 @@ class GoogleMapsNavigationMap
       polylines.value = routePolylines(_driven, _ahead, value);
     }
     _redrawRouteOptions();
+    _redrawAlternates();
   }
 
+  /// The route polylines: the driven part and the part ahead (ids
+  /// `navigation_engine_driven` and `navigation_engine_ahead`); empty while
+  /// no route is shown.
   final polylines = ValueNotifier<Set<Polyline>>(const {});
+
+  /// The vehicle marker (id `navigation_engine_vehicle`) drawn while the
+  /// camera does not follow the vehicle; null while it is hidden.
   final vehicleMarker = ValueNotifier<Marker?>(null);
 
   /// The route option polylines drawn by [showRouteOptions].
@@ -243,6 +294,8 @@ class GoogleMapsNavigationMap
 
   GoogleMapController? _controller;
 
+  /// Connects the map's [controller]: camera moves and fits go to it from
+  /// now on, and a fit asked for earlier is applied.
   void onMapCreated(GoogleMapController controller) {
     _controller = controller;
     _applyPendingFit();
@@ -265,12 +318,12 @@ class GoogleMapsNavigationMap
           .moveCamera(CameraUpdate.newCameraPosition(toCameraPosition(target)))
           .catchError(
             (Object e, StackTrace st) =>
-                _reportCameraError(e, st, 'applying a pending route fit'),
+                _reportError(e, st, 'applying a pending route fit'),
           ),
     );
   }
 
-  void _reportCameraError(Object e, StackTrace st, String what) {
+  void _reportError(Object e, StackTrace st, String what) {
     FlutterError.reportError(
       FlutterErrorDetails(
         exception: e,
@@ -379,36 +432,62 @@ class GoogleMapsNavigationMap
     return image;
   }
 
+  // Renders the bubbles [labels] builds (through the shared image cache) and
+  // returns their markers, anchored at the bottom centre. A failed render
+  // completes the future with its error, which the caller handles; [labels]
+  // runs inside this future, so a label text that throws fails it too.
+  Future<Set<Marker>> _labelMarkers(
+    List<_Label> Function() labels, {
+    bool consumeTapEvents = false,
+  }) async {
+    final ratio = labelPixelRatio;
+    final shown = labels();
+    final images = await Future.wait([
+      for (final l in shown) _labelImage(l.text, l.selected, ratio, l.colors),
+    ]);
+    return {
+      for (var i = 0; i < shown.length; i++)
+        Marker(
+          markerId: MarkerId(shown[i].id),
+          position: toLatLng(shown[i].position),
+          anchor: const Offset(0.5, 1),
+          icon: BitmapDescriptor.bytes(images[i], imagePixelRatio: ratio),
+          zIndexInt: shown[i].zIndex,
+          consumeTapEvents: consumeTapEvents,
+          onTap: shown[i].onTap,
+        ),
+    };
+  }
+
   Future<void> _showLabels(
     List<NavRoute> routes,
     int selected,
     int generation,
   ) async {
     final label = routeLabel!;
-    final ratio = labelPixelRatio;
     final colors = _labelColors;
-    final List<Uint8List> images;
+    final Set<Marker> markers;
     try {
-      images = await Future.wait([
-        for (var i = 0; i < routes.length; i++)
-          _labelImage(label(routes[i]), i == selected, ratio, colors),
-      ]);
+      markers = await _labelMarkers(
+        () => [
+          for (var i = 0; i < routes.length; i++)
+            _Label(
+              id: 'navigation_engine_option_label_$i',
+              text: label(routes[i]),
+              selected: i == selected,
+              colors: colors,
+              position: routes[i].pointAt(routes[i].length / 2),
+              zIndex: i == selected ? 7 : 5,
+              onTap: () => onRouteOptionTap?.call(i),
+            ),
+        ],
+      );
     } on Object {
       // No labels for this generation; the polylines are still shown.
       return;
     }
     if (generation != _labelGeneration) return;
-    routeOptionMarkers.value = {
-      for (var i = 0; i < routes.length; i++)
-        Marker(
-          markerId: MarkerId('navigation_engine_option_label_$i'),
-          position: toLatLng(routes[i].pointAt(routes[i].length / 2)),
-          anchor: const Offset(0.5, 1),
-          icon: BitmapDescriptor.bytes(images[i], imagePixelRatio: ratio),
-          zIndexInt: i == selected ? 7 : 5,
-          onTap: () => onRouteOptionTap?.call(i),
-        ),
-    };
+    routeOptionMarkers.value = markers;
   }
 
   @override
@@ -418,6 +497,283 @@ class GoogleMapsNavigationMap
     _pendingFit = null;
     routeOptionPolylines.value = const {};
     routeOptionMarkers.value = const {};
+  }
+
+  /// The alternate routes drawn by [showAlternates]: grey lines, 70 % as wide
+  /// as the route, under it (`zIndex` 0).
+  final alternatePolylines = ValueNotifier<Set<Polyline>>(const {});
+
+  /// The alternate routes' bubbles (empty until rendered).
+  final alternateMarkers = ValueNotifier<Set<Marker>>(const {});
+
+  /// The search result pins drawn by [showSearchPins].
+  final searchMarkers = ValueNotifier<Set<Marker>>(const {});
+
+  String Function(AlternateRoute alternate)? _alternateLabel;
+
+  /// The text of the bubble on each alternate, such as "2 min faster"; when
+  /// null, [showAlternates] draws no bubbles. Setting it while alternates
+  /// are shown paints their bubbles again when the texts change (such as a
+  /// new language), and removes them when null.
+  String Function(AlternateRoute alternate)? get alternateLabel =>
+      _alternateLabel;
+  set alternateLabel(String Function(AlternateRoute alternate)? value) {
+    _alternateLabel = value;
+    final shown = _shownAlternates;
+    if (shown == null) return;
+    if (value == null) {
+      _alternateGeneration++;
+      _alternateTexts = null;
+      alternateMarkers.value = const {};
+      return;
+    }
+    if (listEquals([for (final a in shown) value(a)], _alternateTexts)) return;
+    unawaited(_showAlternateLabels(shown, ++_alternateGeneration));
+  }
+
+  /// The texts of the bubbles last asked for; null when none.
+  List<String>? _alternateTexts;
+
+  Color _alternateColor = GoogleStyleColors.day.alternative;
+
+  /// The colour of the alternate lines; a change redraws them.
+  Color get alternateColor => _alternateColor;
+  set alternateColor(Color value) {
+    if (value == _alternateColor) return;
+    _alternateColor = value;
+    _redrawAlternates();
+  }
+
+  RouteLabelColors _fasterLabelColors = GoogleStyleColors.day.fasterLabelColors;
+  RouteLabelColors _slowerLabelColors = GoogleStyleColors.day.slowerLabelColors;
+
+  /// The bubble colours of a faster alternate.
+  RouteLabelColors get fasterLabelColors => _fasterLabelColors;
+
+  /// The bubble colours of a slower (or as fast) alternate.
+  RouteLabelColors get slowerLabelColors => _slowerLabelColors;
+
+  /// Sets the bubble colours; bubbles shown are painted again.
+  void setAlternateLabelColors({
+    required RouteLabelColors faster,
+    required RouteLabelColors slower,
+  }) {
+    if (faster == _fasterLabelColors && slower == _slowerLabelColors) return;
+    _fasterLabelColors = faster;
+    _slowerLabelColors = slower;
+    final shown = _shownAlternates;
+    if (shown != null && alternateLabel != null) {
+      unawaited(_showAlternateLabels(shown, ++_alternateGeneration));
+    }
+  }
+
+  Color _pinColor = GoogleStyleColors.day.warning;
+
+  /// The colour of the search pins; a change paints the pins shown again
+  /// (same places, focus and taps).
+  Color get pinColor => _pinColor;
+  set pinColor(Color value) {
+    if (value == _pinColor) return;
+    _pinColor = value;
+    final shown = _shownPins;
+    if (shown != null) {
+      unawaited(
+        showSearchPins(
+          shown.places,
+          focusedId: shown.focusedId,
+          onTap: shown.onTap,
+        ),
+      );
+    }
+  }
+
+  // What showSearchPins was last given; null when no pins are shown.
+  ({
+    List<AlongRoutePlace> places,
+    String? focusedId,
+    void Function(AlongRoutePlace place)? onTap,
+  })?
+  _shownPins;
+
+  /// Renders a search pin as PNG bytes. It defaults to [paintSearchPin];
+  /// tests replace it.
+  Future<Uint8List> Function({
+    required bool focused,
+    required double pixelRatio,
+    required Color color,
+  })?
+  pinPainter;
+
+  // What showAlternates was last given; null when no alternates are shown.
+  List<AlternateRoute>? _shownAlternates;
+  void Function(int index)? _alternateTap;
+
+  // Bumped by every showAlternates / clearAlternates (and bubble colour
+  // change); a bubble render started under an older value is dropped.
+  int _alternateGeneration = 0;
+
+  // Bumped by every showSearchPins / clearSearchPins; a pin render started
+  // under an older value is dropped.
+  int _pinGeneration = 0;
+
+  @override
+  void showAlternates(
+    List<AlternateRoute> alternates, {
+    required void Function(int index) onTap,
+  }) {
+    final generation = ++_alternateGeneration;
+    _shownAlternates = alternates;
+    _alternateTap = onTap;
+    alternatePolylines.value = _buildAlternatePolylines(alternates);
+    if (alternateLabel == null) {
+      _alternateTexts = null;
+      alternateMarkers.value = const {};
+      return;
+    }
+    unawaited(_showAlternateLabels(alternates, generation));
+  }
+
+  Set<Polyline> _buildAlternatePolylines(List<AlternateRoute> alternates) {
+    final width = math.max(1, (_routeColors.aheadWidth * 0.7).round());
+    return {
+      for (var i = 0; i < alternates.length; i++)
+        Polyline(
+          polylineId: PolylineId('navigation_engine_alternate_$i'),
+          points: alternates[i].route.points.map(toLatLng).toList(),
+          color: _alternateColor,
+          width: width,
+          zIndex: 0,
+          consumeTapEvents: true,
+          onTap: () => _alternateTap?.call(i),
+        ),
+    };
+  }
+
+  // Draws the shown alternates again after a colour or width change. The
+  // bubbles, and the renders still pending, are left alone.
+  void _redrawAlternates() {
+    final shown = _shownAlternates;
+    if (shown == null) return;
+    alternatePolylines.value = _buildAlternatePolylines(shown);
+  }
+
+  Future<void> _showAlternateLabels(
+    List<AlternateRoute> alternates,
+    int generation,
+  ) async {
+    final label = alternateLabel!;
+    final faster = _fasterLabelColors;
+    final slower = _slowerLabelColors;
+    _alternateTexts = [for (final a in alternates) label(a)];
+    final Set<Marker> markers;
+    try {
+      markers = await _labelMarkers(
+        consumeTapEvents: true,
+        () => [
+          for (var i = 0; i < alternates.length; i++)
+            _Label(
+              id: 'navigation_engine_alternate_label_$i',
+              text: label(alternates[i]),
+              selected: false,
+              colors: alternates[i].minutesDelta < 0 ? faster : slower,
+              position: alternates[i].route.pointAt(
+                math.min(
+                  alternates[i].divergence + alternateLabelLead,
+                  (alternates[i].divergence + alternates[i].route.length) / 2,
+                ),
+              ),
+              zIndex: 4,
+              onTap: () => _tapAlternate(i, alternates[i].route),
+            ),
+        ],
+      );
+    } on Object catch (e, st) {
+      // The lines stay; only the bubbles go, and only when this render is
+      // still the latest.
+      if (generation != _alternateGeneration) return;
+      alternateMarkers.value = const {};
+      _reportError(e, st, 'rendering alternate route bubbles');
+      return;
+    }
+    if (generation != _alternateGeneration) return;
+    alternateMarkers.value = markers;
+  }
+
+  // A tap on bubble [index], drawn for [route]. A bubble still shown from an
+  // older list (while the new bubbles render) may label another route than
+  // the alternate now at [index]; its tap is ignored.
+  void _tapAlternate(int index, NavRoute route) {
+    final shown = _shownAlternates;
+    if (shown == null || index >= shown.length) return;
+    if (!identical(shown[index].route, route)) return;
+    _alternateTap?.call(index);
+  }
+
+  @override
+  void clearAlternates() {
+    _alternateGeneration++;
+    _shownAlternates = null;
+    _alternateTexts = null;
+    alternatePolylines.value = const {};
+    alternateMarkers.value = const {};
+  }
+
+  /// Pins [places] on the map, the one with [focusedId] larger and on top;
+  /// a tap on a pin calls [onTap] (and does not move the camera). Pins are
+  /// rendered asynchronously; a newer call or [clearSearchPins] drops a
+  /// render still pending. When the render fails, the pins are cleared and
+  /// the error is reported through [FlutterError].
+  Future<void> showSearchPins(
+    List<AlongRoutePlace> places, {
+    String? focusedId,
+    void Function(AlongRoutePlace place)? onTap,
+  }) async {
+    final generation = ++_pinGeneration;
+    if (places.isEmpty) {
+      _shownPins = null;
+      searchMarkers.value = const {};
+      return;
+    }
+    _shownPins = (places: places, focusedId: focusedId, onTap: onTap);
+    final ratio = labelPixelRatio;
+    final paint = pinPainter ?? paintSearchPin;
+    final List<Uint8List> images;
+    try {
+      images = await Future.wait([
+        paint(focused: false, pixelRatio: ratio, color: pinColor),
+        paint(focused: true, pixelRatio: ratio, color: pinColor),
+      ]);
+    } on Object catch (e, st) {
+      // The pins of an older search must not stand for this one.
+      if (generation != _pinGeneration) return;
+      _shownPins = null;
+      searchMarkers.value = const {};
+      _reportError(e, st, 'rendering search pins');
+      return;
+    }
+    if (generation != _pinGeneration) return;
+    searchMarkers.value = {
+      for (final place in places)
+        Marker(
+          markerId: MarkerId('navigation_engine_search_${place.id}'),
+          position: toLatLng(place.position),
+          anchor: const Offset(0.5, 1),
+          icon: BitmapDescriptor.bytes(
+            place.id == focusedId ? images[1] : images[0],
+            imagePixelRatio: ratio,
+          ),
+          zIndexInt: place.id == focusedId ? 9 : 8,
+          consumeTapEvents: true,
+          onTap: onTap == null ? null : () => onTap(place),
+        ),
+    };
+  }
+
+  /// Removes the search pins, also those still being rendered.
+  void clearSearchPins() {
+    _pinGeneration++;
+    _shownPins = null;
+    searchMarkers.value = const {};
   }
 
   @override
@@ -441,7 +797,7 @@ class GoogleMapsNavigationMap
         .animateCamera(CameraUpdate.newCameraPosition(toCameraPosition(target)))
         .catchError(
           (Object e, StackTrace st) =>
-              _reportCameraError(e, st, 'fitting route options'),
+              _reportError(e, st, 'fitting route options'),
         );
   }
 
@@ -461,11 +817,21 @@ class GoogleMapsNavigationMap
   @override
   void hideVehicle() => vehicleMarker.value = null;
 
+  /// Releases the notifiers and drops pending renders and fits. The map
+  /// must not be used afterwards.
   void dispose() {
     polylines.dispose();
     vehicleMarker.dispose();
     routeOptionPolylines.dispose();
     routeOptionMarkers.dispose();
+    alternatePolylines.dispose();
+    alternateMarkers.dispose();
+    searchMarkers.dispose();
+    _alternateGeneration++;
+    _pinGeneration++;
+    _shownAlternates = null;
+    _alternateTexts = null;
+    _shownPins = null;
     _labelGeneration++;
     _shownRoutes = null;
     _labelImages.clear();
@@ -473,12 +839,35 @@ class GoogleMapsNavigationMap
     _controller = null;
   }
 
+  /// Whether a map controller is connected ([onMapCreated]).
   @visibleForTesting
   bool get hasController => _controller != null;
 }
 
 /// The key of a cached label image.
 typedef _LabelKey = (String, bool, double, RouteLabelColors);
+
+/// A bubble to render as a marker: a route option label or an alternate
+/// route's bubble.
+class _Label {
+  const _Label({
+    required this.id,
+    required this.text,
+    required this.selected,
+    required this.colors,
+    required this.position,
+    required this.zIndex,
+    required this.onTap,
+  });
+
+  final String id;
+  final String text;
+  final bool selected;
+  final RouteLabelColors colors;
+  final GeoPoint position;
+  final int zIndex;
+  final VoidCallback onTap;
+}
 
 /// A [GoogleMapsNavigationMap.fitRoutes] waiting for the map to be ready.
 class _PendingFit {
