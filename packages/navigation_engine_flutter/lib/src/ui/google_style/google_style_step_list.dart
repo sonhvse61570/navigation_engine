@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../../maneuver_icon.dart';
 import 'google_style_colors.dart';
 
 /// The list of the steps of a route, each with the distance and the time to

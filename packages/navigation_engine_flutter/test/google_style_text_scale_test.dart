@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
 
 /// A 320x640 phone at 2x text scale.
 Future<void> _pump(
@@ -18,8 +17,9 @@ Future<void> _pump(
   await tester.pumpWidget(
     MaterialApp(
       builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: const TextScaler.linear(2)),
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: const TextScaler.linear(2)),
         child: child!,
       ),
       home: Scaffold(

@@ -2,8 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../../flow/navigation_flow_state.dart';
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 
 /// The line height (a multiple of the font size) of the text of a route card.

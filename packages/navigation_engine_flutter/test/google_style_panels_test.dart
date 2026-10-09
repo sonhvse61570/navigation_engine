@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
 
 Widget _host(Widget child) => MaterialApp(
   home: Scaffold(
@@ -195,8 +194,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(textScale)),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
             child: child!,
           ),
           home: Scaffold(

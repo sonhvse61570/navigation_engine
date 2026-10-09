@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 const _fillKey = ValueKey('google_style_trip_progress_fill');
 const _trackKey = ValueKey('google_style_trip_progress_track');

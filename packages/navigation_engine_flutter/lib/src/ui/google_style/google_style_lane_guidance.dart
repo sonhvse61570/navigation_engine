@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
+
+import '../lane_guidance_row.dart';
 
 /// A row of lane arrows before a manoeuvre. A valid lane shows its active
 /// arrow at full colour; an invalid lane shows all its arrows dimmed. It is

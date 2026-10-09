@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:navigation_engine/testing.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
 
 import 'support/drop_in_harness.dart';
 

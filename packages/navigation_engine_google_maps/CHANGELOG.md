@@ -41,9 +41,26 @@
 - The library re-exports the names its drop-in takes:
   `NavigationSession` and `GeoPoint` from navigation_engine;
   `NavigationFlowController`, `NavigationStrings`, `PlaceLabel`,
-  `AlternateRoute`, `AlternateRoutesMap`, `RouteColors`, `CarPuck`,
-  `VehicleImageBuilder`, `RouteLabelColors`, `fitCameraToBounds`,
-  `paintRouteLabel` and `laneDirectionIcon` from navigation_engine_flutter.
+  `AlternateRoute`, `AlternateRoutesMap`, `SearchPinsMap`, `RouteColors`,
+  `CarPuck`, `VehicleImageBuilder`, `RouteLabelColors`,
+  `fitCameraToBounds`, `paintRouteLabel`, `laneDirectionIcon` and the
+  Google-style pieces (see below) from navigation_engine_flutter.
+- The Google-style UI lives in navigation_engine_flutter, as the
+  Mapbox-style UI does: every piece that needs no Google map (the
+  `GoogleStyle*` widgets, `GoogleStyleColors`, `AudioGuidance`,
+  `IncidentType`, `SpeedLimitSignStyle`, `SpeedingLevel` and the
+  `AlongRoute*` types) and the whole screen, `GoogleStyleFlowScaffold`.
+  This library re-exports the pieces under the same names, so an app that
+  imports only navigation_engine_google_maps compiles and behaves as
+  before (one detail: an error the app's `onResults` throws in the search
+  along the route is reported with the `FlutterError` library
+  `navigation_engine_flutter`, was `navigation_engine_google_maps`).
+  `GoogleStyleNavigation` keeps its constructor; it is now
+  `GoogleStyleFlowScaffold` with a `GoogleMapsNavigationView` as its map.
+  `GoogleStyleFlowScaffold` and `GoogleStyleMapLayers` are not re-exported
+  (import navigation_engine_flutter to build the look on another map).
+- `GoogleMapsNavigationMap` implements `SearchPinsMap` (it drew the search
+  pins before; now through the shared interface).
 - The compass shows a heading up / north up switch the app makes at once
   (`FollowCamera.headingUpChanges`); its tooltip is its one accessibility
   label.

@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:navigation_engine/navigation_engine.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../../flow/trip_progress.dart';
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 import 'google_style_round_button.dart';
 
@@ -396,8 +397,9 @@ class _GoogleStyleTripSheetState extends State<GoogleStyleTripSheet>
             children: [
               MediaQuery(
                 data: MediaQuery.of(context).copyWith(
-                  textScaler: MediaQuery.textScalerOf(context)
-                      .clamp(maxScaleFactor: 1.6),
+                  textScaler: MediaQuery.textScalerOf(
+                    context,
+                  ).clamp(maxScaleFactor: 1.6),
                 ),
                 child: Text(
                   formatter.duration(progress.remainingDuration),
