@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 
 /// The report button, at the top of the navigation screen's end column. It

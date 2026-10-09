@@ -7,9 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
-import 'along_route_search.dart';
 import 'search_pin.dart';
-import 'ui/google_style_colors.dart';
 
 /// The Google Maps position of [p].
 LatLng toLatLng(GeoPoint p) => LatLng(p.lat, p.lng);
@@ -143,7 +141,8 @@ class GoogleMapsNavigationMap
         NavigationMap,
         VehicleMarkerMap,
         RoutePreviewMap,
-        AlternateRoutesMap {
+        AlternateRoutesMap,
+        SearchPinsMap {
   /// Creates the map's drawing state, with the route drawn in
   /// [routeColors].
   GoogleMapsNavigationMap({RouteColors routeColors = const RouteColors()})
@@ -723,6 +722,7 @@ class GoogleMapsNavigationMap
   /// rendered asynchronously; a newer call or [clearSearchPins] drops a
   /// render still pending. When the render fails, the pins are cleared and
   /// the error is reported through [FlutterError].
+  @override
   Future<void> showSearchPins(
     List<AlongRoutePlace> places, {
     String? focusedId,
@@ -770,6 +770,7 @@ class GoogleMapsNavigationMap
   }
 
   /// Removes the search pins, also those still being rendered.
+  @override
   void clearSearchPins() {
     _pinGeneration++;
     _shownPins = null;

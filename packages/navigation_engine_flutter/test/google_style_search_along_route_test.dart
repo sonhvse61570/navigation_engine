@@ -5,7 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// A search whose every query waits on its own completer.
 class _Search {
@@ -84,8 +84,9 @@ void main() {
   }) => tester.pumpWidget(
     MaterialApp(
       builder: (context, app) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: TextScaler.linear(scale)),
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(scale)),
         child: Directionality(textDirection: direction, child: app!),
       ),
       home: Scaffold(body: child),
@@ -574,9 +575,14 @@ void main() {
 
   testWidgets('an error thrown by onResults is reported, not shown as a '
       'failed search', (tester) async {
-    final thrown = <Object>[];
+    final thrown = <FlutterErrorDetails>[];
     final saved = FlutterError.onError;
-    FlutterError.onError = (details) => thrown.add(details.exception);
+    // The test framework's own reports go on to the previous handler: it
+    // fails the test. Collecting them here would leave it hanging.
+    FlutterError.onError = (details) =>
+        details.library == 'Flutter test framework'
+        ? saved?.call(details)
+        : thrown.add(details);
     addTearDown(() => FlutterError.onError = saved);
     await tester.pumpWidget(
       MaterialApp(
@@ -598,7 +604,8 @@ void main() {
     await tester.pump();
     search.pending.single.complete([_fuel]);
     await tester.pump();
-    expect(thrown.single, isA<StateError>());
+    expect(thrown.single.exception, isA<StateError>());
+    expect(thrown.single.library, 'navigation_engine_flutter');
     expect(find.text(strings.searchFailed), findsNothing);
     expect(find.text('Fuel Stop'), findsOneWidget);
   });

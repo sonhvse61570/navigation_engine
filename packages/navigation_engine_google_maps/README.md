@@ -148,10 +148,20 @@ label is its tooltip, the mode a tap switches to.
 shared vocabulary lives in that package and is re-exported here, with what
 the drop-in takes: `NavigationSession` and `GeoPoint` (navigation_engine),
 `NavigationFlowController`, `NavigationStrings`, `PlaceLabel`,
-`AlternateRoute`, `AlternateRoutesMap`, `RouteColors`, `CarPuck`,
-`VehicleImageBuilder`, `RouteLabelColors`, `fitCameraToBounds`,
-`paintRouteLabel` and `laneDirectionIcon`. To build a screen in another
-look, use the scaffold directly.
+`AlternateRoute`, `AlternateRoutesMap`, `SearchPinsMap`, `RouteColors`,
+`CarPuck`, `VehicleImageBuilder`, `RouteLabelColors`, `fitCameraToBounds`,
+`paintRouteLabel`, `laneDirectionIcon`, `AlongRouteCategory`,
+`AlongRoutePlace`, `AlongRouteQuery`, `AlongRouteSearch`, `SpeedingLevel`,
+`GoogleStyleSheetAction`, `showGoogleStyleReportSheet` and the Google-style
+pieces listed below. To build a screen in another look, use the scaffold directly.
+
+The Google-style pieces and the whole screen, `GoogleStyleFlowScaffold`,
+live in `navigation_engine_flutter`, so they work on any map;
+`GoogleStyleNavigation` is that scaffold with a `GoogleMapsNavigationView`
+as its map. `GoogleMapsNavigationMap` implements `SearchPinsMap` and draws
+the search pins. This library re-exports the pieces under the same names;
+import `navigation_engine_flutter` for `GoogleStyleFlowScaffold` and
+`GoogleStyleMapLayers`.
 
 The UI is built from public pieces you can use on their own:
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
+
+import '../navigation_strings.dart';
 
 /// What a driver reports on the road.
 enum IncidentType {

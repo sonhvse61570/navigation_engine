@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 Widget _host(Widget child, {TextDirection direction = TextDirection.ltr}) =>
     MaterialApp(
@@ -192,8 +192,9 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: TextScaler.linear(scale)),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(scale)),
               child: child!,
             ),
             home: Align(

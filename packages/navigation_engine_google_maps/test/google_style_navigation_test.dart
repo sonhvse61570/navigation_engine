@@ -1060,7 +1060,12 @@ void main() {
     ) async {
       final errors = <FlutterErrorDetails>[];
       final old = FlutterError.onError;
-      FlutterError.onError = errors.add;
+      // The test framework's own reports go on to the previous handler: it
+      // fails the test. Collecting them here would leave it hanging.
+      FlutterError.onError = (details) =>
+          details.library == 'Flutter test framework'
+          ? old?.call(details)
+          : errors.add(details);
       addTearDown(() => FlutterError.onError = old);
       await h.mount(tester);
       await h.flow.preview(from: route.points.first, to: route.points.last);

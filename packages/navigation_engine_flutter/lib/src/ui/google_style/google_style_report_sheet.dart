@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
+import '../navigation_strings.dart';
 import 'google_style_colors.dart';
 import 'incident_type.dart';
 
@@ -123,8 +123,9 @@ class GoogleStyleReportSheet extends StatelessWidget {
   /// broken between words only. When its longest word is wider than the
   /// tile at this text size, the name is scaled down until that word fits.
   Widget _label(BuildContext context, String name) {
-    final style = DefaultTextStyle.of(context).style
-        .merge(TextStyle(color: colors.onSurface, fontSize: 13));
+    final style = DefaultTextStyle.of(
+      context,
+    ).style.merge(TextStyle(color: colors.onSurface, fontSize: 13));
     final scaler = MediaQuery.textScalerOf(context);
     var widest = 0.0;
     for (final word in name.split(' ')) {
