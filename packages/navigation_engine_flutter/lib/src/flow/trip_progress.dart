@@ -1,5 +1,6 @@
 /// How much of the trip is left, for a trip-progress bar.
 final class TripProgress {
+  /// Creates the progress of a trip.
   const TripProgress({
     required this.remainingDistance,
     required this.remainingDuration,
@@ -27,6 +28,7 @@ final class TripProgress {
 
 /// The vehicle's speed and the speed limit where it is.
 final class SpeedInfo {
+  /// Creates the [speed] and the [limit], both in metres per second.
   const SpeedInfo({required this.speed, this.limit});
 
   /// Metres per second.

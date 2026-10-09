@@ -185,4 +185,306 @@ void main() {
     g.reset();
     expect(g.update(route.length).announcements, hasLength(1));
   });
+
+  group('"Then" rule', () {
+    const a = GeoPoint(10.77, 106.69);
+
+    /// A straight line east with a vertex at each of [at] (metres) and the
+    /// end at [length]; `steps[i]` sits at `at[i]`.
+    NavRoute line(
+      List<double> at,
+      List<(ManeuverType, ManeuverModifier, String)> steps, {
+      required double length,
+    }) => NavRoute.fromPoints(
+      [for (final d in at) offsetPoint(a, 90, d), offsetPoint(a, 90, length)],
+      steps: [
+        for (var i = 0; i < steps.length; i++)
+          RouteStepSeed.atVertex(
+            i,
+            type: steps[i].$1,
+            modifier: steps[i].$2,
+            roadName: steps[i].$3,
+          ),
+      ],
+    );
+
+    const none = ManeuverModifier.none;
+    const straight = ManeuverModifier.straight;
+
+    test('the default is 300 m', () {
+      expect(NavGuidance(sampleRoute).thenWithin, 300);
+    });
+
+    test('(a) a straight-on step shows a turn 1.2 km away', () {
+      for (final (type, modifier) in [
+        (ManeuverType.continueOn, none),
+        (ManeuverType.continueOn, straight),
+        (ManeuverType.newName, none),
+        (ManeuverType.turn, none),
+      ]) {
+        final r = line(
+          [0, 300, 1500, 2000],
+          [
+            (ManeuverType.depart, none, 'A'),
+            (type, modifier, 'B'),
+            (ManeuverType.turn, ManeuverModifier.right, 'C'),
+            (ManeuverType.arrive, none, ''),
+          ],
+          length: 2000,
+        );
+        final state = NavGuidance(r).update(100).state;
+        expect(state.stepIndex, 1, reason: '$type $modifier');
+        expect(state.thenStep, same(r.steps[2]), reason: '$type $modifier');
+      }
+    });
+
+    test('(a) does not apply to a real turn far from the next one', () {
+      final r = line(
+        [0, 300, 1500, 2000],
+        [
+          (ManeuverType.depart, none, 'A'),
+          (ManeuverType.continueOn, ManeuverModifier.left, 'B'),
+          (ManeuverType.turn, ManeuverModifier.right, 'C'),
+          (ManeuverType.arrive, none, ''),
+        ],
+        length: 2000,
+      );
+      expect(NavGuidance(r).update(100).state.thenStep, isNull);
+    });
+
+    test('(a) skips silent and straight-on steps to the next manoeuvre', () {
+      final r = line(
+        [0, 300, 900, 1500, 2100, 2600, 3000],
+        [
+          (ManeuverType.depart, none, 'A'),
+          (ManeuverType.newName, none, 'B'),
+          (ManeuverType.continueOn, straight, 'C'),
+          (ManeuverType.newName, none, 'D'),
+          (ManeuverType.continueOn, none, 'E'),
+          (ManeuverType.turn, ManeuverModifier.left, 'F'),
+          (ManeuverType.arrive, none, ''),
+        ],
+        length: 3000,
+      );
+      final g = NavGuidance(r);
+      expect(g.update(100).state.thenStep, same(r.steps[5]));
+      expect(g.update(1000).state.thenStep, same(r.steps[5]));
+    });
+
+    test('(a) shows the arrival when no manoeuvre is left', () {
+      final r = line(
+        [0, 300, 900, 1500],
+        [
+          (ManeuverType.depart, none, 'A'),
+          (ManeuverType.newName, none, 'B'),
+          (ManeuverType.continueOn, straight, 'C'),
+          (ManeuverType.arrive, none, ''),
+        ],
+        length: 1500,
+      );
+      final state = NavGuidance(r).update(100).state;
+      expect(state.stepIndex, 1);
+      expect(state.thenStep, same(r.steps[3]));
+      expect(state.thenStep!.isArrival, isTrue);
+    });
+
+    test('(a) without a manoeuvre or an arrival left shows none', () {
+      final r = line(
+        [0, 300],
+        [(ManeuverType.depart, none, 'A'), (ManeuverType.newName, none, 'B')],
+        length: 1500,
+      );
+      final state = NavGuidance(r).update(100).state;
+      expect(state.stepIndex, 1);
+      expect(state.thenStep, isNull);
+    });
+
+    for (final type in [
+      ManeuverType.roundabout,
+      ManeuverType.exitRoundabout,
+      ManeuverType.onRamp,
+      ManeuverType.offRamp,
+      ManeuverType.fork,
+      ManeuverType.merge,
+      ManeuverType.endOfRoad,
+    ]) {
+      test('(a) never skips a ${type.name} going straight', () {
+        final r = line(
+          [0, 300, 900, 1500, 2000],
+          [
+            (ManeuverType.depart, none, 'A'),
+            (ManeuverType.continueOn, none, 'B'),
+            (type, straight, 'C'),
+            (ManeuverType.turn, ManeuverModifier.right, 'D'),
+            (ManeuverType.arrive, none, ''),
+          ],
+          length: 2000,
+        );
+        // 600 m to the straight manoeuvre, 1.2 km to the right turn.
+        final state = NavGuidance(r).update(300).state;
+        expect(state.stepIndex, 2, reason: 'past the continue');
+        final before = NavGuidance(r).update(100).state;
+        expect(before.stepIndex, 1);
+        expect(before.thenStep, same(r.steps[2]), reason: type.name);
+      });
+
+      test('(a) a ${type.name} going straight is no trigger', () {
+        final r = line(
+          [0, 300, 1500, 2000],
+          [
+            (ManeuverType.depart, none, 'A'),
+            (type, straight, 'B'),
+            (ManeuverType.turn, ManeuverModifier.right, 'C'),
+            (ManeuverType.arrive, none, ''),
+          ],
+          length: 2000,
+        );
+        final state = NavGuidance(r).update(100).state;
+        expect(state.stepIndex, 1);
+        expect(state.thenStep, isNull, reason: '1.2 km on, no rule');
+      });
+    }
+
+    test('(b) skips straight-on steps within 300 m, never past it', () {
+      // A turn, a name change 200 m later, a left turn 280 m after the
+      // turn: the left turn shows.
+      final withTurn = line(
+        [0, 500, 700, 780, 2000],
+        [
+          (ManeuverType.depart, none, 'A'),
+          (ManeuverType.turn, ManeuverModifier.right, 'B'),
+          (ManeuverType.newName, straight, 'C'),
+          (ManeuverType.turn, ManeuverModifier.left, 'D'),
+          (ManeuverType.arrive, none, ''),
+        ],
+        length: 2000,
+      );
+      final shown = NavGuidance(withTurn).update(100);
+      expect(shown.state.thenStep, same(withTurn.steps[3]));
+      // Speech is unchanged: the step right after, within 100 m only.
+      expect(shown.announcements.single.thenStep, isNull);
+
+      // Only the name change within 300 m: no "Then continue straight".
+      final alone = line(
+        [0, 500, 700, 1500, 2000],
+        [
+          (ManeuverType.depart, none, 'A'),
+          (ManeuverType.turn, ManeuverModifier.right, 'B'),
+          (ManeuverType.newName, straight, 'C'),
+          (ManeuverType.turn, ManeuverModifier.left, 'D'),
+          (ManeuverType.arrive, none, ''),
+        ],
+        length: 2000,
+      );
+      expect(NavGuidance(alone).update(100).state.thenStep, isNull);
+    });
+
+    NavRoute twoTurns(double gap) => line(
+      [0, 500, 500 + gap, 2000],
+      [
+        (ManeuverType.depart, none, 'A'),
+        (ManeuverType.turn, ManeuverModifier.right, 'B'),
+        (ManeuverType.turn, ManeuverModifier.left, 'C'),
+        (ManeuverType.arrive, none, ''),
+      ],
+      length: 2000,
+    );
+
+    test('(b) a turn 250 m after a turn shows, 350 m does not', () {
+      final near = twoTurns(250);
+      final shown = NavGuidance(near).update(100);
+      expect(shown.state.thenStep, same(near.steps[2]));
+      // Shown, but too far to be spoken (spokenThenWithin, 100 m).
+      expect(shown.announcements.single.thenStep, isNull);
+
+      final far = twoTurns(350);
+      final hidden = NavGuidance(far).update(100);
+      expect(hidden.state.thenStep, isNull);
+      expect(hidden.announcements.single.thenStep, isNull);
+    });
+
+    test('speech: "then" within spokenThenWithin (100 m) only', () {
+      expect(NavGuidance(sampleRoute).spokenThenWithin, 100);
+      const f = EnglishGuidanceFormatter();
+
+      final close = twoTurns(90);
+      final spoken = NavGuidance(close).update(100);
+      expect(spoken.state.thenStep, same(close.steps[2]));
+      expect(spoken.announcements.single.thenStep, same(close.steps[2]));
+      expect(
+        f.announcement(spoken.announcements.single),
+        'In 400 m, turn right onto B, then turn left onto C',
+      );
+
+      final far = twoTurns(250);
+      final quiet = NavGuidance(far).update(100);
+      expect(quiet.state.thenStep, same(far.steps[2]), reason: 'shown');
+      expect(quiet.announcements.single.thenStep, isNull);
+      expect(
+        f.announcement(quiet.announcements.single),
+        'In 400 m, turn right onto B',
+      );
+
+      // Configurable.
+      final loud = NavGuidance(far, spokenThenWithin: 300).update(100);
+      expect(loud.announcements.single.thenStep, same(far.steps[2]));
+    });
+
+    test('(b) thenWithin stays configurable', () {
+      final near = twoTurns(250);
+      final update = NavGuidance(near, thenWithin: 100).update(100);
+      expect(update.state.thenStep, isNull);
+      expect(update.announcements.single.thenStep, isNull);
+      expect(
+        NavGuidance(twoTurns(350), thenWithin: 400).update(100).state.thenStep,
+        isNotNull,
+      );
+    });
+
+    test('(a) is shown, never spoken: speech reads as before', () {
+      // A spoken straight-on step (a continue without a modifier) whose
+      // next turn is 1.2 km away.
+      final r = line(
+        [0, 300, 1500, 2000],
+        [
+          (ManeuverType.depart, none, 'A'),
+          (ManeuverType.continueOn, none, 'B'),
+          (ManeuverType.turn, ManeuverModifier.right, 'C'),
+          (ManeuverType.arrive, none, ''),
+        ],
+        length: 2000,
+      );
+      final update = NavGuidance(r).update(100);
+      expect(update.state.thenStep, same(r.steps[2]));
+      final said = update.announcements.single;
+      expect(said.thenStep, isNull);
+      expect(
+        const EnglishGuidanceFormatter().announcement(said),
+        'In 200 m, continue straight onto B',
+      );
+      expect(
+        const VietnameseGuidanceFormatter().announcement(said),
+        isNot(contains(', rồi ')),
+      );
+    });
+
+    test('(a) skipping does not change what is spoken under (b)', () {
+      // Straight on, then a name change 80 m later: the display skips to
+      // the turn, speech keeps the close step as before.
+      final r = line(
+        [0, 300, 380, 1500, 2000],
+        [
+          (ManeuverType.depart, none, 'A'),
+          (ManeuverType.continueOn, none, 'B'),
+          (ManeuverType.newName, none, 'C'),
+          (ManeuverType.turn, ManeuverModifier.right, 'D'),
+          (ManeuverType.arrive, none, ''),
+        ],
+        length: 2000,
+      );
+      final update = NavGuidance(r).update(100);
+      expect(update.state.thenStep, same(r.steps[3]));
+      expect(update.announcements.single.thenStep, same(r.steps[2]));
+    });
+  });
 }

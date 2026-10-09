@@ -300,7 +300,7 @@ void main() {
       .widget<Material>(
         find
             .descendant(
-              of: find.byType(GoogleStyleTripFooter),
+              of: find.byType(GoogleStyleTripSheet),
               matching: find.byType(Material),
             )
             .first,
@@ -312,7 +312,7 @@ void main() {
     expect(find.text('IDLE'), findsOneWidget);
     expect(find.byType(GoogleStyleOverviewPanel), findsNothing);
     expect(find.byType(GoogleStyleManeuverHeader), findsNothing);
-    expect(find.byType(GoogleStyleTripFooter), findsNothing);
+    expect(find.byType(GoogleStyleTripSheet), findsNothing);
   });
 
   navTest('overview shows the panel and draws route options', (
@@ -360,7 +360,7 @@ void main() {
     // No guidance yet right after start: no header, not an empty card.
     expect(h.session.guidanceState, isNull);
     expect(find.byType(GoogleStyleManeuverHeader), findsNothing);
-    expect(find.byType(GoogleStyleTripFooter), findsOneWidget);
+    expect(find.byType(GoogleStyleTripSheet), findsOneWidget);
     await h.run(
       tester,
       4,
@@ -369,11 +369,11 @@ void main() {
     expect(h.flow.state.value, isA<FlowNavigating>());
     expect(find.byType(GoogleStyleOverviewPanel), findsNothing);
     expect(find.byType(GoogleStyleManeuverHeader), findsOneWidget);
-    expect(find.byType(GoogleStyleTripFooter), findsOneWidget);
-    expect(find.byType(GoogleStyleSpeedometer), findsOneWidget);
+    expect(find.byType(GoogleStyleTripSheet), findsOneWidget);
+    expect(find.byType(GoogleStyleSpeedCluster), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(GoogleStyleTripFooter),
+        of: find.byType(GoogleStyleTripSheet),
         matching: find.text(
           h.formatter.duration(h.flow.tripProgress.value!.remainingDuration),
         ),
@@ -393,13 +393,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 16));
     final button = tester.getRect(find.byType(GoogleStyleRecenterButton));
-    final footer = tester.getRect(find.byType(GoogleStyleTripFooter));
-    // At the bottom start (spec D7), stacked above the speedometer.
-    final speed = tester.getRect(find.byType(GoogleStyleSpeedometer));
+    final footer = tester.getRect(find.byType(GoogleStyleTripSheet));
+    // At the bottom start, in the speed cluster's place (spec D4).
     expect(button.left, closeTo(16, 1));
     expect(button.center.dx, lessThan(400 / 2));
-    expect(button.bottom, closeTo(speed.top - 8, 1), reason: '8 above');
-    expect(speed.bottom, closeTo(footer.top - 16, 1));
+    expect(button.bottom, closeTo(footer.top - 16, 1));
+    expect(find.byType(GoogleStyleSpeedCluster), findsNothing);
     await tester.tap(find.text('Re-center'));
     await tester.pump(const Duration(milliseconds: 16));
     expect(h.session.follow, isTrue);
@@ -414,7 +413,7 @@ void main() {
     await tester.pump();
     expect(h.flow.state.value, isA<FlowIdle>());
     expect(h.session.isRunning, isFalse);
-    expect(find.byType(GoogleStyleTripFooter), findsNothing);
+    expect(find.byType(GoogleStyleTripSheet), findsNothing);
 
     // With onEnd, the callback is called instead.
     var ended = 0;
@@ -438,7 +437,7 @@ void main() {
     await tester.pump();
     await h.startDriving(tester);
     final running = h.session.route;
-    await tester.tap(find.byTooltip('Overview'));
+    await tester.tap(find.byTooltip('Route options'));
     await tester.pump();
     expect(find.text('Resume'), findsOneWidget);
     expect(find.text('Start'), findsNothing);
@@ -453,7 +452,7 @@ void main() {
     h.flow.previewRoutes([route]);
     await tester.pump();
     await h.startDriving(tester);
-    await tester.tap(find.byTooltip('Steps'));
+    await tester.tap(find.byKey(const ValueKey('google_style_header_card')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(GoogleStyleStepList), findsOneWidget);
@@ -476,13 +475,13 @@ void main() {
       fixAt: (s) => h.fixOn(route, route.length - 40 + 8.0 * s, speed: 8),
     );
     expect(h.flow.state.value, isA<FlowArrived>());
-    expect(find.byType(GoogleStyleArrivalPanel), findsOneWidget);
-    expect(find.byType(GoogleStyleTripFooter), findsNothing);
+    expect(find.byType(GoogleStyleArrivalSheet), findsOneWidget);
+    expect(find.byType(GoogleStyleTripSheet), findsNothing);
     await tester.tap(find.text('Done'));
     await tester.pump();
     expect(h.flow.state.value, isA<FlowIdle>());
     expect(h.session.isRunning, isFalse);
-    expect(find.byType(GoogleStyleArrivalPanel), findsNothing);
+    expect(find.byType(GoogleStyleArrivalSheet), findsNothing);
   });
 
   late PendingRouteProvider pendingProvider;
@@ -676,7 +675,7 @@ void main() {
       h.flow.previewRoutes([route]);
       await tester.pump();
       await h.startDriving(tester);
-      await tester.tap(find.byTooltip('Overview'));
+      await tester.tap(find.byTooltip('Route options'));
       await tester.pump();
       expect(h.flow.isTripOverview, isTrue);
       expect(
@@ -832,8 +831,8 @@ void main() {
     h.flow.previewRoutes([route]);
     await tester.pump();
     await h.startDriving(tester);
-    final speedometer = tester.widget<GoogleStyleSpeedometer>(
-      find.byType(GoogleStyleSpeedometer),
+    final speedometer = tester.widget<GoogleStyleSpeedCluster>(
+      find.byType(GoogleStyleSpeedCluster),
     );
     expect(speedometer.formatter, same(mph));
     expect(find.text('mph'), findsOneWidget);
@@ -866,14 +865,14 @@ void main() {
       await h.startDriving(tester, start: strings.start);
       expect(h.flow.state.value, isA<FlowNavigating>());
       expect(find.byType(GoogleStyleManeuverHeader), findsOneWidget);
-      expect(find.byType(GoogleStyleTripFooter), findsOneWidget);
-      expect(find.byType(GoogleStyleSpeedometer), findsOneWidget);
+      expect(find.byType(GoogleStyleTripSheet), findsOneWidget);
+      expect(find.byType(GoogleStyleSpeedCluster), findsOneWidget);
       expect(tester.takeException(), isNull, reason: 'navigating');
       // Vertically too: inside the screen, the speedometer between the
       // header and the footer.
       final header = tester.getRect(find.byType(GoogleStyleManeuverHeader));
-      final footer = tester.getRect(find.byType(GoogleStyleTripFooter));
-      final speed = tester.getRect(find.byType(GoogleStyleSpeedometer));
+      final footer = tester.getRect(find.byType(GoogleStyleTripSheet));
+      final speed = tester.getRect(find.byType(GoogleStyleSpeedCluster));
       expect(header.top, greaterThanOrEqualTo(0));
       expect(footer.bottom, lessThanOrEqualTo(640));
       expect(speed.top, greaterThanOrEqualTo(header.bottom), reason: '$speed');
@@ -911,23 +910,22 @@ void main() {
             r.top >= safe.top - 0.5 &&
             r.right <= safe.right + 0.5 &&
             r.bottom <= safe.bottom + 0.5;
-        final speed = tester.getRect(find.byType(GoogleStyleSpeedometer));
         final recenter = tester.getRect(find.byType(GoogleStyleRecenterButton));
-        final footer = tester.getRect(find.byType(GoogleStyleTripFooter));
-        final bar = tester.getRect(find.byType(GoogleStyleTripProgressBar));
-        expect(inside(speed), isTrue, reason: 'speed $speed');
-        expect(inside(recenter), isTrue, reason: 'recenter $recenter');
-        expect(inside(bar), isTrue, reason: 'progress bar $bar');
-        expect(recenter.height, greaterThanOrEqualTo(48));
-        expect(recenter.overlaps(speed), isFalse, reason: '$recenter');
-        expect(recenter.overlaps(footer), isFalse, reason: '$recenter');
-        expect(speed.overlaps(footer), isFalse, reason: '$speed');
-        // The header spans the width: the stack would reach into it, so
-        // the recenter sits beside the speed.
+        final footer = tester.getRect(find.byType(GoogleStyleTripSheet));
         final header = tester.getRect(find.byType(GoogleStyleManeuverHeader));
+        expect(inside(recenter), isTrue, reason: 'recenter $recenter');
+        expect(inside(footer), isTrue, reason: 'sheet $footer');
+        expect(inside(header), isTrue, reason: 'header $header');
+        expect(recenter.height, greaterThanOrEqualTo(48));
+        expect(recenter.overlaps(footer), isFalse, reason: '$recenter');
         expect(recenter.overlaps(header), isFalse, reason: '$recenter');
-        expect(speed.overlaps(header), isFalse, reason: '$speed');
-        expect(recenter.left, greaterThan(speed.right));
+        // The side panel (D7): header and sheet on the start side, the
+        // recenter in the map area beside them; no progress bar (D11).
+        const panelEnd = 47 + 8 + 844 * 0.42 + 0.5;
+        expect(header.right, lessThanOrEqualTo(panelEnd));
+        expect(footer.right, lessThanOrEqualTo(panelEnd));
+        expect(recenter.left, greaterThan(footer.right));
+        expect(find.byType(GoogleStyleTripProgressBar), findsNothing);
       });
     }
   }
@@ -944,7 +942,7 @@ void main() {
       fixAt: (s) => h.fixOn(route, route.length - 120 + 8.0 * s, speed: 8),
     );
     expect(h.flow.state.value, isA<FlowNavigating>());
-    await tester.tap(find.byTooltip('Steps'));
+    await tester.tap(find.byKey(const ValueKey('google_style_header_card')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(GoogleStyleStepList), findsOneWidget);
@@ -957,7 +955,7 @@ void main() {
     expect(h.flow.state.value, isA<FlowArrived>());
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(GoogleStyleStepList), findsNothing);
-    expect(find.byType(GoogleStyleArrivalPanel), findsOneWidget);
+    expect(find.byType(GoogleStyleArrivalSheet), findsOneWidget);
     expect(find.text('Done').hitTestable(), findsOneWidget);
   });
 
@@ -974,7 +972,7 @@ void main() {
       fixAt: (s) => h.fixOn(route, 1930.0 + 10 * s, speed: 10),
     );
     final first = h.session.guidanceState!.stepIndex;
-    await tester.tap(find.byTooltip('Steps'));
+    await tester.tap(find.byKey(const ValueKey('google_style_header_card')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     GoogleStyleStepList list() =>
@@ -997,7 +995,7 @@ void main() {
     h.flow.previewRoutes([route]);
     await tester.pump();
     await h.startDriving(tester);
-    await tester.tap(find.byTooltip('Steps'));
+    await tester.tap(find.byKey(const ValueKey('google_style_header_card')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     h.flow.stop();

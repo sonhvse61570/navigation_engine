@@ -16,13 +16,27 @@ final class GoogleStyleColors {
     required this.alternative,
     required this.etaText,
     required this.warning,
+    this.guidancePreview = const Color(0xFF5F6368),
+    this.buttonSurface = const Color(0xFFFFFFFF),
+    this.buttonIcon = const Color(0xFF3C4043),
+    this.selectedTint = const Color(0xFFD2E3FC),
+    this.onSelectedTint = const Color(0xFF1967D2),
+    this.outline = const Color(0xFFDADCE0),
+    this.speedometerSurface = const Color(0xFFFFFFFF),
+    this.speedometerText = const Color(0xFF202124),
+    this.speeding = const Color(0xFFD93025),
+    this.progressDriven = const Color(0xFFBDC1C6),
+    this.compassNorth = const Color(0xFFEA4335),
+    this.switchThumb = const Color(0xFFFFFFFF),
+    this.switchTrackOff = const Color(0xFFDADCE0),
+    this.closeOutline = const Color(0xFFC4C7C5),
   });
 
-  /// The background of the turn card (green in day mode).
+  /// The background of the turn card (teal).
   final Color guidance;
 
-  /// The background of the turn card's "then" strip (darker green in day
-  /// mode).
+  /// The background of the turn card's "Then" tab and lanes band (a darker
+  /// teal).
   final Color guidanceSecondary;
 
   /// The colour of the text and the icons on the turn card.
@@ -56,10 +70,60 @@ final class GoogleStyleColors {
   /// The warning colour (red in day mode).
   final Color warning;
 
+  /// The grey of the turn card while a step is previewed or a new route is
+  /// looked for.
+  final Color guidancePreview;
+
+  /// The surface of the round map buttons (and the trip sheet's circles),
+  /// the report button and the Re-center pill.
+  final Color buttonSurface;
+
+  /// The icons of the round map buttons and the report button, and the
+  /// compass's "N".
+  final Color buttonIcon;
+
+  /// The fill of a selected option: the sound pill's, the selected search
+  /// chip and the focused search result.
+  final Color selectedTint;
+
+  /// The text and icons on [selectedTint], such as the selected search
+  /// chip's label and icon.
+  final Color onSelectedTint;
+
+  /// The drag handle of the trip sheet and the outline of chips and round
+  /// buttons.
+  final Color outline;
+
+  /// The surface of the speed cluster.
+  final Color speedometerSurface;
+
+  /// The speed text when not speeding.
+  final Color speedometerText;
+
+  /// Speeding: the text of a minor alert, the background of a major one.
+  final Color speeding;
+
+  /// The driven part of the trip progress bar.
+  final Color progressDriven;
+
+  /// The compass's north triangle (red, day and night).
+  final Color compassNorth;
+
+  /// The thumb of the trip sheet's switches, on and off (white by day).
+  final Color switchThumb;
+
+  /// The track of a trip sheet switch that is off (light grey by day); an
+  /// on track is [accent].
+  final Color switchTrackOff;
+
+  /// The ring of the trip sheet's close circle, a little darker than
+  /// [outline].
+  final Color closeOutline;
+
   /// The Google-style day theme.
   static const day = GoogleStyleColors(
-    guidance: Color(0xFF1E8E3E),
-    guidanceSecondary: Color(0xFF137333),
+    guidance: Color(0xFF015F61),
+    guidanceSecondary: Color(0xFF015053),
     onGuidance: Color(0xFFFFFFFF),
     surface: Color(0xFFFFFFFF),
     onSurface: Color(0xFF202124),
@@ -73,8 +137,8 @@ final class GoogleStyleColors {
 
   /// The Google-style night theme.
   static const night = GoogleStyleColors(
-    guidance: Color(0xFF0D652D),
-    guidanceSecondary: Color(0xFF0A4D22),
+    guidance: Color(0xFF014446),
+    guidanceSecondary: Color(0xFF013436),
     onGuidance: Color(0xFFFFFFFF),
     surface: Color(0xFF202124),
     onSurface: Color(0xFFE8EAED),
@@ -84,6 +148,19 @@ final class GoogleStyleColors {
     alternative: Color(0xFF5F6368),
     etaText: Color(0xFF81C995),
     warning: Color(0xFFF28B82),
+    guidancePreview: Color(0xFF3C4043),
+    buttonSurface: Color(0xFF303134),
+    buttonIcon: Color(0xFFE8EAED),
+    selectedTint: Color(0xFF394457),
+    onSelectedTint: Color(0xFF8AB4F8),
+    outline: Color(0xFF5F6368),
+    speedometerSurface: Color(0xFF202124),
+    speedometerText: Color(0xFFFFFFFF),
+    speeding: Color(0xFFD93025),
+    progressDriven: Color(0xFF5F6368),
+    switchThumb: Color(0xFFE8EAED),
+    switchTrackOff: Color(0xFF5F6368),
+    closeOutline: Color(0xFF80868B),
   );
 }
 
@@ -97,6 +174,22 @@ extension GoogleStyleRouteLabelColors on GoogleStyleColors {
     selectedText: onAccent,
     fill: surface,
     text: onSurface,
+    border: onSurface.withAlpha(0x33),
+  );
+
+  /// The bubble of an alternate route that is faster: green text on a
+  /// button surface.
+  RouteLabelColors get fasterLabelColors => RouteLabelColors(
+    fill: buttonSurface,
+    text: etaText,
+    border: onSurface.withAlpha(0x33),
+  );
+
+  /// The bubble of an alternate route that is slower or as fast: grey text
+  /// on a button surface.
+  RouteLabelColors get slowerLabelColors => RouteLabelColors(
+    fill: buttonSurface,
+    text: onSurfaceVariant,
     border: onSurface.withAlpha(0x33),
   );
 }

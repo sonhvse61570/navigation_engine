@@ -1,3 +1,4 @@
+import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 
 /// What a [NavigationFlowScaffold] gives the map it builds: the look of the
@@ -12,6 +13,7 @@ final class NavigationMapConfig {
     required this.onRouteOptionTap,
     required this.onMapReady,
     required this.bottomOverlayHeight,
+    this.startOverlayWidth = const AlwaysStoppedAnimation<double>(0),
   });
 
   /// Whether the map should use its night style.
@@ -32,4 +34,10 @@ final class NavigationMapConfig {
   /// keeps its own attribution and logo above it, as map providers' terms
   /// require them to stay visible.
   final ValueListenable<double> bottomOverlayHeight;
+
+  /// The width of what covers the start side of the map (a landscape side
+  /// panel, with its margins and the start inset); 0 when nothing does. It
+  /// changes without a new config. A map shifts its follow focus to the
+  /// middle of the rest.
+  final ValueListenable<double> startOverlayWidth;
 }

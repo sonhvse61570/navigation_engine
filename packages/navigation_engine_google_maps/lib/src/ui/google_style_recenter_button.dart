@@ -4,7 +4,8 @@ import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'google_style_colors.dart';
 
 /// The pill that brings the camera back to the vehicle after the driver has
-/// moved the map.
+/// moved the map: a white pill (night `#303134`) with the icon and the label
+/// in the accent blue.
 class GoogleStyleRecenterButton extends StatelessWidget {
   /// Creates the re-center button.
   const GoogleStyleRecenterButton({
@@ -30,9 +31,10 @@ class GoogleStyleRecenterButton extends StatelessWidget {
       icon: const Icon(Icons.navigation),
       label: Text(strings.recenter),
       style: FilledButton.styleFrom(
-        backgroundColor: colors.surface,
+        backgroundColor: colors.buttonSurface,
         foregroundColor: colors.accent,
-        elevation: 4,
+        elevation: 3,
+        minimumSize: const Size(48, 48),
         shape: const StadiumBorder(),
       ),
     );

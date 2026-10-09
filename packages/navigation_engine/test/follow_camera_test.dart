@@ -10,27 +10,27 @@ void main() {
 
   test('zoomFor: close in when slow, wider when fast, clamped', () {
     final c = FollowCamera();
-    expect(c.zoomFor(0), 18.2);
-    expect(c.zoomFor(4), 18.2);
-    expect(c.zoomFor(13), closeTo(17.4, 1e-9));
-    expect(c.zoomFor(22), 16.6);
-    expect(c.zoomFor(40), 16.6);
+    expect(c.zoomFor(0), 18.7);
+    expect(c.zoomFor(4), 18.7);
+    expect(c.zoomFor(13), closeTo(17.9, 1e-9));
+    expect(c.zoomFor(22), 17.1);
+    expect(c.zoomFor(40), 17.1);
   });
 
   test('first update jumps to the target, then follows smoothly', () {
     final c = FollowCamera();
     final first = c.update(frame(0), 1 / 60);
-    expect(first.zoom, 18.2);
+    expect(first.zoom, 18.7);
     expect(first.bearing, 42);
-    expect(first.tilt, 50);
+    expect(first.tilt, 35);
     expect(first.position, const GeoPoint(10.77, 106.69));
     final next = c.update(frame(22), 1 / 60);
-    expect(next.zoom, lessThan(18.2));
-    expect(next.zoom, greaterThan(18.1));
+    expect(next.zoom, lessThan(18.7));
+    expect(next.zoom, greaterThan(18.6));
     for (var i = 0; i < 60 * 10; i++) {
       c.update(frame(22), 1 / 60);
     }
-    expect(c.update(frame(22), 1 / 60).zoom, closeTo(16.6, 0.01));
+    expect(c.update(frame(22), 1 / 60).zoom, closeTo(17.1, 0.01));
   });
 
   test('smoothing does not depend on the frame rate', () {
@@ -49,7 +49,7 @@ void main() {
   test('reset makes the next update jump again', () {
     final c = FollowCamera()..update(frame(0), 1 / 60);
     c.reset();
-    expect(c.update(frame(22), 1 / 60).zoom, 16.6);
+    expect(c.update(frame(22), 1 / 60).zoom, 17.1);
   });
 
   test('north-up returns bearing 0 and no tilt', () {
@@ -68,7 +68,7 @@ void main() {
     final cam = FollowCamera()..headingUp = false;
     final t = cam.update(frame(0, bearing: 135), 1 / 60);
     expect(t.position, const GeoPoint(10.77, 106.69));
-    expect(t.zoom, 18.2);
+    expect(t.zoom, 18.7);
     final up = FollowCamera().update(frame(0, bearing: 135), 1 / 60);
     expect(t.zoom, up.zoom);
     expect(t.position, up.position);
@@ -85,7 +85,7 @@ void main() {
     final a = toggled.update(frame(22), 1 / 60);
     final b = steady.update(frame(22), 1 / 60);
     expect(a.zoom, closeTo(b.zoom, 1e-9));
-    expect(a.zoom, greaterThan(16.7));
+    expect(a.zoom, greaterThan(17.2));
     toggled.headingUp = true;
     expect(
       toggled.update(frame(22), 1 / 60).zoom,

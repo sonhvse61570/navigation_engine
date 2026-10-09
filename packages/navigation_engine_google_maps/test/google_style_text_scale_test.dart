@@ -81,22 +81,55 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         expect(find.byType(GoogleStyleLaneGuidance), findsOneWidget);
-        expect(find.text(strings.then), findsOneWidget);
+        expect(
+          find.text(strings.then),
+          findsNothing,
+          reason: 'lanes take the band',
+        );
         final distance = formatter.distance(1250);
         expect(_scaleOf(tester, distance), 1.6, reason: 'clamped');
+      });
+
+      testWidgets('the header, with a then-step and no lanes', (tester) async {
+        final plain = sampleRoute.steps.firstWhere((s) => s.lanes.isEmpty);
+        await _pump(
+          tester,
+          GoogleStyleManeuverHeader(
+            state: GuidanceState(
+              step: plain,
+              stepIndex: sampleRoute.steps.indexOf(plain),
+              distanceToStep: 1250,
+              thenStep: then,
+              remaining: 4000,
+              arrived: false,
+            ),
+            formatter: formatter,
+            strings: strings,
+          ),
+          alignment: Alignment.topCenter,
+        );
+        expect(tester.takeException(), isNull);
+        expect(find.text(strings.then), findsOneWidget);
         expect(_scaleOf(tester, strings.then), 2, reason: 'not clamped');
+        expect(_scaleOf(tester, formatter.distance(1250)), 1.6);
       });
 
       testWidgets('the footer, with all buttons', (tester) async {
         await _pump(
           tester,
-          GoogleStyleTripFooter(
+          GoogleStyleTripSheet(
             progress: progress,
             formatter: formatter,
             strings: strings,
-            onEnd: () {},
-            onSteps: () {},
-            onOverview: () {},
+            onClose: () {},
+            onRouteOptions: () {},
+            actions: [
+              GoogleStyleSheetAction(
+                icon: Icons.settings,
+                label: strings.settings,
+                onPressed: () {},
+              ),
+            ],
           ),
         );
         expect(tester.takeException(), isNull);
@@ -107,17 +140,17 @@ void main() {
       testWidgets('the speedometer, with both signs and limit 120', (
         tester,
       ) async {
-        for (final sign in SpeedLimitSign.values) {
+        for (final style in SpeedLimitSignStyle.values) {
           await _pump(
             tester,
-            GoogleStyleSpeedometer(
+            GoogleStyleSpeedCluster(
               info: SpeedInfo(speed: 130 / 3.6, limit: 120 / 3.6),
-              sign: sign,
+              style: style,
               strings: strings,
               formatter: formatter,
             ),
           );
-          expect(tester.takeException(), isNull, reason: '$sign');
+          expect(tester.takeException(), isNull, reason: '$style');
           expect(find.text('130'), findsOneWidget);
           expect(find.text('120'), findsOneWidget);
         }
@@ -173,7 +206,7 @@ void main() {
       testWidgets('the arrival panel', (tester) async {
         await _pump(
           tester,
-          GoogleStyleArrivalPanel(
+          GoogleStyleArrivalSheet(
             route: sampleRoute,
             strings: strings,
             onDone: () {},

@@ -155,7 +155,7 @@ void main() {
     // Last fix at 120 m (t = 2 s), then ~1 s more at 10 m/s.
     expect(h.session.frame!.routeDistance, inInclusiveRange(115, 140));
     expect(map.moves.length, greaterThan(100));
-    expect(map.moves.last.tilt, 50);
+    expect(map.moves.last.tilt, 35);
     expect(h.session.stats.fixesAccepted, 3);
     expect(h.session.lastFix, isNotNull);
   });

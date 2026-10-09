@@ -37,12 +37,14 @@ typedef NavigationMapBuilder =
 /// [NavigationSession.tick] yourself, for example from a `Timer` or your own
 /// `Ticker`.
 class NavigationMapFrame extends StatefulWidget {
+  /// Creates the frame of [session]'s map, built by [mapBuilder].
   const NavigationMapFrame({
     super.key,
     required this.session,
     required this.mapBuilder,
     this.vehicleMarkers,
     this.focus = 0.7,
+    this.horizontalFocus = 0.5,
     this.puck = const CarPuck(),
     this.recenterButton,
     this.recenterTooltip = 'Recenter',
@@ -50,7 +52,10 @@ class NavigationMapFrame extends StatefulWidget {
     this.markerInterval = const Duration(milliseconds: 100),
   });
 
+  /// The session the frame ticks and shows. Owned by the app.
   final NavigationSession session;
+
+  /// Builds the map SDK's widget with the focus padding.
   final NavigationMapBuilder mapBuilder;
 
   /// Draws the vehicle while the camera does not follow it.
@@ -58,6 +63,13 @@ class NavigationMapFrame extends StatefulWidget {
 
   /// Where the followed vehicle sits, as a fraction of the height (0 = top).
   final double focus;
+
+  /// Where the followed vehicle sits across the screen, as a fraction of
+  /// the width (0 = left, 0.5 = the centre, the default), such as right of
+  /// centre when a panel covers the left of the map.
+  final double horizontalFocus;
+
+  /// The vehicle drawn at the focus point while the camera follows it.
   final Widget puck;
 
   /// Builds the button shown while not following; null for a default one.
@@ -192,7 +204,11 @@ class _NavigationMapFrameState extends State<NavigationMapFrame>
     return LayoutBuilder(
       builder: (context, box) {
         final size = box.biggest;
-        final padding = focusPadding(size, widget.focus);
+        final padding = focusPadding(
+          size,
+          widget.focus,
+          horizontal: widget.horizontalFocus,
+        );
         return Stack(
           children: [
             Positioned.fill(
@@ -203,7 +219,7 @@ class _NavigationMapFrameState extends State<NavigationMapFrame>
             ),
             if (_follow)
               Positioned(
-                left: size.width / 2,
+                left: size.width * widget.horizontalFocus.clamp(0.0, 1.0),
                 top: size.height * widget.focus.clamp(0.0, 1.0),
                 child: FractionalTranslation(
                   translation: const Offset(-0.5, -0.5),

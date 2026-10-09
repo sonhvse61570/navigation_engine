@@ -32,17 +32,25 @@ void main() {
           strings: const NavigationStrings.vietnamese(),
           dayColors: GoogleStyleColors.day,
           nightColors: GoogleStyleColors.night,
-          speedLimitSign: SpeedLimitSign.rectangular,
+          speedLimitSignStyle: SpeedLimitSignStyle.us,
           dayRouteColors: const RouteColors(),
           nightRouteColors: const RouteColors(),
           puck: const CarPuck(size: 40),
           vehicleImage: vehicleImage(),
           idleBuilder: (_) => const Text('IDLE'),
+          audioGuidance: AudioGuidance.alertsOnly,
+          onAudioGuidanceChanged: (AudioGuidance _) {},
+          onReportIncident: (IncidentType _) {},
+          searchAlongRoute: (AlongRouteQuery _) async =>
+              const <AlongRoutePlace>[],
+          onAddStop: (AlongRoutePlace _) {},
         ),
       ),
     );
     await tester.pump();
     expect(find.text('IDLE'), findsOneWidget);
+    const PlaceLabel label = PlaceLabel(name: 'Landmark 81');
+    expect(label.name, 'Landmark 81');
     expect(session.map, isA<GoogleMapsNavigationMap>());
     expect(tester.takeException(), isNull);
 

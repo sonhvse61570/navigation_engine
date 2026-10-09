@@ -30,12 +30,12 @@ to the session (`map:`), call `onMapCreated`, and build `polylines` /
 
 A complete navigation screen in the style of a phone navigation app: route
 options on the map with duration labels, turn-by-turn guidance with lane
-arrows, a speedometer, a trip footer, day and night themes, and an arrival
-panel.
+arrows, a speed cluster, a trip sheet, day and night themes, and an arrival
+sheet.
 
 The library re-exports what the screen takes from navigation_engine and
 navigation_engine_flutter (`NavigationSession`, `GeoPoint`,
-`NavigationFlowController`, `NavigationStrings`, `SpeedLimitSign`, …), so
+`NavigationFlowController`, `NavigationStrings`, `PlaceLabel`, …), so
 the adapter is the only navigation_engine package to depend on (an app that
 writes its own `FixSource` or `RouteProvider` adds navigation_engine):
 
@@ -70,7 +70,9 @@ session is left as it was, and a Re-center button brings the camera back to
 the vehicle). A back (the system back button or gesture) leaves
 the screen only while idle, navigating or arrived; otherwise it closes what
 is open: loading and errors cancel, a route preview closes, and the trip
-overview resumes the trip. Retry runs only from the error state. The step
+overview resumes the trip. While navigating it first closes the sound pill,
+the trip sheet's menu or the search along the route, one per back. Retry
+runs only from the error state. The step
 list follows the guidance and closes itself on arrival, stop or reroute.
 
 `puck`, `vehicleImage`, `focus` and `initialZoom` are passed to the map
@@ -78,32 +80,66 @@ view (see Vehicle marker below).
 
 ### Controls
 
-While navigating, each control can be turned off. The toggles mirror the
-Google Navigation SDK's UI settings that this package has data for; all are
-true by default and take effect on rebuild:
+While navigating, the screen follows the Google Maps app:
+
+- **Header:** a flat teal card with the next manoeuvre, its distance
+  and the road. On a straight-on step (a continue, new name or turn whose
+  modifier is straight or none) the road reads "toward" it and the
+  distance hides over 1 km; a depart reads "toward" too. Under the card
+  hang the lanes, in a band as wide as the card, or a "Then" tab with the
+  manoeuvre after. Tap it for the step list. Swipe it to preview the next
+  steps; the card turns grey, and Re-center (or 10 s) ends the preview.
+- **End column**, anchored above the trip sheet at the end side (in
+  landscape, at the bottom end of the map area): white, outlined buttons,
+  top to bottom the report button (it opens "Add a report" with eight
+  incident types), the compass (a red triangle over an "N", while
+  following), search along the route, the 3-state sound button (sound,
+  alerts only, muted) and route options. The route options open the trip
+  overview with the alternate routes; Resume on another one switches to
+  it. When the screen is short, the column drops search, then sound, then
+  the compass, then the report: route options stay. When a row would meet
+  the speed cluster or the Re-center pill (a wide pill in the bottom row),
+  the column lifts to end 16 above them.
+- **Speed cluster** at the bottom start (the limit sign and the
+  speedometer, red when speeding; a white circle when the speedometer is
+  alone). The Re-center pill takes its place once the map is moved.
+- **Trip sheet:** close and the time left with "distance • arrival". Drag
+  the sheet up for Share trip progress, Search along route, Directions,
+  Show traffic on map and Show satellite map (switches that flip in place)
+  and Settings. The sheet follows the finger and settles with a spring (a
+  tap on its handle or time animates it); the floating controls fade out
+  as it opens and come back as it closes.
+- **Alternate routes** show on the map with "2 min faster" / "+3 min"
+  bubbles. A tap switches to one.
+- **Landscape** (600 dp wide and up): the header and the sheet move to a
+  side panel, and the follow focus moves beside it.
+
+A control shows when its toggle is on and its callback exists:
 
 | Parameter | Mirrors the SDK's | Controls |
 | --- | --- | --- |
 | `headerEnabled` | `setNavigationHeaderEnabled` | the turn card |
-| `footerEnabled` | `setNavigationFooterEnabled` | the trip footer |
-| `tripProgressBarEnabled` | `setNavigationTripProgressBarEnabled` | the progress bar on the start edge |
-| `speedometerEnabled` | `setSpeedometerEnabled` | the current speed |
+| `footerEnabled` | `setNavigationFooterEnabled` | the trip sheet |
+| `tripProgressBarEnabled` (default false) | `setNavigationTripProgressBarEnabled` | the progress bar on the start edge (screens 552 dp high and up) |
+| `speedometerEnabled` | `setSpeedometerEnabled` | the speedometer |
 | `speedLimitIconEnabled` | `setSpeedLimitIconEnabled` | the speed limit sign |
-| `recenterButtonEnabled` | `setRecenterButtonEnabled` | the Re-center button |
-| `compassEnabled` | the map's compass setting | the compass button, shown only while the camera follows the vehicle |
-| `routeOverviewButtonEnabled` | `showRouteOverview` | the footer's overview button |
+| `recenterButtonEnabled` | `setRecenterButtonEnabled` | the Re-center pill |
+| `compassEnabled` | the map's compass setting | the compass, while following |
+| `routeOverviewButtonEnabled` | `showRouteOverview` | the end column's route-options button |
+| `reportButtonEnabled` + `onReportIncident` | `setReportIncidentButtonEnabled` | the report button |
+| `searchButtonEnabled` + `searchAlongRoute` | — | the search button |
+| `onAudioGuidanceChanged` (+ `audioGuidance`) | `setAudioGuidance` | the sound button |
+| `onShareTrip`, `onSettings` | — | their menu rows |
 
-`onMuteToggle` (with `muted`) adds a sound button and `onReportIncident` a
-report button, both below the header; the app owns the sound and the report.
-The compass needle follows the camera bearing, and a tap switches between
-heading up and north up (`session.camera.headingUp`); a switch the app makes
-shows at once. The bearing is the one the follow camera sends, not one read
-back from the map, so it is right while following, the only time the compass
-shows (a gesture that rotates the map stops following and hides it). Its
-accessibility label is its tooltip, the mode a tap switches to.
+The app owns the audio, the reports, the search back end
+(`searchAlongRoute`) and the stops (`onAddStop`); the package adds no stop
+itself, and goes back to guidance once `onAddStop` returns. Pass `PlaceLabel`s to `flow.preview(destination: …)` for the
+arrival card. Speeding is minor 10 km/h over and major 20 km/h over (5 / 10
+with an mph formatter); `speedingMinor` / `speedingMajor` change it.
 
-The Re-center button sits at the bottom start, above the speedometer, as in
-Google's navigation UI. It shows once the user has moved the map.
+The compass glyph turns with the camera bearing, and a tap switches between
+heading up and north up (`session.camera.headingUp`). Its accessibility
+label is its tooltip, the mode a tap switches to.
 
 ### Built on navigation_engine_flutter
 
@@ -111,25 +147,30 @@ Google's navigation UI. It shows once the user has moved the map.
 `navigation_engine_flutter`) dressed with the Google-style pieces. The
 shared vocabulary lives in that package and is re-exported here, with what
 the drop-in takes: `NavigationSession` and `GeoPoint` (navigation_engine),
-`NavigationFlowController`, `NavigationStrings`, `SpeedLimitSign`,
-`RouteColors`, `CarPuck`, `VehicleImageBuilder`, `RouteLabelColors`,
-`fitCameraToBounds`, `paintRouteLabel` and `laneDirectionIcon`. To build a
-screen in another look, use the scaffold directly.
+`NavigationFlowController`, `NavigationStrings`, `PlaceLabel`,
+`AlternateRoute`, `AlternateRoutesMap`, `RouteColors`, `CarPuck`,
+`VehicleImageBuilder`, `RouteLabelColors`, `fitCameraToBounds`,
+`paintRouteLabel` and `laneDirectionIcon`. To build a screen in another
+look, use the scaffold directly.
 
 The UI is built from public pieces you can use on their own:
 
 - `GoogleStyleNavigation`: the drop-in screen that binds the pieces to a flow.
 - `GoogleStyleManeuverHeader`: the next manoeuvre, its distance and street.
 - `GoogleStyleLaneGuidance`: the lane arrows before a manoeuvre.
-- `GoogleStyleTripFooter`: arrival time, remaining time and distance, and the end, steps and overview buttons.
-- `GoogleStyleSpeedometer`: the current speed and the speed limit sign (`SpeedLimitSign`).
+- `GoogleStyleTripSheet`: the trip sheet: close, the time left with distance and arrival, optional route options, and a menu when dragged up.
+- `GoogleStyleSpeedCluster`: the speed limit sign (`SpeedLimitSignStyle`) and the current speed, red when speeding.
 - `GoogleStyleRecenterButton`: brings the camera back to the vehicle.
 - `GoogleStyleTripProgressBar`: the share of the trip driven, a bar on the start edge.
-- `GoogleStyleCompassButton`: a needle that points to north, and a tap to switch heading up and north up.
-- `GoogleStyleRoundButton`: the round map button of the compass, sound and report.
+- `GoogleStyleCompassButton`: a red triangle over an "N" that points to north, and a tap to switch heading up and north up.
+- `GoogleStyleRoundButton`: the outlined round map button of the compass, search, sound and route options.
+- `GoogleStyleControlStack`: a column of map buttons, dropping from the bottom (or by `priorities`) when it does not fit.
+- `GoogleStyleSoundButton`: the 3-state sound button (`AudioGuidance`).
+- `GoogleStyleReportButton` / `GoogleStyleReportSheet`: the report pill, then circle, and the "Add a report" sheet (`IncidentType`).
+- `GoogleStyleSearchAlongRoute`: the search along the route, with its category chips and results.
 - `GoogleStyleOverviewPanel`: the route options, loading and error states.
 - `GoogleStyleStepList`: the list of steps of a route.
-- `GoogleStyleArrivalPanel`: the arrival summary.
+- `GoogleStyleArrivalSheet`: the destination and a Done button, on arrival.
 - `googleStyleNightMapStyle`: a dark map style, used at night.
 - `fitCameraToBounds` and `paintRouteLabel` (from `navigation_engine_flutter`, re-exported here): the camera fit and the route label bubble the overview uses.
 
@@ -139,8 +180,8 @@ Colours come from `GoogleStyleColors`; pass your own to `dayColors` and
 `nightColors` (`GoogleStyleColors.day` and `GoogleStyleColors.night` are the
 defaults, switched by `flow.isNight`). They reach:
 
-- the panels: the overview, the trip footer, the speedometer, the step list
-  and the arrival (`surface`, `onSurface`, `accent`, …);
+- the panels: the overview, the trip sheet, the speed cluster, the step
+  list and the arrival (`surface`, `onSurface`, `accent`, …);
 - the turn card (`guidance`, `guidanceSecondary`, `onGuidance`);
 - the route lines: the selected route option and the route ahead in
   `accent`, the other options and the part already driven in `alternative`.
@@ -183,13 +224,15 @@ class MphFormatter extends EnglishGuidanceFormatter {
 ```
 
 Large text scales are supported: texts ellipsise or shrink to fit, and the
-turn card's distance and the footer's time left stop growing at 1.6×.
+turn card's distance and the trip sheet's time left stop growing at 1.6×.
 
 ### Route option ids
 
 Besides the ids listed under Reserved ids below, the route options use polylines and markers whose ids
 all start with `navigation_engine_option_`. Do not reuse that prefix in your
-own `markers` or `polylines`.
+own `markers` or `polylines`. Alternate routes use
+`navigation_engine_alternate_*`, and search pins use
+`navigation_engine_search_*`.
 
 The route options are drawn through `RoutePreviewMap`, which
 `GoogleMapsNavigationMap` implements; `flow.preview` and `flow.select` use it.

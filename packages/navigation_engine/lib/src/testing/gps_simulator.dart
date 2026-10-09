@@ -83,12 +83,19 @@ class GpsSimulator {
     _offDriven = 0;
   }
 
-  /// Continues on [route] from the point of it nearest to the car (a reroute
-  /// starts where the car is, give or take the GPS error).
-  void setRoute(NavRoute route) {
+  /// Continues on [route] from the point of it nearest to the car.
+  ///
+  /// By default only the first 150 m of [route] are searched: a reroute
+  /// starts where the car is, give or take the GPS error. With
+  /// [keepPosition] the whole of [route] is searched, for a switch onto a
+  /// route that shares the road being driven (an alternate picked mid trip),
+  /// so the car keeps its position.
+  void setRoute(NavRoute route, {bool keepPosition = false}) {
     final here = position;
     _route = route;
-    distance = route.snap(here, near: 0, behind: 0, ahead: 150).distance;
+    distance = keepPosition
+        ? route.snap(here).distance
+        : route.snap(here, near: 0, behind: 0, ahead: 150).distance;
     _offPos = null;
     _doneStops.clear();
   }

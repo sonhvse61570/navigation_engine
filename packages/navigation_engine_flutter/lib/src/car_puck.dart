@@ -8,11 +8,16 @@ import 'package:flutter/widgets.dart';
 /// map turns and the arrow stays up (the direction of travel); while it is
 /// north up the arrow turns to the vehicle's bearing.
 class CarPuck extends StatelessWidget {
+  /// Creates an arrow [size] logical pixels square, filled with [color].
   const CarPuck({super.key, this.size = 44, this.color = defaultColor});
 
+  /// The arrow's colour when none is given: Google blue.
   static const defaultColor = Color(0xFF1A73E8);
 
+  /// The width and height of the arrow, in logical pixels.
   final double size;
+
+  /// The arrow's fill colour.
   final Color color;
 
   @override

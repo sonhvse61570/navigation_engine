@@ -91,6 +91,36 @@ void main() {
     expect(distanceBetween(sim.position, here), lessThan(1));
   });
 
+  test('setRoute with keepPosition places the car anywhere on the new '
+      'route', () {
+    // A switch onto a route that shares the road (an alternate picked mid
+    // trip): the car stays where it is, 1500 m along, instead of being
+    // looked for within the new route's first 150 m.
+    final sim = GpsSimulator(sampleRoute)..teleport(1500);
+    final here = sim.position;
+    final copy = NavRoute.fromPoints(sampleRoute.points);
+    sim.setRoute(copy, keepPosition: true);
+    expect(sim.route, same(copy));
+    expect(sim.distance, closeTo(1500, 1));
+    expect(distanceBetween(sim.position, here), lessThan(1));
+  });
+
+  test('setRoute with keepPosition onto a diverging alternate takes the '
+      'nearest point of the whole route', () {
+    final alt = sampleRouteAlternatives.single;
+    final sim = GpsSimulator(sampleRoute)..teleport(1500);
+    final here = sim.position;
+    final nearest = alt.snap(here);
+    sim.setRoute(alt, keepPosition: true);
+    expect(sim.distance, closeTo(nearest.distance, 1e-6));
+    expect(
+      distanceBetween(sim.position, here),
+      closeTo(nearest.offset, 1),
+      reason: 'no jump beyond the gap between the two roads',
+    );
+    expect(sim.distance, greaterThan(150));
+  });
+
   test('teleport puts the car there, stopped, and skips passed red lights', () {
     final sim = GpsSimulator(sampleRoute, stops: sampleRouteRedLights)
       ..teleport(420);

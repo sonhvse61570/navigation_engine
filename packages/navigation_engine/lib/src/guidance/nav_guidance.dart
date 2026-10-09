@@ -14,7 +14,8 @@ class NavGuidance {
     this.route, {
     this.thresholds = const [500, 200, 0],
     this.nowDistance = 30,
-    this.thenWithin = 100,
+    this.thenWithin = 300,
+    this.spokenThenWithin = 100,
     this.arriveWithin = 15,
     this.minGap = 80,
   });
@@ -26,8 +27,27 @@ class NavGuidance {
   final List<double> thresholds;
   final double nowDistance;
 
-  /// Two manoeuvres closer than this are announced together.
+  /// Rule (b) of the "then" step: a manoeuvre at most this many metres
+  /// after the current one is shown as [GuidanceState.thenStep]. Default
+  /// 300 m. Speech has its own, shorter reach: [spokenThenWithin].
+  ///
+  /// Straight-on steps (a depart, new name, continue or turn whose
+  /// modifier is straight or none) are skipped: the "then" step is the next
+  /// real manoeuvre within this distance, never "then continue straight".
+  /// A roundabout, ramp, fork, merge or end of the road counts as a real
+  /// manoeuvre even going straight.
+  ///
+  /// Rule (a) is not bound by it: while the current step goes straight on,
+  /// the next real manoeuvre is shown as the "then" step however far it is
+  /// (the arrival when no manoeuvre is left).
+  /// Rule (a) is only shown, never spoken.
   final double thenWithin;
+
+  /// A manoeuvre at most this many metres after the announced one is
+  /// spoken along with it ("…, then turn left") as
+  /// [GuidanceAnnouncement.thenStep]. Default 100 m, so the voice does not
+  /// get chatty; the display reaches further ([thenWithin] and rule (a)).
+  final double spokenThenWithin;
 
   /// Metres from the end that count as arrived.
   final double arriveWithin;
@@ -98,9 +118,13 @@ class NavGuidance {
     final step = steps[_stepIndex];
     final toStep = step.distance - distance;
     final next = _stepIndex + 1 < steps.length ? steps[_stepIndex + 1] : null;
-    final then = next != null && next.distance - step.distance <= thenWithin
-        ? next
-        : null;
+    final gap = next == null ? double.infinity : next.distance - step.distance;
+    // Speech: only a close manoeuvre.
+    final spokenThen = gap <= spokenThenWithin ? next : null;
+    // Display: rule (a), else rule (b); both skip straight-on steps.
+    final then = _straightOn(step)
+        ? _nextManoeuvre(_stepIndex)
+        : _nextManoeuvre(_stepIndex, within: step.distance + thenWithin);
 
     // Only the most urgent due threshold is spoken: arriving at a step that
     // is already 150 m away must not read the 500 m prompt first. The ones
@@ -126,7 +150,7 @@ class NavGuidance {
           kind: due == 0 ? AnnouncementKind.now : AnnouncementKind.approaching,
           threshold: due,
           distance: toStep,
-          thenStep: then,
+          thenStep: spokenThen,
         ),
       );
     }
@@ -143,7 +167,32 @@ class NavGuidance {
       announcements: out,
     );
   }
+
+  /// The first step after [index] that does not go straight on: the next
+  /// real manoeuvre, else the arrival; null when neither is left, or when
+  /// it lies beyond [within] metres along the route.
+  RouteStep? _nextManoeuvre(int index, {double within = double.infinity}) {
+    final steps = route.steps;
+    for (var i = index + 1; i < steps.length; i++) {
+      if (steps[i].distance > within) return null;
+      if (!_straightOn(steps[i])) return steps[i];
+    }
+    return null;
+  }
 }
+
+/// Whether [step] goes straight on, for the "then" rules of
+/// [NavGuidance.thenWithin]: a depart, new name, continue or turn whose
+/// modifier is straight or none (the Google-style header's straight-on
+/// rule). A roundabout, its exit, a ramp, a fork, a merge or the end of the
+/// road is a real manoeuvre even going straight, and never the arrival.
+bool _straightOn(RouteStep step) =>
+    (step.type == ManeuverType.depart ||
+        step.type == ManeuverType.newName ||
+        step.type == ManeuverType.continueOn ||
+        step.type == ManeuverType.turn) &&
+    (step.modifier == ManeuverModifier.straight ||
+        step.modifier == ManeuverModifier.none);
 
 /// Steps shown on a banner but never spoken: the road only changes name,
 /// the departure, or the instruction is to keep going straight.

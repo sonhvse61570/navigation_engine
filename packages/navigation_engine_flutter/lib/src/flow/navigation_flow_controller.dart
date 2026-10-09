@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 
+import 'alternate_route.dart';
+import 'alternate_routes_map.dart';
 import 'navigation_flow_state.dart';
+import 'place_label.dart';
 import 'route_preview_map.dart';
 import 'trip_progress.dart';
 
@@ -23,16 +26,20 @@ import 'trip_progress.dart';
 /// flow.start(); // FlowNavigating, then FlowArrived
 /// ```
 class NavigationFlowController {
+  /// Creates a flow on [session], getting routes from [routeProvider].
   NavigationFlowController({
     required this.session,
     this.routeProvider,
     NightMode nightMode = NightMode.auto,
     DateTime Function() clock = DateTime.now,
     this.progressInterval = const Duration(seconds: 1),
+    this.stepPreviewTimeout = const Duration(seconds: 10),
+    this.fetchAlternatesOnReroute = true,
   }) : _nightMode = nightMode,
        _clock = clock {
     _frameSub = session.frames.listen(_onFrame);
     _eventSub = session.events.listen(_onEvent);
+    _followSub = session.followChanges.listen(_onFollowChange);
     _nightTimer = Timer.periodic(
       const Duration(minutes: 1),
       (_) => _updateNight(),
@@ -50,7 +57,44 @@ class NavigationFlowController {
   /// changes.
   final Duration progressInterval;
 
+  /// How long a step preview ([previewStep]) lasts without another
+  /// [previewStep] call before it ends by itself.
+  final Duration stepPreviewTimeout;
+
+  /// Whether a reroute asks [routeProvider] (or the session's provider)
+  /// for alternates to the new route. Each reroute then costs one more
+  /// request, a `routes(maxAlternatives: 2)` call, besides the session's own
+  /// reroute request; set it to false to save that request with a paid
+  /// router, or with a UI that shows no alternates while navigating. The
+  /// alternates of the trip's start are kept either way, until a reroute.
+  final bool fetchAlternatesOnReroute;
+
+  /// The camera zoom of a step preview.
+  static const double stepPreviewZoom = 17;
+
+  /// The camera tilt of a step preview, in degrees.
+  static const double stepPreviewTilt = 45;
+
   final DateTime Function() _clock;
+
+  /// How far (metres) an alternate must be from the current route to count
+  /// as having left it.
+  static const double alternateDivergenceThreshold = 30;
+
+  /// How far (metres) past an alternate's divergence point the vehicle goes
+  /// before the alternate is dropped.
+  static const double alternatePassedMargin = 20;
+
+  final _alternates = ValueNotifier<List<AlternateRoute>>(const []);
+
+  /// The trip's alternates, with where each leaves the current route.
+  List<_Alternate> _alts = const [];
+
+  /// Bumped by every route change; an alternates request started under an
+  /// older value is dropped.
+  int _altGeneration = 0;
+  bool _altRequestPending = false;
+  DateTime? _lastAltRequestAt;
 
   EdgeInsets _overviewPadding = const EdgeInsets.all(48);
 
@@ -74,6 +118,9 @@ class NavigationFlowController {
 
   late final StreamSubscription<MotionFrame> _frameSub;
   late final StreamSubscription<SessionEvent> _eventSub;
+  late final StreamSubscription<bool> _followSub;
+  final _previewedStep = ValueNotifier<int?>(null);
+  Timer? _previewTimer;
   late final Timer _nightTimer;
   NightMode _nightMode;
   int _generation = 0;
@@ -91,7 +138,13 @@ class NavigationFlowController {
   MotionFrame? _staleFrame;
 
   /// The last [preview] request, as it was passed: what [retry] repeats.
-  ({GeoPoint to, GeoPoint? from, double? heading, int maxAlternatives})?
+  ({
+    GeoPoint to,
+    GeoPoint? from,
+    double? heading,
+    int maxAlternatives,
+    PlaceLabel? destination,
+  })?
   _lastRequest;
 
   DateTime? _lastProgressAt;
@@ -99,6 +152,8 @@ class NavigationFlowController {
   int? _lastStepIndex;
   bool _disposed = false;
 
+  /// Where the trip is: idle, loading, overview, navigating, arrived or
+  /// error. Listen to it to show the matching UI.
   ValueListenable<NavigationFlowState> get state => _state;
 
   /// Remaining distance, time and ETA; null unless navigating.
@@ -115,10 +170,20 @@ class NavigationFlowController {
   /// True while the session is fetching a new route after going off route.
   ValueListenable<bool> get rerouting => _rerouting;
 
+  /// The index, in the navigating route's steps, of the step previewed with
+  /// [previewStep]; null when no step is previewed.
+  ValueListenable<int?> get previewedStep => _previewedStep;
+
+  /// The routes the driver could switch to while navigating, fastest or
+  /// not, each with its time difference; empty outside [FlowNavigating].
+  ValueListenable<List<AlternateRoute>> get alternates => _alternates;
+
   /// Whether the overview shown is the running trip's own (entered through
   /// [backToOverview]); a UI shows 'Resume' instead of 'Start' then.
   bool get isTripOverview => _tripOverview;
 
+  /// How [isNight] is decided: from the sun where the vehicle is (the
+  /// default), or always day or night. Setting it updates [isNight] at once.
   NightMode get nightMode => _nightMode;
   set nightMode(NightMode value) {
     _nightMode = value;
@@ -133,12 +198,14 @@ class NavigationFlowController {
   /// call to any flow method supersedes a pending request; [cancel] drops
   /// it. Throws [StateError] while navigating (call [backToOverview] first)
   /// and [ArgumentError] when [maxAlternatives] is negative, before any
-  /// state change.
+  /// state change. [destination] is carried on the overview, then on the
+  /// trip's navigating and arrived states.
   Future<void> preview({
     required GeoPoint to,
     GeoPoint? from,
     double? heading,
     int maxAlternatives = 2,
+    PlaceLabel? destination,
   }) async {
     _checkNotDisposed();
     if (maxAlternatives < 0) {
@@ -154,7 +221,10 @@ class NavigationFlowController {
       from: from,
       heading: heading,
       maxAlternatives: maxAlternatives,
+      destination: destination,
     );
+    _alts = const [];
+    _altGeneration++;
     final generation = ++_generation;
     final previous = _settled;
     final start = from ?? session.lastFix?.position;
@@ -181,7 +251,13 @@ class NavigationFlowController {
         return;
       }
       _tripOverview = false;
-      _set(FlowOverview(routes.take(maxAlternatives + 1).toList(), 0));
+      _set(
+        FlowOverview(
+          routes.take(maxAlternatives + 1).toList(),
+          0,
+          destination: destination,
+        ),
+      );
     } catch (e) {
       if (_disposed || generation != _generation) return;
       _set(FlowError(e, previous, to));
@@ -205,13 +281,19 @@ class NavigationFlowController {
       from: request.from,
       heading: request.heading,
       maxAlternatives: request.maxAlternatives,
+      destination: request.destination,
     );
   }
 
   /// Shows [routes] (best first) without a provider. Throws
   /// [ArgumentError] when empty, [RangeError] for a bad [selected], and,
-  /// like [preview], [StateError] while navigating.
-  void previewRoutes(List<NavRoute> routes, {int selected = 0}) {
+  /// like [preview], [StateError] while navigating. [destination] is carried
+  /// as in [preview].
+  void previewRoutes(
+    List<NavRoute> routes, {
+    int selected = 0,
+    PlaceLabel? destination,
+  }) {
     _checkNotDisposed();
     if (_state.value is FlowNavigating) {
       throw StateError(
@@ -219,9 +301,11 @@ class NavigationFlowController {
       );
     }
     if (routes.isEmpty) throw ArgumentError.value(routes, 'routes', 'empty');
-    final overview = FlowOverview(routes, selected);
+    final overview = FlowOverview(routes, selected, destination: destination);
     _generation++;
     _tripOverview = false;
+    _alts = const [];
+    _altGeneration++;
     _set(overview);
   }
 
@@ -234,7 +318,7 @@ class NavigationFlowController {
     if (s is! FlowOverview) throw StateError('select() needs FlowOverview');
     RangeError.checkValidIndex(index, s.routes, 'index');
     if (index == s.selected) return;
-    _set(FlowOverview(s.routes, index));
+    _set(FlowOverview(s.routes, index, destination: s.destination));
   }
 
   /// Starts guidance along the selected route: [FlowNavigating]. The
@@ -250,10 +334,24 @@ class NavigationFlowController {
     final s = _state.value;
     if (s is! FlowOverview) throw StateError('start() needs FlowOverview');
     _generation++;
+    final fromTripOverview = _tripOverview;
+    final route = s.route;
+    // The route the trip ran before this overview, when it resumes onto
+    // another one.
+    final previous = fromTripOverview && !identical(session.route, route)
+        ? session.route
+        : null;
+    final drivenBefore = fromTripOverview
+        ? (_distanceOn(session.route ?? route) ?? 0.0)
+        : 0.0;
+    // Resuming another route of the trip overview: the vehicle's place on
+    // it, when it is one of the trip's alternates.
+    final driven = fromTripOverview
+        ? _onAlternate(route, drivenBefore)
+        : drivenBefore;
     _tripOverview = false;
     _lastSpeedAt = null;
     _lastProgressAt = null;
-    final route = s.route;
     final resume = session.isRunning && identical(session.route, route);
     if (!resume) {
       if (session.isRunning) {
@@ -265,11 +363,27 @@ class NavigationFlowController {
       _rerouting.value = false;
     }
     session.follow = true;
+    _altGeneration++;
+    _alts = previous == null
+        ? _measure(route, s.routes, driven)
+        : [
+            // As in selectAlternate: the route left is measured from the
+            // vehicle on, as its start may lie behind the chosen route's.
+            ..._measure(route, [previous], driven, from: drivenBefore),
+            ..._measure(route, [
+              for (final r in s.routes)
+                if (!identical(r, previous)) r,
+            ], driven),
+          ];
     if (resume && session.guidanceState?.arrived == true) {
-      _set(FlowArrived(route));
+      _set(FlowArrived(route, destination: s.destination));
     } else {
-      _set(FlowNavigating(route));
+      _set(
+        FlowNavigating(route, destination: s.destination),
+        drivenOnSwitch: driven,
+      );
     }
+    if (_state.value is FlowNavigating) _refreshAlternates(route, driven);
   }
 
   /// Ends the trip from any state: stops the session, removes the route
@@ -285,6 +399,8 @@ class NavigationFlowController {
     session.setRoute(null);
     _rerouting.value = false;
     _speed.value = null;
+    _alts = const [];
+    _altGeneration++;
     _set(const FlowIdle());
   }
 
@@ -294,13 +410,20 @@ class NavigationFlowController {
   /// [StateError] in other states.
   void backToOverview() {
     _checkNotDisposed();
-    final route = switch (_state.value) {
-      FlowNavigating(:final route) || FlowArrived(:final route) => route,
+    final (route, destination) = switch (_state.value) {
+      FlowNavigating(:final route, :final destination) ||
+      FlowArrived(:final route, :final destination) => (route, destination),
       _ => throw StateError('backToOverview() needs navigating or arrived'),
     };
     _generation++;
     _tripOverview = true;
-    _set(FlowOverview([route], 0));
+    _set(
+      FlowOverview(
+        [route, for (final a in _alts) a.route],
+        0,
+        destination: destination,
+      ),
+    );
   }
 
   /// Goes back to the state before the request: the "Cancel" / "OK" of a
@@ -341,6 +464,265 @@ class NavigationFlowController {
     if (s is FlowOverview) _showOverview(s);
   }
 
+  /// Switches the trip to alternate [index] at once
+  /// ([NavigationSession.setRoute], no route request). The route left
+  /// becomes an alternate while the vehicle has not passed where the two
+  /// part. Throws [StateError] outside [FlowNavigating] and [RangeError]
+  /// for a bad index.
+  void selectAlternate(int index) {
+    _checkNotDisposed();
+    final s = _state.value;
+    if (s is! FlowNavigating) {
+      throw StateError('selectAlternate() needs FlowNavigating');
+    }
+    RangeError.checkValidIndex(index, _alternates.value, 'index');
+    final chosen = _alternates.value[index].route;
+    final old = s.route;
+    final drivenOld = _distanceOn(old) ?? 0;
+    // The vehicle's place on the chosen route: the same as on the old one
+    // for routes from the same origin, not for a refetched alternate, which
+    // starts where the vehicle was when it was fetched.
+    final driven = _onAlternate(chosen, drivenOld);
+    _generation++;
+    _altGeneration++;
+    session.setRoute(chosen);
+    _staleFrame = session.frame;
+    _rerouting.value = false;
+    _alts = [
+      ..._measure(chosen, [
+        for (final a in _alts)
+          if (!identical(a.route, chosen)) a.route,
+      ], driven),
+      // The old route is measured from the vehicle on: its start may lie
+      // behind the chosen route's.
+      ..._measure(chosen, [old], driven, from: drivenOld),
+    ];
+    // Before the state changes: the list must not still hold the chosen
+    // route when listeners see the new state.
+    _refreshAlternates(chosen, driven);
+    _set(
+      FlowNavigating(chosen, destination: s.destination),
+      drivenOnSwitch: driven,
+    );
+  }
+
+  /// Draws the alternates again on the session's current map; does nothing
+  /// outside [FlowNavigating]. Call it after a map view attaches to the
+  /// session (or is recreated) while navigating.
+  void refreshAlternates() {
+    _checkNotDisposed();
+    if (_state.value is FlowNavigating) _drawAlternates();
+  }
+
+  /// The routes of [others] that leave [current] and are still ahead of a
+  /// vehicle [driven] metres along it; each is sampled from [from] metres
+  /// along itself.
+  List<_Alternate> _measure(
+    NavRoute current,
+    Iterable<NavRoute> others,
+    double driven, {
+    double from = 0,
+  }) => [
+    for (final r in others)
+      if (!identical(r, current))
+        if (routeDivergence(
+              current,
+              r,
+              threshold: alternateDivergenceThreshold,
+              from: from,
+            )
+            case final d?)
+          if (driven <= d.current + alternatePassedMargin)
+            _Alternate(r, d.current, d.alternate, d.shift),
+  ];
+
+  /// Where a vehicle [driven] metres along the current route is on
+  /// alternate [route]: by the mapping [routeDivergence] measured, so a
+  /// refetched alternate, which starts where the vehicle was, is measured
+  /// from its own start. [driven] itself when [route] is not one of the
+  /// trip's alternates.
+  double _onAlternate(NavRoute route, double driven) {
+    for (final a in _alts) {
+      if (identical(a.route, route)) {
+        return a.positionAt(driven).clamp(0.0, route.length);
+      }
+    }
+    return driven;
+  }
+
+  /// Drops the passed alternates and publishes the others with their time
+  /// differences, for a vehicle [driven] metres along [route]; keeps the
+  /// published list when [driven] is null (the frame still measures the
+  /// previous route).
+  void _refreshAlternates(NavRoute route, double? driven) {
+    if (_alts.isEmpty) {
+      _setAlternates(const []);
+      return;
+    }
+    if (driven == null) return;
+    _alts = [
+      for (final a in _alts)
+        if (driven <= a.onCurrent + alternatePassedMargin) a,
+    ];
+    final remaining = route.remainingDuration(driven);
+    _setAlternates([
+      for (final a in _alts)
+        AlternateRoute(
+          route: a.route,
+          divergence: a.onAlternate,
+          timeDelta: Duration(
+            seconds:
+                (a.route.remainingDuration(
+                          a.positionAt(driven).clamp(0.0, a.route.length),
+                        ) -
+                        remaining)
+                    .round(),
+          ),
+        ),
+    ]);
+  }
+
+  void _setAlternates(List<AlternateRoute> next) {
+    if (_sameAlternates(_alternates.value, next)) return;
+    _alternates.value = List.unmodifiable(next);
+    _drawAlternates();
+  }
+
+  static bool _sameAlternates(List<AlternateRoute> a, List<AlternateRoute> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!identical(a[i].route, b[i].route) ||
+          a[i].minutesDelta != b[i].minutesDelta) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _drawAlternates() {
+    final map = switch (session.map) {
+      final AlternateRoutesMap m => m,
+      _ => null,
+    };
+    if (map == null) return;
+    final list = _alternates.value;
+    if (list.isEmpty) {
+      _onMap('clearing alternate routes', map.clearAlternates);
+    } else {
+      _onMap(
+        'showing alternate routes',
+        () => map.showAlternates(list, onTap: _onAlternateTap),
+      );
+    }
+  }
+
+  // A tap on the map: guarded, as the drawing may be stale.
+  void _onAlternateTap(int index) {
+    if (_disposed || _state.value is! FlowNavigating) return;
+    if (index < 0 || index >= _alternates.value.length) return;
+    selectAlternate(index);
+  }
+
+  /// Asks for alternates after a reroute onto [route]: one request at a
+  /// time, at most one per [NavigationSession.rerouteInterval]. The answer is
+  /// dropped when the trip's route changed meanwhile; a failure leaves no
+  /// alternates.
+  void _requestAlternates(NavRoute route) {
+    final provider = routeProvider ?? session.routeProvider;
+    if (provider == null || _altRequestPending) return;
+    final now = _clock();
+    final last = _lastAltRequestAt;
+    if (last != null && now.difference(last) < session.rerouteInterval) return;
+    _lastAltRequestAt = now;
+    _altRequestPending = true;
+    final generation = _altGeneration;
+    final from = session.lastFix?.position ?? route.points.first;
+    unawaited(() async {
+      try {
+        final List<NavRoute> routes;
+        try {
+          routes = await provider.routes(
+            from,
+            route.points.last,
+            heading: session.frame?.bearing,
+            maxAlternatives: 2,
+          );
+        } catch (_) {
+          // No alternates this time: the trip goes on without them.
+          return;
+        }
+        if (_disposed || generation != _altGeneration) return;
+        final s = _state.value;
+        if (s is! FlowNavigating || !identical(s.route, route)) return;
+        final driven = _distanceOn(route) ?? 0;
+        _alts = _measure(route, routes, driven);
+        _refreshAlternates(route, driven);
+      } finally {
+        _altRequestPending = false;
+      }
+    }());
+  }
+
+  /// Shows step [index] of the route being driven: follow is turned off and
+  /// the camera moves once to the manoeuvre (zoom [stepPreviewZoom], tilt
+  /// [stepPreviewTilt], the route's bearing there). The preview ends after
+  /// [stepPreviewTimeout] without another call, on [endStepPreview], when
+  /// the camera follows again (a Re-center), and when the route or the
+  /// state changes (a reroute, an alternate, arrival, stop, the overview).
+  /// Throws [StateError] outside [FlowNavigating] and [RangeError] for an
+  /// index outside the route's steps.
+  void previewStep(int index) {
+    _checkNotDisposed();
+    final s = _state.value;
+    if (s is! FlowNavigating) {
+      throw StateError('previewStep() needs FlowNavigating');
+    }
+    RangeError.checkValidIndex(index, s.route.steps, 'index');
+    final step = s.route.steps[index];
+    _previewTimer?.cancel();
+    _previewTimer = Timer(stepPreviewTimeout, endStepPreview);
+    _previewedStep.value = index;
+    session.follow = false;
+    final map = session.map;
+    if (map == null) return;
+    final target = CameraTarget(
+      position: s.route.pointAt(step.distance),
+      bearing: s.route.bearingAt(step.distance),
+      zoom: stepPreviewZoom,
+      tilt: stepPreviewTilt,
+    );
+    unawaited(
+      Future.sync(() => map.moveCamera(target)).catchError(
+        (Object e, StackTrace st) =>
+            _reportMapError(e, st, 'moving the camera to a previewed step'),
+      ),
+    );
+  }
+
+  /// Ends a step preview and, unless [refollow] is false, makes the camera
+  /// follow the vehicle again; does nothing when no step is previewed. Pass
+  /// `refollow: false` when the user touches the map during a preview: the
+  /// preview and its timer end, and the camera stays where the user moves
+  /// it.
+  void endStepPreview({bool refollow = true}) {
+    if (_disposed) return;
+    _endPreview(refollow: refollow);
+  }
+
+  void _endPreview({required bool refollow}) {
+    if (_previewedStep.value == null) return;
+    _previewTimer?.cancel();
+    _previewTimer = null;
+    _previewedStep.value = null;
+    if (refollow) session.follow = true;
+  }
+
+  // Follow turned back on elsewhere (a Re-center) ends the preview. The
+  // stream is async: a `true` queued before the preview began is stale.
+  void _onFollowChange(bool follow) {
+    if (follow && session.follow) _endPreview(refollow: false);
+  }
+
   /// Stops listening. Leaves the session and the map alone.
   void dispose() {
     if (_disposed) return;
@@ -349,11 +731,15 @@ class NavigationFlowController {
     unawaited(_frameSub.cancel());
     unawaited(_eventSub.cancel());
     _nightTimer.cancel();
+    _previewTimer?.cancel();
+    unawaited(_followSub.cancel());
+    _previewedStep.dispose();
     _state.dispose();
     _tripProgress.dispose();
     _speed.dispose();
     _isNight.dispose();
     _rerouting.dispose();
+    _alternates.dispose();
   }
 
   void _checkNotDisposed() {
@@ -366,8 +752,19 @@ class NavigationFlowController {
     _ => null,
   };
 
-  void _set(NavigationFlowState next) {
+  /// Moves to [next]. [drivenOnSwitch] is the distance driven when the trip
+  /// switches to another route mid-trip: the frame still measures the
+  /// previous route then, so the first progress is taken from it.
+  void _set(NavigationFlowState next, {double? drivenOnSwitch}) {
     final prev = _state.value;
+    if (_previewedStep.value != null) {
+      final sameRoute =
+          next is FlowNavigating &&
+          prev is FlowNavigating &&
+          identical(next.route, prev.route);
+      // An overview turns follow off itself.
+      if (!sameRoute) _endPreview(refollow: next is! FlowOverview);
+    }
     if (prev is FlowOverview && next is! FlowOverview) {
       final preview = _previewMap;
       if (preview != null) {
@@ -380,9 +777,11 @@ class NavigationFlowController {
     }
     if (next is FlowNavigating) {
       if (prev is! FlowNavigating) _lastStepIndex = null;
-      _publishProgress(next.route, force: true);
+      _publishProgress(next.route, force: true, drivenFallback: drivenOnSwitch);
     } else {
+      if (next is FlowArrived || next is FlowIdle) _alts = const [];
       _tripProgress.value = null;
+      _setAlternates(const []);
     }
     // Before notifying: a listener may move the flow on.
     if (next is! FlowLoading && next is! FlowError) _settled = next;
@@ -451,7 +850,7 @@ class NavigationFlowController {
         if (s is FlowNavigating &&
             session.guidanceState?.arrived == true &&
             identical(session.route, s.route)) {
-          _set(FlowArrived(s.route));
+          _set(FlowArrived(s.route, destination: s.destination));
         }
       case OffRoute() || FixSourceError():
         break;
@@ -459,14 +858,18 @@ class NavigationFlowController {
   }
 
   void _onRerouted(NavRoute route) {
+    _alts = const [];
+    _altGeneration++;
     _staleFrame = session.frame;
     final s = _state.value;
+    final destination = _destinationOf(s) ?? _destinationOf(_settled);
     if (s is FlowNavigating) {
-      _set(FlowNavigating(route));
+      _set(FlowNavigating(route, destination: destination));
+      if (fetchAlternatesOnReroute) _requestAlternates(route);
     } else if (_tripOverview) {
       // The trip's own overview follows the trip, also the one a pending
       // request or an error returns to, so [start] resumes the new route.
-      final overview = FlowOverview([route], 0);
+      final overview = FlowOverview([route], 0, destination: destination);
       if (s is FlowOverview) {
         _set(overview);
       } else if (s is FlowLoading || s is FlowError) {
@@ -474,6 +877,16 @@ class NavigationFlowController {
       }
     }
   }
+
+  /// The destination label [s] carries, or the one of the state an error
+  /// returns to.
+  static PlaceLabel? _destinationOf(NavigationFlowState s) => switch (s) {
+    FlowOverview(:final destination) ||
+    FlowNavigating(:final destination) ||
+    FlowArrived(:final destination) => destination,
+    FlowError(:final previous) => _destinationOf(previous),
+    FlowIdle() || FlowLoading() => null,
+  };
 
   /// Metres driven along [route], when the session's frame measures it:
   /// null when the session runs another route, or right after a route
@@ -502,7 +915,11 @@ class NavigationFlowController {
     }
   }
 
-  void _publishProgress(NavRoute route, {bool force = false}) {
+  void _publishProgress(
+    NavRoute route, {
+    bool force = false,
+    double? drivenFallback,
+  }) {
     final now = _clock();
     final step = session.guidanceState?.stepIndex;
     final last = _lastProgressAt;
@@ -512,7 +929,8 @@ class NavigationFlowController {
         now.difference(last) >= progressInterval ||
         step != _lastStepIndex;
     if (!due) return;
-    final driven = (_distanceOn(route) ?? 0).clamp(0.0, route.length);
+    final measured = _distanceOn(route);
+    final driven = (measured ?? drivenFallback ?? 0).clamp(0.0, route.length);
     final remaining = Duration(
       microseconds: (route.remainingDuration(driven) * 1e6).round(),
     );
@@ -524,6 +942,7 @@ class NavigationFlowController {
       eta: now.add(remaining),
       fraction: route.length == 0 ? 1 : driven / route.length,
     );
+    _refreshAlternates(route, measured?.clamp(0.0, route.length));
   }
 
   void _updateNight() {
@@ -549,4 +968,22 @@ class NavigationFlowController {
     FlowError(:final previous) => _routeOf(previous),
     FlowIdle() || FlowLoading() => null,
   };
+}
+
+/// An alternate and where it leaves the current route: [onCurrent] metres
+/// along the current route, [onAlternate] metres along [route]. Before
+/// that, a place `x` metres along the current route is `x + shift` metres
+/// along [route].
+final class _Alternate {
+  const _Alternate(this.route, this.onCurrent, this.onAlternate, this.shift);
+  final NavRoute route;
+  final double onCurrent;
+  final double onAlternate;
+  final double shift;
+
+  /// Where a vehicle [driven] metres along the current route is along
+  /// [route]: on the shared road before the divergence, then as far past
+  /// [onAlternate] as it is past [onCurrent].
+  double positionAt(double driven) =>
+      driven <= onCurrent ? driven + shift : onAlternate - (onCurrent - driven);
 }

@@ -6,11 +6,14 @@
 library;
 
 export 'src/car_puck.dart';
+export 'src/flow/alternate_route.dart' show AlternateRoute;
+export 'src/flow/alternate_routes_map.dart';
 export 'src/flow/navigation_flow_actions.dart';
 export 'src/flow/navigation_flow_controller.dart';
 export 'src/flow/navigation_flow_scaffold.dart';
 export 'src/flow/navigation_flow_state.dart';
 export 'src/flow/navigation_map_config.dart';
+export 'src/flow/place_label.dart';
 export 'src/flow/route_preview_map.dart';
 export 'src/flow/trip_progress.dart';
 export 'src/focus_padding.dart';

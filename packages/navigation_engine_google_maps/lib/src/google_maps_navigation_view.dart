@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:navigation_engine/navigation_engine.dart';
@@ -23,6 +25,7 @@ import 'ui/google_style_colors.dart';
 /// call [NavigationSession.tick] yourself, for example from a `Timer` or your
 /// own `Ticker`.
 class GoogleMapsNavigationView extends StatefulWidget {
+  /// Creates a Google map that shows and follows [session].
   const GoogleMapsNavigationView({
     super.key,
     required this.session,
@@ -41,10 +44,20 @@ class GoogleMapsNavigationView extends StatefulWidget {
     this.onRouteOptionTap,
     this.alternativeRouteColor,
     this.labelColors,
+    this.trafficEnabled = false,
+    this.mapType = MapType.normal,
+    this.alternateLabel,
+    this.horizontalFocus = 0.5,
+    this.bottomOverlay = 0,
   });
 
+  /// The session shown on the map. Owned by the app.
   final NavigationSession session;
+
+  /// Where the map is centred before the first camera move.
   final GeoPoint initialCenter;
+
+  /// The zoom of the map before the first camera move.
   final double initialZoom;
 
   /// The route line colours and widths; changes redraw the route.
@@ -62,14 +75,22 @@ class GoogleMapsNavigationView extends StatefulWidget {
   /// `vehicleImageFor`), otherwise the default [CarPuck]. Read once, when the
   /// view is created. If it throws, the default Google marker is kept.
   final VehicleImageBuilder? vehicleImage;
+
+  /// Builds the button shown while the camera does not follow the vehicle,
+  /// given the callback that follows it again; null for the default one.
   final Widget Function(VoidCallback recenter)? recenterButton;
+
+  /// Where the followed vehicle sits, as a fraction of the height (0 = top).
   final double focus;
 
   /// The app's own markers, drawn next to the vehicle marker. Do not use the
-  /// ids `navigation_engine_vehicle`, `navigation_engine_driven` or
-  /// `navigation_engine_ahead`: the adapter owns them (the last two are
-  /// route polyline ids).
+  /// ids `navigation_engine_vehicle`, `navigation_engine_driven`,
+  /// `navigation_engine_ahead`, `navigation_engine_option_*`,
+  /// `navigation_engine_alternate_*` or `navigation_engine_search_*`: the
+  /// adapter owns them (some are polyline ids).
   final Set<Marker> markers;
+
+  /// Called with the map's controller once the map is created.
   final void Function(GoogleMapController controller)? onMapCreated;
 
   /// The map style, a JSON array of style rules, passed to `GoogleMap.style`.
@@ -102,8 +123,39 @@ class GoogleMapsNavigationView extends StatefulWidget {
   /// `accent` / `onAccent`, the others in `surface` / `onSurface` (see
   /// [GoogleStyleRouteLabelColors.routeLabelColors]). When null the map's own
   /// colours are kept ([GoogleStyleColors.day] by default); when set, changes
-  /// render the labels shown again.
+  /// render the labels shown again. It also sets the alternate routes'
+  /// colour ([GoogleStyleColors.alternative]), their bubble colours
+  /// ([GoogleStyleRouteLabelColors.fasterLabelColors] and
+  /// [GoogleStyleRouteLabelColors.slowerLabelColors]) and the search pins'
+  /// colour ([GoogleStyleColors.warning]).
   final GoogleStyleColors? labelColors;
+
+  /// Whether the map shows its traffic layer (`GoogleMap.trafficEnabled`).
+  final bool trafficEnabled;
+
+  /// The map type, such as [MapType.hybrid] for a satellite map with roads.
+  final MapType mapType;
+
+  /// The text of the bubble on each alternate route drawn while navigating
+  /// (see [GoogleMapsNavigationMap.alternateLabel]); null draws none.
+  /// Forwarded to the map.
+  final String Function(AlternateRoute alternate)? alternateLabel;
+
+  /// Where the followed vehicle sits across the map, as a fraction of the
+  /// width (see [NavigationMapFrame.horizontalFocus]). It is physical: 0 is
+  /// the left edge in both text directions, so a caller that places it
+  /// beside a start-side panel mirrors it in RTL. The map padding that moves
+  /// the focus also keeps the Google logo clear of that panel (a left inset
+  /// above 0.5, a right inset below).
+  final double horizontalFocus;
+
+  /// The height of what the app shows over the bottom of the map (such as
+  /// [NavigationMapConfig.bottomOverlayHeight]); 0 by default. The map
+  /// padding's bottom grows by it, so the Google logo stays above it, as
+  /// the Google Maps Platform terms require, and its top grows by as much,
+  /// so the followed vehicle stays at [focus]. It is capped so the padded
+  /// map keeps at least 48 dp of height.
+  final double bottomOverlay;
 
   @override
   State<GoogleMapsNavigationView> createState() =>
@@ -120,11 +172,21 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
   void _forwardOptions() {
     _map
       ..routeLabel = widget.routeLabel
-      ..onRouteOptionTap = widget.onRouteOptionTap;
+      ..onRouteOptionTap = widget.onRouteOptionTap
+      ..alternateLabel = widget.alternateLabel;
     final alternative = widget.alternativeRouteColor;
     if (alternative != null) _map.alternativeColor = alternative;
     final labelColors = widget.labelColors;
-    if (labelColors != null) _map.labelColors = labelColors.routeLabelColors;
+    if (labelColors != null) {
+      _map
+        ..labelColors = labelColors.routeLabelColors
+        ..alternateColor = labelColors.alternative
+        ..pinColor = labelColors.warning
+        ..setAlternateLabelColors(
+          faster: labelColors.fasterLabelColors,
+          slower: labelColors.slowerLabelColors,
+        );
+    }
   }
 
   @override
@@ -174,6 +236,20 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
     _forwardOptions();
   }
 
+  /// [focus] (the focus padding) with [GoogleMapsNavigationView.bottomOverlay]
+  /// added to its bottom and its top: the SDK centres the camera in the
+  /// padded view, so the centre (the focus) does not move, and the logo,
+  /// at the padded bottom, clears the overlay.
+  EdgeInsets _withBottomOverlay(EdgeInsets focus, double height) {
+    final room = (height - focus.top - focus.bottom - _minMapHeight) / 2;
+    final lift = math.min(widget.bottomOverlay, math.max(0.0, room));
+    if (!(lift > 0)) return focus;
+    return focus.copyWith(top: focus.top + lift, bottom: focus.bottom + lift);
+  }
+
+  /// The least height the padded map keeps.
+  static const double _minMapHeight = 48;
+
   @override
   void dispose() {
     if (identical(widget.session.map, _map)) widget.session.map = null;
@@ -187,22 +263,27 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
       session: widget.session,
       vehicleMarkers: _map,
       focus: widget.focus,
+      horizontalFocus: widget.horizontalFocus,
       puck: widget.puck,
       recenterButton: widget.showRecenterButton
           ? widget.recenterButton
           : (_) => const SizedBox.shrink(),
-      mapBuilder: (context, padding) {
-        // The SDK centres the camera target in the padded view: the next
-        // route fit accounts for it. A plain field, so nothing moves now.
-        _map.mapPadding = padding;
+      mapBuilder: (context, focus) {
         return LayoutBuilder(
           builder: (context, box) {
             _viewportChanged(box.biggest);
+            final padding = _withBottomOverlay(focus, box.maxHeight);
+            // The SDK centres the camera target in the padded view: the next
+            // route fit accounts for it. A plain field, so nothing moves now.
+            _map.mapPadding = padding;
             return ListenableBuilder(
               listenable: Listenable.merge([
                 _map.polylines,
                 _map.routeOptionPolylines,
                 _map.routeOptionMarkers,
+                _map.alternatePolylines,
+                _map.alternateMarkers,
+                _map.searchMarkers,
                 _map.vehicleMarker,
               ]),
               builder: (context, _) => GoogleMap(
@@ -212,6 +293,8 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
                 ),
                 style: widget.style,
                 padding: padding,
+                trafficEnabled: widget.trafficEnabled,
+                mapType: widget.mapType,
                 compassEnabled: false,
                 myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
@@ -219,10 +302,13 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
                 polylines: {
                   ..._map.polylines.value,
                   ..._map.routeOptionPolylines.value,
+                  ..._map.alternatePolylines.value,
                 },
                 markers: {
                   ...widget.markers,
                   ..._map.routeOptionMarkers.value,
+                  ..._map.alternateMarkers.value,
+                  ..._map.searchMarkers.value,
                   ?_map.vehicleMarker.value,
                 },
                 onMapCreated: (c) {
