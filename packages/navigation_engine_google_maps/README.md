@@ -26,6 +26,60 @@ Using your own `GoogleMap`? Use `GoogleMapsNavigationMap` directly: pass it
 to the session (`map:`), call `onMapCreated`, and build `polylines` /
 `vehicleMarker` from its listenables.
 
+## Map taps and the destination pin
+
+`onMapTap` and `onMapLongPress` (on `GoogleMapsNavigationView` and
+`GoogleStyleNavigation`) get the place the user taps or long-presses, as a
+`GeoPoint`. A tap on a feature the adapter draws (a route option or its
+bubble, an alternate or its bubble, a search pin or the destination pin)
+does not reach `onMapTap`. The Google Maps SDKs are documented to report
+no map tap for a tap a marker took, and on Android for one a tappable
+polyline took; should a platform report both for one gesture, the view
+drops the map tap that comes after the feature tap in the same frame, or
+that the feature tap follows in the same turn of the event loop. A map
+tap is therefore delivered one turn of the event loop after the SDK
+reports it. A tap on the route line itself (not tappable) is a map tap,
+also where an alternate shares the road: alternates are drawn only where
+they differ (`alternateLinePoints`). A tap on the vehicle is a map tap at
+the vehicle, as on the other adapters (the SDK would take it as a marker
+click). A long press always reaches `onMapLongPress`. A touch on the map still
+stops following the vehicle.
+
+`GoogleMapsNavigationMap` implements `DestinationPinMap`:
+`showDestinationPin(point)` draws the shared red pin of
+`paintDestinationPin` (from navigation_engine_flutter, this package's own
+drawing, no Google asset), anchored at its tip; null removes it. The drop-in
+pins the end of the selected route in the overview, while navigating and
+arrived, and clears it when the flow goes back to idle. While idle, an app
+can pin a long-pressed place itself:
+
+```dart
+GoogleStyleNavigation(
+  session: session,
+  flow: flow,
+  initialCenter: center,
+  onMapLongPress: (point) {
+    if (session.map case final DestinationPinMap pin) {
+      pin.showDestinationPin(point);
+    }
+    flow.preview(to: point);
+  },
+);
+```
+
+## Colours of the labels, alternates and pins
+
+`GoogleMapsNavigationView.labelColors` takes `RouteLabelColors`, the
+colours of the route option bubbles, so the view can wear any look:
+`GoogleStyleColors.day.routeLabelColors`,
+`MapboxStyleColors.night.routeLabelColors` or your own. The alternate
+routes and the search pins have their own parameters: `alternateColor`,
+`fasterLabelColors`, `slowerLabelColors` and `searchPinColor`. Each one left
+null keeps the map's own: by default the shared day colours of every
+adapter (`MapDefaultColors`), not the Google-style ones.
+`GoogleStyleNavigation` passes its theme's, by day and at night; a screen
+of your own passes `GoogleStyleColors`' to keep the Google look.
+
 ## Google-style navigation UI
 
 A complete navigation screen in the style of a phone navigation app: route
@@ -148,9 +202,11 @@ label is its tooltip, the mode a tap switches to.
 shared vocabulary lives in that package and is re-exported here, with what
 the drop-in takes: `NavigationSession` and `GeoPoint` (navigation_engine),
 `NavigationFlowController`, `NavigationStrings`, `PlaceLabel`,
-`AlternateRoute`, `AlternateRoutesMap`, `SearchPinsMap`, `RouteColors`,
-`CarPuck`, `VehicleImageBuilder`, `RouteLabelColors`, `fitCameraToBounds`,
-`paintRouteLabel`, `laneDirectionIcon`, `AlongRouteCategory`,
+`AlternateRoute`, `AlternateRoutesMap`, `SearchPinsMap`,
+`DestinationPinMap`, `RouteColors`, `CarPuck`, `VehicleImageBuilder`,
+`RouteLabelColors`, `fitCameraToBounds`, `paintRouteLabel`,
+`paintSearchPin`, `paintDestinationPin`, `laneDirectionIcon`,
+`AlongRouteCategory`,
 `AlongRoutePlace`, `AlongRouteQuery`, `AlongRouteSearch`, `SpeedingLevel`,
 `GoogleStyleSheetAction`, `showGoogleStyleReportSheet` and the Google-style
 pieces listed below. To build a screen in another look, use the scaffold directly.
@@ -158,8 +214,8 @@ pieces listed below. To build a screen in another look, use the scaffold directl
 The Google-style pieces and the whole screen, `GoogleStyleFlowScaffold`,
 live in `navigation_engine_flutter`, so they work on any map;
 `GoogleStyleNavigation` is that scaffold with a `GoogleMapsNavigationView`
-as its map. `GoogleMapsNavigationMap` implements `SearchPinsMap` and draws
-the search pins. This library re-exports the pieces under the same names;
+as its map. `GoogleMapsNavigationMap` implements `SearchPinsMap` and
+`DestinationPinMap`, and draws the search pins and the destination pin. This library re-exports the pieces under the same names;
 import `navigation_engine_flutter` for `GoogleStyleFlowScaffold` and
 `GoogleStyleMapLayers`.
 
@@ -241,8 +297,9 @@ turn card's distance and the trip sheet's time left stop growing at 1.6×.
 Besides the ids listed under Reserved ids below, the route options use polylines and markers whose ids
 all start with `navigation_engine_option_`. Do not reuse that prefix in your
 own `markers` or `polylines`. Alternate routes use
-`navigation_engine_alternate_*`, and search pins use
-`navigation_engine_search_*`.
+`navigation_engine_alternate_*`, search pins use
+`navigation_engine_search_*`, and the destination pin is
+`navigation_engine_destination`.
 
 The route options are drawn through `RoutePreviewMap`, which
 `GoogleMapsNavigationMap` implements; `flow.preview` and `flow.select` use it.
@@ -276,7 +333,38 @@ The adapter owns these ids; do not reuse them in your own `markers` or
 `polylines`:
 
 - polylines: `navigation_engine_driven`, `navigation_engine_ahead`
-- marker: `navigation_engine_vehicle`
+- markers: `navigation_engine_vehicle`, `navigation_engine_destination`
+
+## Feature parity
+
+What each map adapter supports. The map interfaces and helpers come from
+navigation_engine_flutter; each adapter re-exports the interfaces' names.
+
+| | Google Maps | MapLibre | flutter_map | Mapbox |
+|---|---|---|---|---|
+| Drop-in screen | `GoogleStyleNavigation` | `MapLibreStyleNavigation` | `NeutralNavigation` | `MapboxStyleNavigation` |
+| Map tap and long press (`onMapTap`, `onMapLongPress`; a tap on a feature the adapter draws is not a map tap; a tap on the vehicle is) | yes | yes | yes | yes |
+| When `onMapTap` is called | one turn of the event loop after the SDK reports the tap | one turn after the SDK reports it | after flutter_map's double-tap window (about 250 ms), then one turn | one turn after the SDK reports it |
+| Search pins (`SearchPinsMap`) | yes | yes | yes | yes |
+| Destination pin (`DestinationPinMap`) | yes | yes | yes | yes |
+| Alternate routes (`AlternateRoutesMap`) | yes | yes | yes | yes |
+| A tap on the route where an alternate shares the road | a map tap: each alternate is drawn only from 40 m before it leaves the route to 40 m after it rejoins it (`alternateLinePoints`) | the same | the same | the same |
+| Colours left unset (`labelColors`, `alternateColor`, `fasterLabelColors`, `slowerLabelColors`, `searchPinColor`) | the shared day defaults, `MapDefaultColors` | the same | the same | the same |
+| `horizontalFocus` (side panels) | view and drop-in (landscape panel) | view; the drop-in has no side panel | view; the drop-in has no side panel | view; the drop-in has no side panel |
+| Traffic and satellite | yes: `trafficEnabled` and `mapType`, the Google-style menu's switches | from the style: pass a satellite or traffic style as `styleString` | from the tiles: pass satellite tiles as `tileUrlTemplate`; no traffic layer | from the style: pass `MapboxStyles.STANDARD_SATELLITE` as `styleUri`; traffic needs your own source and layers |
+| Web | a long press is a right click | a long press is a double click, which first calls `onMapTap` twice and zooms in | as on mobile | no long press (Mapbox GL JS has none): `onMapLongPress` is never called |
+
+The drop-ins pass their theme's colours, by day and at night. An app that
+builds a view itself (from a `GoogleStyleFlowScaffold`'s `mapBuilder`, say)
+passes `alternateColor`, `fasterLabelColors`, `slowerLabelColors` and
+`searchPinColor` (and `labelColors`) to follow its theme and night mode;
+left unset, every adapter uses the same day colours (`MapDefaultColors`).
+
+The MapLibre, flutter_map and Mapbox views ignore `layers.traffic` and
+`layers.satellite` when a `GoogleStyleFlowScaffold`'s `mapBuilder` builds
+them: switch the style or the tiles yourself. For GPS fixes and routes with
+any adapter, see `navigation_engine_geolocator` (`GeolocatorFixSource`) and
+`navigation_engine_osrm` (`OsrmRouteProvider`).
 
 ## How the session is driven
 

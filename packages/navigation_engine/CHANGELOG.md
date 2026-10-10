@@ -61,3 +61,9 @@
   going straight.
   Speech keeps its 100 m reach: `GuidanceAnnouncement.thenStep` follows
   the new `NavGuidance.spokenThenWithin` (default 100 m) alone.
+- `NavRoute.pointsBetween(from, to)`: the part of a route between two
+  distances along it, both ends interpolated (an end within a millimetre
+  of a vertex is that vertex) and clamped to the route; always 2 points or
+  more.
+- `NavRoute.distanceAtVertex(index)`: the distance along the route at a
+  vertex, in the route's own planar frame.

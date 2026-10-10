@@ -6,7 +6,10 @@ import 'alternate_route.dart';
 /// labels itself.
 abstract interface class AlternateRoutesMap {
   /// Draws [alternates] under the current route, each with a label; a tap
-  /// on one calls [onTap] with its index.
+  /// on one calls [onTap] with its index. The bundled adapters draw each
+  /// line from [alternateLinePoints] (the alternate's own part, so a tap on
+  /// the current route where the two share the road is a map tap), and
+  /// treat an empty list as [clearAlternates].
   void showAlternates(
     List<AlternateRoute> alternates, {
     required void Function(int index) onTap,

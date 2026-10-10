@@ -43,6 +43,12 @@ class GoogleMapsNavigationView extends StatefulWidget {
     this.onRouteOptionTap,
     this.alternativeRouteColor,
     this.labelColors,
+    this.alternateColor,
+    this.fasterLabelColors,
+    this.slowerLabelColors,
+    this.searchPinColor,
+    this.onMapTap,
+    this.onMapLongPress,
     this.trafficEnabled = false,
     this.mapType = MapType.normal,
     this.alternateLabel,
@@ -85,8 +91,9 @@ class GoogleMapsNavigationView extends StatefulWidget {
   /// The app's own markers, drawn next to the vehicle marker. Do not use the
   /// ids `navigation_engine_vehicle`, `navigation_engine_driven`,
   /// `navigation_engine_ahead`, `navigation_engine_option_*`,
-  /// `navigation_engine_alternate_*` or `navigation_engine_search_*`: the
-  /// adapter owns them (some are polyline ids).
+  /// `navigation_engine_alternate_*`, `navigation_engine_search_*` or
+  /// `navigation_engine_destination`: the adapter owns them (some are
+  /// polyline ids).
   final Set<Marker> markers;
 
   /// Called with the map's controller once the map is created.
@@ -118,16 +125,54 @@ class GoogleMapsNavigationView extends StatefulWidget {
   /// redraw the options shown.
   final Color? alternativeRouteColor;
 
-  /// The colours of the route option label bubbles: the selected one in
-  /// `accent` / `onAccent`, the others in `surface` / `onSurface` (see
-  /// [GoogleStyleRouteLabelColors.routeLabelColors]). When null the map's own
-  /// colours are kept ([GoogleStyleColors.day] by default); when set, changes
-  /// render the labels shown again. It also sets the alternate routes'
-  /// colour ([GoogleStyleColors.alternative]), their bubble colours
-  /// ([GoogleStyleRouteLabelColors.fasterLabelColors] and
-  /// [GoogleStyleRouteLabelColors.slowerLabelColors]) and the search pins'
-  /// colour ([GoogleStyleColors.warning]).
-  final GoogleStyleColors? labelColors;
+  /// The colours of the route option label bubbles, such as a style's
+  /// `routeLabelColors` ([GoogleStyleRouteLabelColors.routeLabelColors] or
+  /// [MapboxStyleColors.routeLabelColors]). When null the map's own colours
+  /// are kept ([MapDefaultColors.routeLabels] by default, as on every
+  /// adapter); when set, changes
+  /// render the labels shown again. Forwarded to
+  /// [GoogleMapsNavigationMap.labelColors].
+  final RouteLabelColors? labelColors;
+
+  /// The colour of the alternate routes drawn while navigating, such as
+  /// [GoogleStyleColors.alternative]. When null the map's own colour is
+  /// kept; forwarded to [GoogleMapsNavigationMap.alternateColor].
+  final Color? alternateColor;
+
+  /// The bubble colours of a faster alternate route, such as
+  /// [GoogleStyleRouteLabelColors.fasterLabelColors]. When null the map's
+  /// own are kept; see [GoogleMapsNavigationMap.setAlternateLabelColors].
+  final RouteLabelColors? fasterLabelColors;
+
+  /// The bubble colours of a slower (or as fast) alternate route, such as
+  /// [GoogleStyleRouteLabelColors.slowerLabelColors]. When null the map's
+  /// own are kept; see [GoogleMapsNavigationMap.setAlternateLabelColors].
+  final RouteLabelColors? slowerLabelColors;
+
+  /// The colour of the search pins, such as [GoogleStyleColors.warning].
+  /// When null the map's own colour is kept; forwarded to
+  /// [GoogleMapsNavigationMap.pinColor].
+  final Color? searchPinColor;
+
+  /// Called with the place the user taps on the map (`GoogleMap.onTap`). A
+  /// tap on a feature the adapter draws (a route option or its bubble, an
+  /// alternate or its bubble, a search pin or the destination pin) does not
+  /// call it, even on a platform that reports a map tap for it too: a map
+  /// tap that comes in the same frame after such a tap, or that such a tap
+  /// follows in the same turn of the event loop, is dropped. A tap is
+  /// delivered one turn of the event loop after the SDK reports it, and
+  /// not once the view is gone. A tap on the route line itself is a map
+  /// tap, also where an alternate shares the road (the alternate's line is
+  /// drawn only where it differs). A tap on the vehicle is a map tap at the
+  /// vehicle's position (the SDK would take it as a marker click), as on
+  /// the other adapters, where the vehicle is not tappable. A touch on the
+  /// map still stops following the vehicle.
+  final void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place the user long-presses on the map
+  /// (`GoogleMap.onLongPress`), wherever it is, such as to pin a
+  /// destination of the app's own ([DestinationPinMap.showDestinationPin]).
+  final void Function(GeoPoint point)? onMapLongPress;
 
   /// Whether the map shows its traffic layer (`GoogleMap.trafficEnabled`).
   final bool trafficEnabled;
@@ -176,17 +221,44 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
     final alternative = widget.alternativeRouteColor;
     if (alternative != null) _map.alternativeColor = alternative;
     final labelColors = widget.labelColors;
-    if (labelColors != null) {
-      _map
-        ..labelColors = labelColors.routeLabelColors
-        ..alternateColor = labelColors.alternative
-        ..pinColor = labelColors.warning
-        ..setAlternateLabelColors(
-          faster: labelColors.fasterLabelColors,
-          slower: labelColors.slowerLabelColors,
-        );
+    if (labelColors != null) _map.labelColors = labelColors;
+    final alternateColor = widget.alternateColor;
+    if (alternateColor != null) _map.alternateColor = alternateColor;
+    final faster = widget.fasterLabelColors;
+    final slower = widget.slowerLabelColors;
+    if (faster != null || slower != null) {
+      _map.setAlternateLabelColors(
+        faster: faster ?? _map.fasterLabelColors,
+        slower: slower ?? _map.slowerLabelColors,
+      );
     }
+    final pinColor = widget.searchPinColor;
+    if (pinColor != null) _map.pinColor = pinColor;
   }
+
+  // The vehicle marker as the map built it, made to take its taps as map
+  // taps at the vehicle: the SDK reports a marker click instead of a map
+  // tap, and on Android would move the camera to the marker.
+  Marker? _vehicleMarker() {
+    final marker = _map.vehicleMarker.value;
+    if (marker == null) return null;
+    return marker.copyWith(
+      consumeTapEventsParam: true,
+      onTapParam: () => _onTap(marker.position),
+    );
+  }
+
+  void _onTap(LatLng position) {
+    if (widget.onMapTap == null) return;
+    final point = GeoPoint(position.latitude, position.longitude);
+    // Not the map's side of a tap one of the adapter's features took; read
+    // the callback when the tap is delivered.
+    dispatchMapTap(_map, () => widget.onMapTap?.call(point));
+  }
+
+  void _onLongPress(LatLng position) => widget.onMapLongPress?.call(
+    GeoPoint(position.latitude, position.longitude),
+  );
 
   @override
   void initState() {
@@ -283,6 +355,7 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
                 _map.alternatePolylines,
                 _map.alternateMarkers,
                 _map.searchMarkers,
+                _map.destinationMarker,
                 _map.vehicleMarker,
               ]),
               builder: (context, _) => GoogleMap(
@@ -308,8 +381,11 @@ class _GoogleMapsNavigationViewState extends State<GoogleMapsNavigationView> {
                   ..._map.routeOptionMarkers.value,
                   ..._map.alternateMarkers.value,
                   ..._map.searchMarkers.value,
-                  ?_map.vehicleMarker.value,
+                  ?_map.destinationMarker.value,
+                  ?_vehicleMarker(),
                 },
+                onTap: _onTap,
+                onLongPress: _onLongPress,
                 onMapCreated: (c) {
                   _map.onMapCreated(c);
                   widget.onMapCreated?.call(c);

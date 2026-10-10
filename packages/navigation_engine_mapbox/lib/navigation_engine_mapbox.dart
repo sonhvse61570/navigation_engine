@@ -5,13 +5,21 @@ export 'package:navigation_engine/navigation_engine.dart'
     show GeoPoint, NavigationSession;
 export 'package:navigation_engine_flutter/navigation_engine_flutter.dart'
     show
+        AlongRoutePlace,
+        AlternateRoute,
+        AlternateRoutesMap,
         CarPuck,
+        DestinationPinMap,
         MapboxStyleColors,
         NavigationFlowController,
         NavigationStrings,
         RouteColors,
+        RouteLabelColors,
+        SearchPinsMap,
         SpeedLimitSign,
-        VehicleImageBuilder;
+        VehicleImageBuilder,
+        paintDestinationPin,
+        paintSearchPin;
 
 export 'src/mapbox_navigation_map.dart'
     hide
@@ -19,6 +27,7 @@ export 'src/mapbox_navigation_map.dart'
         MapboxBackend,
         MapboxNavigationMapTesting,
         toCameraOptions,
+        toGeoPoint,
         toInitialViewport,
         toPoint;
 export 'src/mapbox_navigation_view.dart' hide MapboxViewBinding, dayNightStyle;

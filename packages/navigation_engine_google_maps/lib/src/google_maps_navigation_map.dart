@@ -7,8 +7,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
-import 'search_pin.dart';
-
 /// The Google Maps position of [p].
 LatLng toLatLng(GeoPoint p) => LatLng(p.lat, p.lng);
 
@@ -83,8 +81,9 @@ Set<Polyline> _optionPolylines(
   };
 }
 
-/// [NavigationMap], [VehicleMarkerMap], [RoutePreviewMap] and
-/// [AlternateRoutesMap] on top of google_maps_flutter.
+/// [NavigationMap], [VehicleMarkerMap], [RoutePreviewMap],
+/// [AlternateRoutesMap], [SearchPinsMap] and [DestinationPinMap] on top of
+/// google_maps_flutter.
 ///
 /// ## Route options
 ///
@@ -106,13 +105,21 @@ Set<Polyline> _optionPolylines(
 ///
 /// [showAlternates] fills [alternatePolylines] with one grey line per
 /// alternate (id `navigation_engine_alternate_<i>`), in [alternateColor] and
-/// 70 % as wide as the route, under the route (`zIndex` 0). With
+/// 70 % as wide as the route, under the route (`zIndex` 0). A line is the
+/// alternate's own part ([alternateLinePoints]): from 40 m before it leaves
+/// the route to 40 m after it rejoins it, so a tap on the route where the
+/// two share the road is a map tap, as on every adapter. With
 /// [alternateLabel] set, [alternateMarkers] also gets a bubble on each one
 /// (id `navigation_engine_alternate_label_<i>`), at the middle of the part
-/// after the divergence but at most [alternateLabelLead] metres past it, so
-/// it shows near the car at follow zoom, in [fasterLabelColors] or
+/// that differs (from the divergence to the rejoin, else the end) but at
+/// most [alternateLabelLead] metres past the divergence
+/// ([alternateLabelDistance]), so it is on its line and shows near the car
+/// at follow zoom, in [fasterLabelColors] or
 /// [slowerLabelColors]. A
-/// tap on a line or a bubble calls the `onTap` given to [showAlternates].
+/// tap on a line or a bubble calls the `onTap` given to [showAlternates],
+/// unless it was drawn for another route than the alternate now at its
+/// index (an older list the SDK still shows); the same holds for a tap on
+/// a route option line or label.
 /// Bubbles are rendered like the route option labels; a newer
 /// [showAlternates] or [clearAlternates] drops renders still pending. Until
 /// the new bubbles land the old ones stay, but a tap on one that labels
@@ -126,10 +133,31 @@ Set<Polyline> _optionPolylines(
 ///
 /// [showSearchPins] fills [searchMarkers] with one pin per place found along
 /// the route (id `navigation_engine_search_<placeId>`), in [pinColor] and
-/// painted by [pinPainter]; the focused one is larger and on top. A newer
-/// [showSearchPins] or [clearSearchPins] drops renders still pending; a
+/// painted by [pinPainter]; the focused one is larger and on top. A tap on
+/// a pin calls the newest `onTap` with its place, only while a place with
+/// its id is still shown (the SDK keeps old markers for a round trip). A
+/// newer [showSearchPins] or [clearSearchPins] drops renders still pending; a
 /// failed render clears the pins and is reported through [FlutterError]. A
 /// new [pinColor] paints the shown pins again.
+///
+/// ## Destination pin
+///
+/// [showDestinationPin] sets [destinationMarker] (id
+/// `navigation_engine_destination`): the shared red pin of
+/// [paintDestinationPin] (or [destinationPinPainter]), anchored at its tip,
+/// under the vehicle. A newer call drops a render still pending; a failed
+/// render removes the pin and is reported through [FlutterError].
+///
+/// ## Taps on the map's own features
+///
+/// A tap on a feature the map draws (a route option or its bubble, an
+/// alternate or its bubble, a search pin or the destination pin) drops the
+/// one map tap of its gesture, should the platform report one too:
+/// `GoogleMapsNavigationView.onMapTap` does not get a map tap that comes
+/// in the same frame after such a tap, nor one that such a tap follows in
+/// the same turn of the event loop. A map tap in a later frame is
+/// delivered. `GoogleMapsNavigationView` also makes a tap on the vehicle
+/// marker a map tap at the vehicle.
 ///
 /// Wire [onMapCreated] to `GoogleMap.onMapCreated`; camera updates before
 /// are dropped. Polylines and markers are widget properties in
@@ -142,7 +170,8 @@ class GoogleMapsNavigationMap
         VehicleMarkerMap,
         RoutePreviewMap,
         AlternateRoutesMap,
-        SearchPinsMap {
+        SearchPinsMap,
+        DestinationPinMap {
   /// Creates the map's drawing state, with the route drawn in
   /// [routeColors].
   GoogleMapsNavigationMap({RouteColors routeColors = const RouteColors()})
@@ -154,6 +183,14 @@ class GoogleMapsNavigationMap
   /// metres: the middle of a long alternate's own part is off screen at
   /// follow zoom.
   static const double alternateLabelLead = 400;
+
+  // Drops the map tap of a gesture a feature the map draws took (see
+  // [dispatchMapTap]).
+  final _tapGuard = MapTapGuard();
+
+  // A tap on a feature the map draws: it drops the map tap of its gesture,
+  // held or to come.
+  void _featureTapped() => _tapGuard.featureTapped();
 
   RouteColors _routeColors;
   List<GeoPoint> _driven = const [];
@@ -211,13 +248,10 @@ class GoogleMapsNavigationMap
   })?
   labelPainter;
 
-  // The Google-style day label colours (`GoogleStyleColors.day`).
-  RouteLabelColors _labelColors = const RouteLabelColors(
-    border: Color(0x33202124),
-  );
+  RouteLabelColors _labelColors = MapDefaultColors.routeLabels;
 
-  /// The colours of the label bubbles (see [labelPainter]), by default the
-  /// Google-style day ones. Changing them
+  /// The colours of the label bubbles (see [labelPainter]), by default
+  /// [MapDefaultColors.routeLabels], as on every adapter. Changing them
   /// while options are shown renders the labels again; the old bubbles stay
   /// until the new ones are ready.
   RouteLabelColors get labelColors => _labelColors;
@@ -380,9 +414,20 @@ class GoogleMapsNavigationMap
               ? Color.lerp(_routeColors.ahead, const Color(0xFF000000), 0.35)!
               : Color.lerp(alternativeColor, const Color(0xFFFFFFFF), 0.5)!,
           width: width,
-          onTap: () => onRouteOptionTap?.call(i),
+          onTap: () => _tapOption(i, routes[i]),
         ),
     };
+  }
+
+  // A tap on route option [index] (its line or its label), drawn for
+  // [route]. A line or a label still shown from an older list (for one round trip to the SDK) may stand for
+  // another route than the option now at [index]; its tap is ignored.
+  void _tapOption(int index, NavRoute route) {
+    _featureTapped();
+    final shown = _shownRoutes;
+    if (shown == null || index >= shown.length) return;
+    if (!identical(shown[index], route)) return;
+    onRouteOptionTap?.call(index);
   }
 
   // Draws the shown options again after a colour change. The labels, and the
@@ -477,7 +522,7 @@ class GoogleMapsNavigationMap
               colors: colors,
               position: routes[i].pointAt(routes[i].length / 2),
               zIndex: i == selected ? 7 : 5,
-              onTap: () => onRouteOptionTap?.call(i),
+              onTap: () => _tapOption(i, routes[i]),
             ),
         ],
       );
@@ -533,9 +578,10 @@ class GoogleMapsNavigationMap
   /// The texts of the bubbles last asked for; null when none.
   List<String>? _alternateTexts;
 
-  Color _alternateColor = GoogleStyleColors.day.alternative;
+  Color _alternateColor = MapDefaultColors.alternate;
 
-  /// The colour of the alternate lines; a change redraws them.
+  /// The colour of the alternate lines (by default
+  /// [MapDefaultColors.alternate]); a change redraws them.
   Color get alternateColor => _alternateColor;
   set alternateColor(Color value) {
     if (value == _alternateColor) return;
@@ -543,13 +589,15 @@ class GoogleMapsNavigationMap
     _redrawAlternates();
   }
 
-  RouteLabelColors _fasterLabelColors = GoogleStyleColors.day.fasterLabelColors;
-  RouteLabelColors _slowerLabelColors = GoogleStyleColors.day.slowerLabelColors;
+  RouteLabelColors _fasterLabelColors = MapDefaultColors.fasterLabels;
+  RouteLabelColors _slowerLabelColors = MapDefaultColors.slowerLabels;
 
-  /// The bubble colours of a faster alternate.
+  /// The bubble colours of a faster alternate (by default
+  /// [MapDefaultColors.fasterLabels], as on every adapter).
   RouteLabelColors get fasterLabelColors => _fasterLabelColors;
 
-  /// The bubble colours of a slower (or as fast) alternate.
+  /// The bubble colours of a slower (or as fast) alternate (by default
+  /// [MapDefaultColors.slowerLabels]).
   RouteLabelColors get slowerLabelColors => _slowerLabelColors;
 
   /// Sets the bubble colours; bubbles shown are painted again.
@@ -566,10 +614,11 @@ class GoogleMapsNavigationMap
     }
   }
 
-  Color _pinColor = GoogleStyleColors.day.warning;
+  Color _pinColor = MapDefaultColors.searchPin;
 
-  /// The colour of the search pins; a change paints the pins shown again
-  /// (same places, focus and taps).
+  /// The colour of the search pins (by default [MapDefaultColors.searchPin],
+  /// as on every adapter); a change paints the pins shown again (same
+  /// places, focus and taps).
   Color get pinColor => _pinColor;
   set pinColor(Color value) {
     if (value == _pinColor) return;
@@ -638,12 +687,13 @@ class GoogleMapsNavigationMap
       for (var i = 0; i < alternates.length; i++)
         Polyline(
           polylineId: PolylineId('navigation_engine_alternate_$i'),
-          points: alternates[i].route.points.map(toLatLng).toList(),
+          // Only its own part: a tap where it shares the route is a map tap.
+          points: alternateLinePoints(alternates[i]).map(toLatLng).toList(),
           color: _alternateColor,
           width: width,
           zIndex: 0,
           consumeTapEvents: true,
-          onTap: () => _alternateTap?.call(i),
+          onTap: () => _tapAlternate(i, alternates[i].route),
         ),
     };
   }
@@ -676,10 +726,7 @@ class GoogleMapsNavigationMap
               selected: false,
               colors: alternates[i].minutesDelta < 0 ? faster : slower,
               position: alternates[i].route.pointAt(
-                math.min(
-                  alternates[i].divergence + alternateLabelLead,
-                  (alternates[i].divergence + alternates[i].route.length) / 2,
-                ),
+                alternateLabelDistance(alternates[i], lead: alternateLabelLead),
               ),
               zIndex: 4,
               onTap: () => _tapAlternate(i, alternates[i].route),
@@ -698,10 +745,12 @@ class GoogleMapsNavigationMap
     alternateMarkers.value = markers;
   }
 
-  // A tap on bubble [index], drawn for [route]. A bubble still shown from an
-  // older list (while the new bubbles render) may label another route than
-  // the alternate now at [index]; its tap is ignored.
+  // A tap on line or bubble [index], drawn for [route]. A line still shown
+  // from an older list (for one round trip to the SDK), or a bubble (while
+  // the new bubbles render), may stand for another route than the
+  // alternate now at [index]; its tap is ignored.
   void _tapAlternate(int index, NavRoute route) {
+    _featureTapped();
     final shown = _shownAlternates;
     if (shown == null || index >= shown.length) return;
     if (!identical(shown[index].route, route)) return;
@@ -764,9 +813,24 @@ class GoogleMapsNavigationMap
           ),
           zIndexInt: place.id == focusedId ? 9 : 8,
           consumeTapEvents: true,
-          onTap: onTap == null ? null : () => onTap(place),
+          onTap: () => _tapPin(place.id),
         ),
     };
+  }
+
+  // A tap on the pin drawn for the place [id]: the place with that id still
+  // shown, with the newest onTap. A pin the SDK still shows from an older
+  // list (or after a clear) for one round trip reports nothing else.
+  void _tapPin(String id) {
+    _featureTapped();
+    final shown = _shownPins;
+    if (shown == null) return;
+    for (final place in shown.places) {
+      if (place.id == id) {
+        shown.onTap?.call(place);
+        return;
+      }
+    }
   }
 
   /// Removes the search pins, also those still being rendered.
@@ -775,6 +839,82 @@ class GoogleMapsNavigationMap
     _pinGeneration++;
     _shownPins = null;
     searchMarkers.value = const {};
+  }
+
+  /// The destination pin drawn by [showDestinationPin]; null while none is
+  /// shown (also until its image is rendered).
+  final destinationMarker = ValueNotifier<Marker?>(null);
+
+  /// Renders the destination pin as PNG bytes. It defaults to
+  /// [paintDestinationPin]; tests replace it.
+  Future<Uint8List> Function({required double pixelRatio})?
+  destinationPinPainter;
+
+  // Bumped by every showDestinationPin; a render started under an older
+  // value is dropped.
+  int _destinationGeneration = 0;
+
+  // The destination pin image and the pixel ratio it was rendered at.
+  ({double ratio, Future<Uint8List> png})? _destinationImage;
+
+  /// Pins the trip's destination at [point] (the shared red pin, anchored
+  /// at its tip), replacing the one shown; null removes it. The pin is
+  /// rendered asynchronously at [labelPixelRatio], once per ratio; a newer
+  /// call drops a render still pending. When the render fails, the pin is
+  /// removed and the error is reported through [FlutterError]. A tap on the
+  /// pin does nothing (and does not move the camera).
+  @override
+  void showDestinationPin(GeoPoint? point) {
+    final generation = ++_destinationGeneration;
+    if (point == null) {
+      destinationMarker.value = null;
+      return;
+    }
+    unawaited(_showDestination(point, generation));
+  }
+
+  Future<void> _showDestination(GeoPoint point, int generation) async {
+    final ratio = labelPixelRatio;
+    final Uint8List png;
+    try {
+      png = await _destinationPng(ratio);
+    } on Object catch (e, st) {
+      if (generation != _destinationGeneration) return;
+      destinationMarker.value = null;
+      _reportError(e, st, 'rendering the destination pin');
+      return;
+    }
+    if (generation != _destinationGeneration) return;
+    destinationMarker.value = Marker(
+      markerId: const MarkerId('navigation_engine_destination'),
+      position: toLatLng(point),
+      anchor: const Offset(0.5, 1),
+      icon: BitmapDescriptor.bytes(png, imagePixelRatio: ratio),
+      zIndexInt: 6,
+      consumeTapEvents: true,
+      onTap: _featureTapped,
+    );
+  }
+
+  // The pin image at [ratio], rendered once; a failed render is not kept.
+  Future<Uint8List> _destinationPng(double ratio) {
+    final cached = _destinationImage;
+    if (cached != null && cached.ratio == ratio) return cached.png;
+    final paint = destinationPinPainter;
+    final png = Future.sync(
+      () => paint != null
+          ? paint(pixelRatio: ratio)
+          : paintDestinationPin(pixelRatio: ratio),
+    );
+    final entry = (ratio: ratio, png: png);
+    _destinationImage = entry;
+    png.then<void>(
+      (_) {},
+      onError: (Object _) {
+        if (identical(_destinationImage, entry)) _destinationImage = null;
+      },
+    );
+    return png;
   }
 
   @override
@@ -821,6 +961,7 @@ class GoogleMapsNavigationMap
   /// Releases the notifiers and drops pending renders and fits. The map
   /// must not be used afterwards.
   void dispose() {
+    _tapGuard.dispose();
     polylines.dispose();
     vehicleMarker.dispose();
     routeOptionPolylines.dispose();
@@ -828,6 +969,9 @@ class GoogleMapsNavigationMap
     alternatePolylines.dispose();
     alternateMarkers.dispose();
     searchMarkers.dispose();
+    destinationMarker.dispose();
+    _destinationGeneration++;
+    _destinationImage = null;
     _alternateGeneration++;
     _pinGeneration++;
     _shownAlternates = null;
@@ -844,6 +988,16 @@ class GoogleMapsNavigationMap
   @visibleForTesting
   bool get hasController => _controller != null;
 }
+
+/// Delivers a tap on [map] itself through [deliver], unless it belongs to
+/// a tap on a feature the map draws (a route option or its bubble, an
+/// alternate or its bubble, a search pin or the destination pin): one that
+/// came before it in the same frame, or one that comes in the same turn of
+/// the event loop. [deliver] runs after that turn, and not at all once the
+/// map is disposed. The view calls it from `GoogleMap.onTap`; the library
+/// does not export it.
+void dispatchMapTap(GoogleMapsNavigationMap map, VoidCallback deliver) =>
+    map._tapGuard.dispatch(deliver);
 
 /// The key of a cached label image.
 typedef _LabelKey = (String, bool, double, RouteLabelColors);

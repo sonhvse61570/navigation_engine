@@ -38,6 +38,8 @@ void main() {
           puck: const CarPuck(size: 40),
           vehicleImage: vehicleImage(),
           idleBuilder: (_) => const Text('IDLE'),
+          onMapTap: (GeoPoint point) {},
+          onMapLongPress: (GeoPoint point) {},
           mapViewBuilder: views.build,
         ),
       ),
@@ -50,5 +52,45 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     flow.dispose();
     session.dispose();
+  });
+
+  test('the map interfaces and their types need only this library', () {
+    // Each type annotation and name fails to compile without its re-export.
+    final map = MapboxNavigationMap();
+    final SearchPinsMap pins = map;
+    final DestinationPinMap destination = map;
+    final AlternateRoutesMap alternates = map;
+    const AlongRoutePlace place = AlongRoutePlace(
+      id: 'a',
+      name: 'Fuel',
+      position: GeoPoint(10.78, 106.7),
+    );
+    final AlternateRoute alternate = AlternateRoute(
+      route: sampleRoute,
+      timeDelta: Duration.zero,
+      divergence: 0,
+    );
+    final Future<Uint8List> Function({
+      required bool focused,
+      required double pixelRatio,
+      required Color color,
+    })
+    searchPin = paintSearchPin;
+    final Future<Uint8List> Function({required double pixelRatio, Color color})
+    destinationPin = paintDestinationPin;
+    // The type of the view's labelColors, fasterLabelColors and
+    // slowerLabelColors.
+    const RouteLabelColors labelColors = RouteLabelColors();
+    expect([
+      pins,
+      destination,
+      alternates,
+      place,
+      alternate,
+      searchPin,
+      labelColors,
+    ], hasLength(7));
+    expect(destinationPin, isNotNull);
+    map.dispose();
   });
 }

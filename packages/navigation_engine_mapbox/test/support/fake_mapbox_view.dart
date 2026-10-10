@@ -55,6 +55,12 @@ class FakeMapboxViews {
 
   /// The SDK loaded the style.
   void loadStyle() => current.loadStyle();
+
+  /// The SDK reports a tap on the map where no feature took it.
+  void tapMap(GeoPoint point) => backend.tapMap(point);
+
+  /// The SDK reports a long tap on the map.
+  void longPressMap(GeoPoint point) => backend.longPressMap(point);
 }
 
 /// A [MapboxNavigationView] without the SDK's map; see [FakeMapboxViews].
@@ -130,10 +136,11 @@ class FakeMapboxViewState extends State<FakeMapboxView> {
     session: _view.session,
     vehicleMarkers: adapter,
     focus: _view.focus,
+    horizontalFocus: _view.horizontalFocus,
     puck: _view.puck,
     recenterButton: _view.recenterButton,
     mapBuilder: (context, padding) {
-      adapter.padding = padding;
+      binding.framePadding(padding);
       return LayoutBuilder(
         builder: (context, constraints) {
           binding.reportViewport(constraints.biggest, mounted: () => mounted);

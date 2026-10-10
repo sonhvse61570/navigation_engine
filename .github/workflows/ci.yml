@@ -50,3 +50,14 @@ jobs:
             (cd "$p" && flutter test --no-pub)
             echo "::endgroup::"
           done
+
+      # Code whose behaviour differs under dart2js (tests tagged `js`, see
+      # packages/navigation_engine_osrm/dart_test.yaml) also runs on node.
+      - name: Test on JS
+        timeout-minutes: 10
+        run: |
+          if command -v node > /dev/null; then
+            (cd packages/navigation_engine_osrm && dart test -p node -t js)
+          else
+            echo "node not found: skipping the JS tests"
+          fi

@@ -362,10 +362,43 @@ void main() {
         ..showRouteOptions(_routes, 0);
       final second = RecordingPlatform();
       map.onMapCreated(controllerOn(second));
+      // Taps count for what the style holds: the new style draws the lines.
+      await map.onStyleLoaded();
+      await _settle();
       first.tapFeature(_line(1));
       expect(taps, isEmpty);
       second.tapFeature(_line(1));
       expect(taps, [1]);
+    });
+
+    test('a tap on an option line or label drawn for an older list is '
+        'ignored', () async {
+      final painter = _Painter();
+      final (map, platform) = await _loaded(labels: true, painter: painter);
+      final taps = <int>[];
+      map
+        ..onRouteOptionTap = taps.add
+        ..showRouteOptions(_routes, 0);
+      await _settle();
+      // Another list, its labels still rendering: until the queue runs, the
+      // style holds the old lines (index 1 is north) and labels.
+      painter.gate = Completer<void>();
+      map.showRouteOptions([_west, _south], 0);
+      platform
+        ..tapFeature(_line(1))
+        ..tapFeature(_casing(1))
+        ..tapFeature(_labels, id: 1);
+      expect(taps, isEmpty);
+      // The same route at index 0 still counts.
+      platform.tapFeature(_line(0));
+      expect(taps, [0]);
+      await _settle();
+      platform.tapFeature(_line(1));
+      expect(taps, [0, 1]);
+      painter.gate!.complete();
+      await _settle();
+      platform.tapFeature(_labels, id: 1);
+      expect(taps, [0, 1, 1]);
     });
   });
 

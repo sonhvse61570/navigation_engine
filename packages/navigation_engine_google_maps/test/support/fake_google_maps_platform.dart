@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart'
@@ -32,6 +34,37 @@ class FakeGoogleMapsPlatform extends gmp.GoogleMapsFlutterPlatform {
 
   /// What the native view does once it exists.
   void createView() => _onCreated!(_mapId!);
+
+  // The gestures a test sends, delivered at once to the map's listeners
+  // (the `GoogleMap` listens once the view is created and its controller
+  // initialised: pump after [createView]).
+  final _taps = StreamController<gmp.MapTapEvent>.broadcast(sync: true);
+  final _longPresses = StreamController<gmp.MapLongPressEvent>.broadcast(
+    sync: true,
+  );
+  final _markerTaps = StreamController<gmp.MarkerTapEvent>.broadcast(
+    sync: true,
+  );
+  final _polylineTaps = StreamController<gmp.PolylineTapEvent>.broadcast(
+    sync: true,
+  );
+
+  /// A tap on the map itself at [position], as the SDK reports one that
+  /// no map object took.
+  void tapMap(gmp.LatLng position) =>
+      _taps.add(gmp.MapTapEvent(_mapId!, position));
+
+  /// A long press on the map at [position].
+  void longPressMap(gmp.LatLng position) =>
+      _longPresses.add(gmp.MapLongPressEvent(_mapId!, position));
+
+  /// A tap on the marker [id] of the last build.
+  void tapMarker(String id) =>
+      _markerTaps.add(gmp.MarkerTapEvent(_mapId!, gmp.MarkerId(id)));
+
+  /// A tap on the polyline [id] of the last build.
+  void tapPolyline(String id) =>
+      _polylineTaps.add(gmp.PolylineTapEvent(_mapId!, gmp.PolylineId(id)));
 
   Set<gmp.Marker> get markers => lastObjects!.markers;
 
@@ -134,7 +167,7 @@ class FakeGoogleMapsPlatform extends gmp.GoogleMapsFlutterPlatform {
   @override
   void dispose({required int mapId}) {}
 
-  // The map events: none happen in these tests.
+  // The other map events: none happen in these tests.
   @override
   Stream<gmp.CameraMoveStartedEvent> onCameraMoveStarted({
     required int mapId,
@@ -150,7 +183,7 @@ class FakeGoogleMapsPlatform extends gmp.GoogleMapsFlutterPlatform {
 
   @override
   Stream<gmp.MarkerTapEvent> onMarkerTap({required int mapId}) =>
-      const Stream.empty();
+      _markerTaps.stream.where((e) => e.mapId == mapId);
 
   @override
   Stream<gmp.InfoWindowTapEvent> onInfoWindowTap({required int mapId}) =>
@@ -170,7 +203,7 @@ class FakeGoogleMapsPlatform extends gmp.GoogleMapsFlutterPlatform {
 
   @override
   Stream<gmp.PolylineTapEvent> onPolylineTap({required int mapId}) =>
-      const Stream.empty();
+      _polylineTaps.stream.where((e) => e.mapId == mapId);
 
   @override
   Stream<gmp.PolygonTapEvent> onPolygonTap({required int mapId}) =>
@@ -186,11 +219,12 @@ class FakeGoogleMapsPlatform extends gmp.GoogleMapsFlutterPlatform {
   }) => const Stream.empty();
 
   @override
-  Stream<gmp.MapTapEvent> onTap({required int mapId}) => const Stream.empty();
+  Stream<gmp.MapTapEvent> onTap({required int mapId}) =>
+      _taps.stream.where((e) => e.mapId == mapId);
 
   @override
   Stream<gmp.MapLongPressEvent> onLongPress({required int mapId}) =>
-      const Stream.empty();
+      _longPresses.stream.where((e) => e.mapId == mapId);
 
   @override
   Stream<gmp.ClusterTapEvent> onClusterTap({required int mapId}) =>

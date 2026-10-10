@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 
+import '../../flow/destination_pin_map.dart';
 import '../../flow/navigation_flow_controller.dart';
 import '../../flow/navigation_flow_scaffold.dart';
 import '../../flow/navigation_flow_state.dart';
@@ -41,6 +42,11 @@ import 'mapbox_style_trip_progress.dart';
 /// the route option labels' text (the route's duration through
 /// [formatter]). The map should turn its own recenter button off and call
 /// [NavigationMapConfig.onMapReady] once it is ready.
+///
+/// When the session's map is a [DestinationPinMap], the end of the selected
+/// route is pinned in the overview, while navigating and arrived, and the
+/// pin is cleared when the flow goes back to idle (see
+/// [NavigationFlowScaffold]).
 ///
 /// The app owns, starts and disposes [session] and [flow].
 class MapboxStyleFlowScaffold extends StatelessWidget {

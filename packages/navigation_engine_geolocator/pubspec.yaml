@@ -1,0 +1,31 @@
+name: navigation_engine_geolocator
+description: >-
+  Device GPS for navigation_engine through geolocator: a FixSource that asks for the location permission and streams fixes with platform-unknown speed and heading cleaned up.
+version: 0.1.0
+repository: https://github.com/sonhvse61570/navigation_engine/tree/main/packages/navigation_engine_geolocator
+issue_tracker: https://github.com/sonhvse61570/navigation_engine/issues
+topics:
+  - navigation
+  - gps
+  - geolocation
+  - turn-by-turn
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  geolocator: ^14.0.1
+  # Position.hasSpeed / hasHeading first appear in 4.3.0; geolocator 14.0.1
+  # alone allows ^4.2.3.
+  geolocator_platform_interface: ^4.3.0
+  navigation_engine: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter

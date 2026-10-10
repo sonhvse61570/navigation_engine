@@ -80,6 +80,17 @@ Future<Uint8List> _painter(
   required RouteLabelColors colors,
 }) async => Uint8List.fromList(text.codeUnits);
 
+/// Renders a search pin as `pin` bytes, without the engine.
+Future<Uint8List> _pin({
+  required bool focused,
+  required double pixelRatio,
+  required Color color,
+}) async => Uint8List.fromList('pin'.codeUnits);
+
+/// Renders the destination pin as `dest` bytes, without the engine.
+Future<Uint8List> _destination({required double pixelRatio}) async =>
+    Uint8List.fromList('dest'.codeUnits);
+
 /// The vehicle image, without the engine.
 Future<Uint8List> _vehicle(double ratio) async => Uint8List(4);
 
@@ -157,6 +168,8 @@ class Harness {
     TextScaler? textScaler,
     bool pushed = false,
     void Function(ml.MapLibreMapController controller)? onMapCreated,
+    void Function(GeoPoint point)? onMapTap,
+    void Function(GeoPoint point)? onMapLongPress,
   }) {
     final screen = MapLibreStyleNavigation(
       session: session,
@@ -177,6 +190,8 @@ class Harness {
       focus: focus,
       initialZoom: initialZoom,
       onMapCreated: onMapCreated,
+      onMapTap: onMapTap,
+      onMapLongPress: onMapLongPress,
     );
     return MaterialApp(
       builder: textScaler == null
@@ -222,6 +237,8 @@ class Harness {
     TextScaler? textScaler,
     bool pushed = false,
     void Function(ml.MapLibreMapController controller)? onMapCreated,
+    void Function(GeoPoint point)? onMapTap,
+    void Function(GeoPoint point)? onMapLongPress,
     bool loadStyle = true,
   }) async {
     tester.view
@@ -246,6 +263,8 @@ class Harness {
         textScaler: textScaler,
         pushed: pushed,
         onMapCreated: onMapCreated,
+        onMapTap: onMapTap,
+        onMapLongPress: onMapLongPress,
       ),
     );
     if (pushed) {
@@ -254,7 +273,10 @@ class Harness {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
     }
-    map.labelPainter = _painter;
+    map
+      ..labelPainter = _painter
+      ..pinPainter = _pin
+      ..destinationPinPainter = _destination;
     // The platform view is created in a microtask.
     await tester.pump();
     if (loadStyle) await this.loadStyle(tester);
@@ -888,4 +910,99 @@ void main() {
       expect(recenterRect.overlaps(speedRect), isFalse);
     });
   }
+
+  group('map taps, pins and alternates (SP6)', () {
+    navTest('map taps and long presses reach the app', (tester, h) async {
+      final taps = <GeoPoint>[];
+      final presses = <GeoPoint>[];
+      await h.mount(tester, onMapTap: taps.add, onMapLongPress: presses.add);
+      final view = tester.widget<MapLibreNavigationView>(
+        find.byType(MapLibreNavigationView),
+      );
+      expect(view.onMapTap, isNotNull);
+      expect(view.onMapLongPress, isNotNull);
+      h.platform
+        ..tapMap(const ml.LatLng(10.5, 106.25))
+        ..longPressMap(const ml.LatLng(10.25, 106.5));
+      await tester.pump(Duration.zero);
+      expect(taps, [const GeoPoint(10.5, 106.25)]);
+      expect(presses, [const GeoPoint(10.25, 106.5)]);
+    });
+
+    navTest('a tap on a route option selects it and is no map tap', (
+      tester,
+      h,
+    ) async {
+      final taps = <GeoPoint>[];
+      await h.mount(tester, onMapTap: taps.add);
+      h.flow.previewRoutes([route, alt]);
+      await tester.pump();
+      await tester.pump();
+      h.platform
+        ..tapFeature(_Map.optionLayer(1))
+        ..tapMap(const ml.LatLng(10.5, 106.25));
+      await tester.pump(Duration.zero);
+      expect((h.flow.state.value as FlowOverview).selected, 1);
+      expect(taps, isEmpty);
+    });
+
+    navTest('the overview pins the destination, through a night style '
+        'reload', (tester, h) async {
+      await h.mount(tester);
+      expect(h.map, isA<DestinationPinMap>());
+      expect(h.map, isA<SearchPinsMap>());
+      expect(h.map, isA<AlternateRoutesMap>());
+      h.flow.previewRoutes([route, alt]);
+      await tester.pump();
+      await tester.pump();
+      List<Object?> pin() =>
+          ((h.platform.sources[_Map.destination]!['features'] as List).single
+                  as Map)['geometry']['coordinates']
+              as List<Object?>;
+      expect(h.platform.layerIds, contains(_Map.destination));
+      expect(pin(), [route.points.last.lng, route.points.last.lat]);
+
+      h.flow.nightMode = NightMode.alwaysNight;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      h.platform.reloadStyle();
+      await h.loadStyle(tester);
+      expect(h.platform.layerIds, contains(_Map.destination));
+      expect(pin(), [route.points.last.lng, route.points.last.lat]);
+
+      h.flow.stop();
+      await tester.pump();
+      await tester.pump();
+      expect(h.platform.layerIds, isNot(contains(_Map.destination)));
+    });
+
+    navTest('alternates and pins use the screen\'s words and colours', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester);
+      AlternateRoute a(int minutes) => AlternateRoute(
+        route: alt,
+        timeDelta: Duration(minutes: minutes),
+        divergence: 0,
+      );
+      const strings = NavigationStrings();
+      final label = h.map.alternateLabel!;
+      expect(label(a(-2)), strings.minFaster(2));
+      expect(label(a(3)), strings.minSlower(3));
+      expect(label(a(0)), strings.similarEta);
+      expect(h.map.alternateColor, day.alternative);
+      expect(h.map.pinColor, day.warning);
+      expect(h.map.fasterLabelColors.text, day.accent);
+      expect(h.map.slowerLabelColors.text, day.onSurfaceVariant);
+      expect(h.map.fasterLabelColors.fill, day.surface);
+
+      h.flow.nightMode = NightMode.alwaysNight;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(h.map.alternateColor, night.alternative);
+      expect(h.map.pinColor, night.warning);
+      expect(h.map.fasterLabelColors.text, night.accent);
+    });
+  });
 }

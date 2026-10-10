@@ -8,9 +8,25 @@ import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'maplibre_navigation_map.dart';
 
 /// A ready-made navigation map on MapLibre: follows [session]'s vehicle
-/// heading-up, draws the route and the vehicle, and offers recenter. It is
-/// a [RoutePreviewMap] too: a [NavigationFlowController] on [session] draws
-/// its route options here (see [routeLabel], [onRouteOptionTap]).
+/// heading-up, draws the route and the vehicle, and offers recenter. Its
+/// map is a [RoutePreviewMap], an [AlternateRoutesMap], a [SearchPinsMap]
+/// and a [DestinationPinMap] too: a [NavigationFlowController] on
+/// [session] draws its route options (see [routeLabel],
+/// [onRouteOptionTap]) and alternates (see [alternateLabel]) here, and a
+/// navigation scaffold its pins.
+///
+/// ## Under a Google-style scaffold
+///
+/// A `GoogleStyleFlowScaffold`'s `mapBuilder` can build this view from its
+/// `GoogleStyleMapLayers`: [horizontalFocus] from `horizontalFocus`,
+/// [bottomInset] from `bottomOverlay`, [routeColors], [routeLabel] and
+/// [alternateLabel] from the fields of the same names, and the colours
+/// ([labelColors], [alternativeRouteColor], [alternateColor],
+/// [fasterLabelColors], [slowerLabelColors], [searchPinColor]) from
+/// `colors`. MapLibre has no traffic layer and no satellite map type of its
+/// own: both come from the style, so the view ignores `traffic` and
+/// `satellite`; an app with a satellite style can pass it as [styleString]
+/// when `satellite` is on.
 ///
 /// On Android set `MapLibreMap.useHybridComposition = true` before
 /// `runApp()`, otherwise Flutter widgets (the vehicle puck) cannot be drawn
@@ -42,9 +58,17 @@ class MapLibreNavigationView extends StatefulWidget {
     this.night = false,
     this.routeLabel,
     this.onRouteOptionTap,
-    this.labelColors = const RouteLabelColors(),
+    this.labelColors = MapDefaultColors.routeLabels,
     this.alternativeRouteColor = const Color(0xFF9AA0A6),
     this.bottomInset = 0,
+    this.onMapTap,
+    this.onMapLongPress,
+    this.horizontalFocus = 0.5,
+    this.alternateLabel,
+    this.alternateColor,
+    this.fasterLabelColors,
+    this.slowerLabelColors,
+    this.searchPinColor,
   });
 
   final NavigationSession session;
@@ -105,13 +129,66 @@ class MapLibreNavigationView extends StatefulWidget {
   final Color alternativeRouteColor;
 
   /// The height of what the app shows over the bottom of the map (a panel,
-  /// a footer): the MapLibre attribution button and logo keep 8 above it
-  /// (`attributionButtonMargins` and `logoViewMargins`), as the map's data
-  /// providers require them to stay visible.
+  /// a footer): the MapLibre attribution button keeps 8 above it
+  /// (`attributionButtonMargins`), as the map's data providers require it
+  /// to stay visible. The view shows no logo (maplibre_gl's `logoEnabled`
+  /// defaults to false); `logoViewMargins` follows all the same.
   final double bottomInset;
 
-  /// The margin of the attribution button and the logo from the map's
-  /// edges, above [bottomInset].
+  /// Called with the place the user taps on the map
+  /// (`MapLibreMap.onMapClick`). A tap on a feature the adapter draws (a
+  /// route option or its label, an alternate or its bubble, a search pin or
+  /// the destination pin) does not call it: the SDK reports none for it,
+  /// and a map tap that comes in the same frame after such a tap, or that
+  /// such a tap follows in the same turn of the event loop, is dropped
+  /// anyway. A tap is delivered one turn of the event loop after the SDK
+  /// reports it, and not once the view is gone. A tap on the route line
+  /// itself is a map tap, also where an alternate shares the road (the
+  /// alternate's line is drawn only where it differs). A touch on the map
+  /// still stops following the vehicle.
+  final void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place the user long-presses on the map
+  /// (`MapLibreMap.onMapLongClick`; a double click on the web), wherever it
+  /// is, such as to pin a destination of the app's own
+  /// ([DestinationPinMap.showDestinationPin]).
+  final void Function(GeoPoint point)? onMapLongPress;
+
+  /// Where the followed vehicle sits across the map, as a fraction of the
+  /// width (see [NavigationMapFrame.horizontalFocus]). It is physical: 0 is
+  /// the left edge in both text directions, so a caller that places it
+  /// beside a start-side panel mirrors it in RTL. The camera insets that
+  /// move the focus also keep the attribution button (bottom right) clear
+  /// of a panel on the right (a focus below 0.5). The view shows no logo
+  /// (maplibre_gl's `logoEnabled` defaults to false); its margin (bottom
+  /// left) still moves clear of a panel on the left (a focus above 0.5).
+  final double horizontalFocus;
+
+  /// The text of the bubble on each alternate route drawn while navigating
+  /// (see [MapLibreNavigationMap.alternateLabel]); null draws none.
+  /// Forwarded to the map.
+  final String Function(AlternateRoute alternate)? alternateLabel;
+
+  /// The colour of the alternate routes drawn while navigating. When null
+  /// the map's own colour is kept; forwarded to
+  /// [MapLibreNavigationMap.alternateColor].
+  final Color? alternateColor;
+
+  /// The bubble colours of a faster alternate route. When null the map's
+  /// own are kept; see [MapLibreNavigationMap.setAlternateLabelColors].
+  final RouteLabelColors? fasterLabelColors;
+
+  /// The bubble colours of a slower (or as fast) alternate route. When null
+  /// the map's own are kept; see
+  /// [MapLibreNavigationMap.setAlternateLabelColors].
+  final RouteLabelColors? slowerLabelColors;
+
+  /// The colour of the search pins. When null the map's own colour is
+  /// kept; forwarded to [MapLibreNavigationMap.pinColor].
+  final Color? searchPinColor;
+
+  /// The margin of the attribution button (and of the logo, not shown)
+  /// from the map's edges, above [bottomInset] and beside a side panel.
   static const double _ornamentMargin = 8;
 
   /// The style shown: [nightStyleString] at [night], otherwise [styleString].
@@ -142,8 +219,35 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
       ..onRouteOptionTap = widget.onRouteOptionTap
       ..routeColors = widget.routeColors
       ..alternativeColor = widget.alternativeRouteColor
-      ..labelColors = widget.labelColors;
+      ..labelColors = widget.labelColors
+      ..alternateLabel = widget.alternateLabel;
+    final alternateColor = widget.alternateColor;
+    if (alternateColor != null) _map.alternateColor = alternateColor;
+    final faster = widget.fasterLabelColors;
+    final slower = widget.slowerLabelColors;
+    if (faster != null || slower != null) {
+      _map.setAlternateLabelColors(
+        faster: faster ?? _map.fasterLabelColors,
+        slower: slower ?? _map.slowerLabelColors,
+      );
+    }
+    final pinColor = widget.searchPinColor;
+    if (pinColor != null) _map.pinColor = pinColor;
   }
+
+  // The SDK keeps the click callbacks of the map's creation: these read the
+  // widget's when a click comes.
+  void _onMapClick(Point<double> _, LatLng position) {
+    if (widget.onMapTap == null) return;
+    final point = GeoPoint(position.latitude, position.longitude);
+    // Not the map's side of a tap one of the adapter's features took; read
+    // the callback when the tap is delivered.
+    dispatchMapTap(_map, () => widget.onMapTap?.call(point));
+  }
+
+  void _onMapLongClick(Point<double> _, LatLng position) => widget
+      .onMapLongPress
+      ?.call(GeoPoint(position.latitude, position.longitude));
 
   Size? _reportedSize;
 
@@ -187,6 +291,7 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
       session: widget.session,
       vehicleMarkers: _map,
       focus: widget.focus,
+      horizontalFocus: widget.horizontalFocus,
       puck: widget.puck,
       recenterButton: widget.recenterButton,
       mapBuilder: (context, padding) {
@@ -194,20 +299,23 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
         return LayoutBuilder(
           builder: (context, constraints) {
             _reportViewport(constraints.biggest);
-            return _buildMap();
+            return _buildMap(padding);
           },
         );
       },
     );
   }
 
-  /// Where the attribution button and the logo sit from their corner.
-  Point<double> get _ornamentMargins => Point(
-    MapLibreNavigationView._ornamentMargin,
+  /// Where the logo (bottom left; not shown) or the attribution button
+  /// (bottom right) sits from its corner: above
+  /// [MapLibreNavigationView.bottomInset], and beside the [side] inset of the
+  /// focus padding (the panel on that side).
+  Point<double> _ornamentMargins(double side) => Point(
+    side + MapLibreNavigationView._ornamentMargin,
     widget.bottomInset + MapLibreNavigationView._ornamentMargin,
   );
 
-  Widget _buildMap() {
+  Widget _buildMap(EdgeInsets focus) {
     return MapLibreMap(
       styleString: widget._shownStyle,
       initialCameraPosition: CameraPosition(
@@ -216,8 +324,10 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
       ),
       compassEnabled: false,
       myLocationEnabled: false,
-      attributionButtonMargins: _ornamentMargins,
-      logoViewMargins: _ornamentMargins,
+      attributionButtonMargins: _ornamentMargins(focus.right),
+      logoViewMargins: _ornamentMargins(focus.left),
+      onMapClick: _onMapClick,
+      onMapLongClick: _onMapLongClick,
       onMapCreated: (c) {
         _map.onMapCreated(c);
         widget.onMapCreated?.call(c);

@@ -159,6 +159,10 @@ List<GeoPoint> _allPoints(List<NavRoute> routes) => [
 ];
 
 void main() {
+  // A tap on a feature the map draws spends the map tap guard's token,
+  // which lapses at the end of the frame (SchedulerBinding).
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('the test backend: imageAdded fails with the error of a failing '
       'addImage (no timeout)', () async {
     final backend = RecordingBackend()..failOnce.add('addImage');

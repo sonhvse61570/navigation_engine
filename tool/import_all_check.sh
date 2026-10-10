@@ -3,7 +3,7 @@
 # once, without prefixes: a name exported by two libraries for different
 # elements would be ambiguous and fail to analyze.
 #
-# It writes a throwaway app (path dependencies on all six packages) to a
+# It writes a throwaway app (path dependencies on all eight packages) to a
 # temporary directory, resolves it offline from the workspace's lock (run
 # `flutter pub get` at the repo root first) and analyzes it; nothing is
 # built.
@@ -18,9 +18,11 @@ packages=(
   navigation_engine
   navigation_engine_flutter
   navigation_engine_flutter_map
+  navigation_engine_geolocator
   navigation_engine_google_maps
   navigation_engine_mapbox
   navigation_engine_maplibre
+  navigation_engine_osrm
 )
 
 {
@@ -71,9 +73,12 @@ final _names = <Object>[
   GoogleStyleFlowScaffold,
   GoogleStyleMapLayers,
   AlongRoutePlace,
+  AlternateRoute,
+  AlternateRoutesMap,
   AudioGuidance,
   IncidentType,
   SearchPinsMap,
+  DestinationPinMap,
   SpeedLimitSignStyle,
   GoogleStyleNavigation,
   MapboxStyleNavigation,
@@ -89,7 +94,23 @@ final _names = <Object>[
   FlutterMapNavigationView,
   fitCameraToBounds,
   paintRouteLabel,
+  paintSearchPin,
+  paintDestinationPin,
+  alternateRouteLabel,
+  alternateLabelColorsOf,
+  alternateLinePoints,
+  alternateLabelDistance,
+  MapDefaultColors,
+  MapTapGuard,
   laneDirectionIcon,
+  GeolocatorFixSource,
+  OsrmRouteProvider,
+  OsrmGeometries,
+  OsrmException,
+  OsrmCodeException,
+  OsrmHttpException,
+  OsrmTimeoutException,
+  OsrmFormatException,
 ];
 DART
 } > "$app/lib/import_all.dart"

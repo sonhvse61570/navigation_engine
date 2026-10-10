@@ -13,6 +13,7 @@ export 'package:navigation_engine_flutter/navigation_engine_flutter.dart'
         AlternateRoutesMap,
         AudioGuidance,
         CarPuck,
+        DestinationPinMap,
         GoogleStyleArrivalSheet,
         GoogleStyleColors,
         GoogleStyleCompassButton,
@@ -45,12 +46,18 @@ export 'package:navigation_engine_flutter/navigation_engine_flutter.dart'
         VehicleImageBuilder,
         fitCameraToBounds,
         laneDirectionIcon,
+        paintDestinationPin,
         paintRouteLabel,
+        paintSearchPin,
         showGoogleStyleReportSheet;
 
 export 'src/google_maps_navigation_map.dart'
-    hide routePolylines, toCameraPosition, toLatLng, vehicleIconFrom;
+    hide
+        dispatchMapTap,
+        routePolylines,
+        toCameraPosition,
+        toLatLng,
+        vehicleIconFrom;
 export 'src/google_maps_navigation_view.dart';
-export 'src/search_pin.dart';
 export 'src/ui/google_style_navigation.dart';
 export 'src/ui/night_map_style.dart';

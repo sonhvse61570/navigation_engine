@@ -98,6 +98,17 @@ class RecordingPlatform extends ml.MapLibrePlatform {
     'layerId': layerId,
   });
 
+  /// Sends a tap on the map itself at [at], as the SDK reports one that no
+  /// interactive layer took (`map#onMapClick`).
+  void tapMap(ml.LatLng at) =>
+      onMapClickPlatform({'point': const Point<double>(0, 0), 'latLng': at});
+
+  /// Sends a long press on the map at [at] (`map#onMapLongClick`).
+  void longPressMap(ml.LatLng at) => onMapLongClickPlatform({
+    'point': const Point<double>(0, 0),
+    'latLng': at,
+  });
+
   Future<void> _record(String name, Object? arg) async {
     calls.add((name, arg));
     if (failOnce.remove(name)) throw StateError('$name failed');

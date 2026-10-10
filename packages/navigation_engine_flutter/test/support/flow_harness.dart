@@ -157,6 +157,54 @@ NavRoute branchRoute(double at, {double length = 900, double speed = 10}) {
   );
 }
 
+/// [northRoute]'s road to 1000 m, then 300 m east, 1000 m north and 300 m
+/// west back onto it at 2000 m, then its road to the end: 3600 m at [speed]
+/// m/s.
+NavRoute detourRoute({double speed = 10}) {
+  final turnOff = offsetPoint(testOrigin, 0, 1000);
+  final east = offsetPoint(turnOff, 90, 300);
+  final north = offsetPoint(east, 0, 1000);
+  final back = offsetPoint(testOrigin, 0, 2000);
+  return NavRoute.fromPoints(
+    [
+      ...straight(testOrigin, 0, 1000),
+      ...straight(turnOff, 90, 300).skip(1),
+      ...straight(east, 0, 1000).skip(1),
+      ...straight(north, 270, 300).skip(1).take(5),
+      ...straight(back, 0, 1000),
+    ],
+    name: 'detour',
+    fallbackSpeed: speed,
+  );
+}
+
+/// A 100 km straight route from [origin] along [bearing] (a point every
+/// 500 m), and a detour that leaves it at 2 km, runs 300 m to its right for
+/// 1 km and comes back onto it at 3 km.
+(NavRoute, NavRoute) longDetour(GeoPoint origin, double bearing) {
+  List<GeoPoint> line(GeoPoint from, double b, double length, double every) => [
+    for (var d = 0.0; d <= length + 1e-6; d += every) offsetPoint(from, b, d),
+  ];
+  final main = line(origin, bearing, 100000, 500);
+  final fork = main[4];
+  final side = offsetPoint(fork, bearing + 90, 300);
+  final sideEnd = offsetPoint(side, bearing, 1000);
+  return (
+    NavRoute.fromPoints(main, name: 'main', fallbackSpeed: 20),
+    NavRoute.fromPoints(
+      [
+        ...main.take(5),
+        ...line(fork, bearing + 90, 300, 50).skip(1),
+        ...line(side, bearing, 1000, 50).skip(1),
+        ...line(sideEnd, bearing - 90, 300, 50).skip(1).take(5),
+        ...main.skip(6),
+      ],
+      name: 'long detour',
+      fallbackSpeed: 20,
+    ),
+  );
+}
+
 /// A session and a flow on a fake clock, with no widget: [run] ticks the
 /// session and pumps the fake time.
 class FlowHarness {

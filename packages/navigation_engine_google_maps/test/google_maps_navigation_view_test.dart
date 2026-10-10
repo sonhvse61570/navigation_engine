@@ -52,7 +52,7 @@ Widget app(
   String Function(NavRoute route)? routeLabel,
   void Function(int index)? onRouteOptionTap,
   Color? alternativeRouteColor,
-  GoogleStyleColors? labelColors,
+  RouteLabelColors? labelColors,
 }) => MaterialApp(
   home: GoogleMapsNavigationView(
     session: session,
@@ -537,9 +537,11 @@ void main() {
     addTearDown(session.dispose);
     await tester.pumpWidget(app(session));
     final map = session.map! as GoogleMapsNavigationMap;
-    expect(map.labelColors, GoogleStyleColors.day.routeLabelColors);
+    expect(map.labelColors, MapDefaultColors.routeLabels);
 
-    await tester.pumpWidget(app(session, labelColors: GoogleStyleColors.night));
+    await tester.pumpWidget(
+      app(session, labelColors: GoogleStyleColors.night.routeLabelColors),
+    );
     expect(map.labelColors, GoogleStyleColors.night.routeLabelColors);
 
     await tester.pumpWidget(app(session));

@@ -1,0 +1,11 @@
+# Tests tagged `js` guard code whose behaviour differs under dart2js
+# (32-bit bitwise operators, the web's User-Agent). The default run, and
+# `flutter test` in CI, run them on the VM like the rest. Run them on JS
+# too with
+#
+#     dart test -p node -t js
+#
+# (CI does when node is installed). The platform is named on the command
+# line, not here: `flutter test` rejects `node` in this file.
+tags:
+  js:

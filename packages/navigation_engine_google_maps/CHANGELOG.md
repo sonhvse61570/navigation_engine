@@ -255,3 +255,58 @@
 - The "Then" tab now shows on a straight-on step for the next manoeuvre
   however far it is (`NavGuidance`'s new rule, from the core); lanes still
   take the band first.
+- Map taps: `GoogleMapsNavigationView.onMapTap` and `onMapLongPress`
+  (`void Function(GeoPoint)?`, from `GoogleMap.onTap` / `onLongPress`),
+  forwarded by `GoogleStyleNavigation`. A tap on a route option, an
+  alternate, a bubble or a pin the adapter draws does not reach `onMapTap`,
+  even on a platform that would report a map tap for it too: the feature
+  tap drops the one map tap that comes after it in the same frame, or
+  that it follows in the same turn of the event loop (a map tap is
+  delivered one turn after the SDK reports it). A long press always
+  reaches `onMapLongPress`.
+- `GoogleMapsNavigationMap` implements `DestinationPinMap`:
+  `showDestinationPin` draws the shared `paintDestinationPin` marker (id
+  `navigation_engine_destination`, `destinationMarker`,
+  `destinationPinPainter`); the drop-in pins the end of the selected route
+  in the overview, while navigating and arrived.
+- `paintSearchPin` moved to navigation_engine_flutter; this library
+  re-exports it, with `paintDestinationPin` and `DestinationPinMap`.
+- Breaking: `GoogleMapsNavigationView.labelColors` takes `RouteLabelColors`
+  (was `GoogleStyleColors`), so the view can wear another look, such as
+  `MapboxStyleColors.routeLabelColors`. What it also set now has its own
+  parameters: `alternateColor`, `fasterLabelColors`, `slowerLabelColors`
+  and `searchPinColor` (null keeps the map's). An app that passed
+  `labelColors: colors` passes `labelColors: colors.routeLabelColors`, and
+  `alternateColor: colors.alternative`, `fasterLabelColors:
+  colors.fasterLabelColors`, `slowerLabelColors: colors.slowerLabelColors`
+  and `searchPinColor: colors.warning` to keep the rest.
+  `GoogleStyleNavigation` is unchanged.
+- Alternate lines are drawn only where the alternate differs from the
+  route (`alternateLinePoints`: 40 m before it leaves the route to 40 m
+  after it rejoins it): a tap on the route where they share the road is a
+  map tap, as on the other adapters, instead of a switch to the alternate.
+- A tap on an option line or an alternate line the SDK still shows from an
+  older list (one round trip) is ignored when that line stands for
+  another route than the one now at its index, as the bubbles already
+  were (the family rule).
+- A tap on the vehicle is a map tap at the vehicle, as on the other
+  adapters: `GoogleMapsNavigationView` makes the vehicle marker take its
+  taps (the SDK reported a marker click, no map tap, and on Android moved
+  the camera to it).
+- Colours left unset are the shared `MapDefaultColors`, as on the other
+  adapters: the route option labels' border, the alternate bubbles (the
+  faster one's text is the blue accent, was green) and the search pins
+  (`#CF3339`, was `#D93025`) change from the Google-style day colours.
+  `GoogleStyleNavigation` passes its colours and is unchanged; an app that
+  builds `GoogleMapsNavigationView` itself passes `labelColors`,
+  `alternateColor`, `fasterLabelColors`, `slowerLabelColors` and
+  `searchPinColor` (such as `GoogleStyleColors.day`'s) to keep the
+  Google look and follow night mode.
+- Alternate bubbles are placed with `alternateLabelDistance`: on a short
+  detour the bubble sits at the middle of the part that differs, on the
+  drawn line, not on the road it shares with the route.
+- A tap on a route option label, or on a search pin, that the SDK still
+  shows from an older list (or after a clear) counts only for what is
+  still shown: a label while its route is still the option at its index,
+  a pin while a place with its id is still shown (with the newest
+  `onTap`), as on the other adapters.

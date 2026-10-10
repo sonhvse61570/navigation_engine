@@ -522,19 +522,101 @@ class NavigationFlowController {
     Iterable<NavRoute> others,
     double driven, {
     double from = 0,
-  }) => [
-    for (final r in others)
-      if (!identical(r, current))
-        if (routeDivergence(
-              current,
-              r,
-              threshold: alternateDivergenceThreshold,
-              from: from,
-            )
-            case final d?)
-          if (driven <= d.current + alternatePassedMargin)
-            _Alternate(r, d.current, d.alternate, d.shift),
-  ];
+  }) {
+    NavRoute? reversedCurrent;
+    return [
+      for (final r in others)
+        if (!identical(r, current))
+          if (routeDivergence(
+                current,
+                r,
+                threshold: alternateDivergenceThreshold,
+                from: from,
+              )
+              case final d?)
+            if (driven <= d.current + alternatePassedMargin)
+              _Alternate(
+                r,
+                d.current,
+                d.alternate,
+                d.shift,
+                _rejoin(
+                  current,
+                  reversedCurrent ??= _reversed(current),
+                  r,
+                  d.alternate,
+                ),
+              ),
+    ];
+  }
+
+  /// Where [alternate] comes back onto [current] to share its end: the
+  /// divergence of the two routes reversed ([reversedCurrent] is [current]
+  /// reversed), as distances along each. Null when [alternate] does not end
+  /// on [current], or the rejoin is not past the divergence at
+  /// [divergence] metres along [alternate].
+  ({double alternate, double current})? _rejoin(
+    NavRoute current,
+    NavRoute reversedCurrent,
+    NavRoute alternate,
+    double divergence,
+  ) {
+    final reversedAlternate = _reversed(alternate);
+    final back = routeDivergence(
+      reversedCurrent,
+      reversedAlternate,
+      threshold: alternateDivergenceThreshold,
+    );
+    // Off at the first sample: it ends elsewhere.
+    if (back == null || back.alternate <= 0) return null;
+    final onAlternate = _forwardDistance(
+      alternate,
+      reversedAlternate,
+      back.alternate,
+    );
+    if (onAlternate <= divergence) return null;
+    return (
+      alternate: onAlternate,
+      current: _forwardDistance(current, reversedCurrent, back.current),
+    );
+  }
+
+  static NavRoute _reversed(NavRoute route) =>
+      NavRoute.fromPoints(route.points.reversed.toList());
+
+  /// The distance along [forward] of the place [distance] metres along
+  /// [reversed] ([forward] with its points reversed). Mapped by vertex:
+  /// each route measures metres in its own planar frame (anchored at its
+  /// first point), so `forward.length - distance` drifts by hundreds of
+  /// metres on a long trip; segment `i` of [reversed] is segment
+  /// `n - 2 - i` of [forward], run the other way.
+  static double _forwardDistance(
+    NavRoute forward,
+    NavRoute reversed,
+    double distance,
+  ) {
+    final last = reversed.points.length - 1;
+    final d = distance.clamp(0.0, reversed.length);
+    // The segment of [reversed] that holds [d]: the last vertex at or
+    // before it.
+    var lo = 0, hi = last;
+    while (hi - lo > 1) {
+      final mid = (lo + hi) >> 1;
+      if (reversed.distanceAtVertex(mid) <= d) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    final a = reversed.distanceAtVertex(lo);
+    final b = reversed.distanceAtVertex(lo + 1);
+    final t = b == a ? 0.0 : (d - a) / (b - a);
+    // Reversed vertices lo and lo + 1 are forward vertices last - lo and
+    // last - lo - 1.
+    final end = forward.distanceAtVertex(last - lo);
+    final start = forward.distanceAtVertex(last - lo - 1);
+    return end - (end - start) * t;
+  }
 
   /// Where a vehicle [driven] metres along the current route is on
   /// alternate [route]: by the mapping [routeDivergence] measured, so a
@@ -570,6 +652,7 @@ class NavigationFlowController {
         AlternateRoute(
           route: a.route,
           divergence: a.onAlternate,
+          rejoin: a.rejoin,
           timeDelta: Duration(
             seconds:
                 (a.route.remainingDuration(
@@ -975,11 +1058,18 @@ class NavigationFlowController {
 /// that, a place `x` metres along the current route is `x + shift` metres
 /// along [route].
 final class _Alternate {
-  const _Alternate(this.route, this.onCurrent, this.onAlternate, this.shift);
+  const _Alternate(
+    this.route,
+    this.onCurrent,
+    this.onAlternate,
+    this.shift,
+    this.rejoin,
+  );
   final NavRoute route;
   final double onCurrent;
   final double onAlternate;
   final double shift;
+  final ({double alternate, double current})? rejoin;
 
   /// Where a vehicle [driven] metres along the current route is along
   /// [route]: on the shared road before the divergence, then as far past

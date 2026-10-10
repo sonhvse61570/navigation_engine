@@ -8,6 +8,7 @@ import 'package:navigation_engine/navigation_engine.dart';
 
 import '../../along_route_search.dart';
 import '../../flow/alternate_route.dart';
+import '../../flow/destination_pin_map.dart';
 import '../../flow/navigation_flow_actions.dart';
 import '../../flow/navigation_flow_controller.dart';
 import '../../flow/navigation_flow_scaffold.dart';
@@ -16,6 +17,7 @@ import '../../flow/navigation_map_config.dart';
 import '../../flow/search_pins_map.dart';
 import '../../flow/trip_progress.dart';
 import '../../route_colors.dart';
+import '../alternate_route_labels.dart';
 import '../navigation_strings.dart';
 import 'audio_guidance.dart';
 import 'google_style_arrival_sheet.dart';
@@ -96,7 +98,10 @@ const double _columnGap = 16;
 /// - the sound button with [onAudioGuidanceChanged].
 ///
 /// The search pins its results on the session's map when it is a
-/// [SearchPinsMap], and works without them otherwise.
+/// [SearchPinsMap], and works without them otherwise. When the map is a
+/// [DestinationPinMap], the end of the selected route is pinned in the
+/// overview, while navigating and arrived, and the pin is cleared when the
+/// flow goes back to idle (see [NavigationFlowScaffold]).
 ///
 /// The app owns the audio ([audioGuidance]), reports, search and stops; the
 /// library adds no stop itself.
@@ -532,15 +537,10 @@ class _GoogleStyleFlowScaffoldState extends State<GoogleStyleFlowScaffold> {
     flow.previewStep(target);
   }
 
-  String _alternateLabel(AlternateRoute alternate) {
-    final m = alternate.minutesDelta;
-    final strings = widget.strings;
-    return m < 0
-        ? strings.minFaster(-m)
-        : m > 0
-        ? strings.minSlower(m)
-        : strings.similarEta;
-  }
+  // A method, not a closure: its tear-off stays equal across builds, so
+  // the map layers compare equal while nothing else changes.
+  String _alternateLabel(AlternateRoute alternate) =>
+      alternateRouteLabel(alternate, widget.strings);
 
   /// The follow focus across the map: the middle of the part beside a side
   /// panel [start] wide (on the start side), else the centre.

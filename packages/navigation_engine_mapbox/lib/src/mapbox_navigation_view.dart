@@ -29,9 +29,27 @@ import 'mapbox_navigation_map.dart';
 }
 
 /// A ready-made navigation map on Mapbox: follows [session]'s vehicle
-/// heading-up, draws the route and the vehicle, and offers recenter. It is
-/// a [RoutePreviewMap] too: a [NavigationFlowController] on [session] draws
-/// its route options here (see [routeLabel], [onRouteOptionTap]).
+/// heading-up, draws the route and the vehicle, and offers recenter. Its
+/// map is a [RoutePreviewMap], an [AlternateRoutesMap], a [SearchPinsMap]
+/// and a [DestinationPinMap] too: a [NavigationFlowController] on
+/// [session] draws its route options (see [routeLabel],
+/// [onRouteOptionTap]) and alternates (see [alternateLabel]) here, and a
+/// navigation scaffold its pins. [onMapTap] and [onMapLongPress] get the
+/// user's taps on the map.
+///
+/// ## Under a Google-style scaffold
+///
+/// A `GoogleStyleFlowScaffold`'s `mapBuilder` can build this view from its
+/// `GoogleStyleMapLayers`: [horizontalFocus] from `horizontalFocus`,
+/// [bottomInset] from `bottomOverlay`, [routeColors], [routeLabel] and
+/// [alternateLabel] from the fields of the same names, and the colours
+/// ([labelColors], [alternativeRouteColor], [alternateColor],
+/// [fasterLabelColors], [slowerLabelColors], [searchPinColor]) from
+/// `colors`. The view ignores `traffic` and `satellite`: the Standard
+/// style's configuration has no switch for either (satellite imagery is
+/// another style, [MapboxStyles.STANDARD_SATELLITE], and traffic needs a
+/// traffic source and layers of the app's own), so an app that wants them
+/// passes such a style as [styleUri].
 ///
 /// Call `MapboxOptions.setAccessToken(...)` before building it. Attaches
 /// itself as [NavigationSession.map] while mounted; the app owns the session.
@@ -63,9 +81,17 @@ class MapboxNavigationView extends StatefulWidget {
     this.nightStyleUri,
     this.routeLabel,
     this.onRouteOptionTap,
-    this.labelColors = const RouteLabelColors(),
+    this.labelColors = MapDefaultColors.routeLabels,
     this.alternativeRouteColor = const Color(0xFF9AA0A6),
     this.bottomInset = 0,
+    this.onMapTap,
+    this.onMapLongPress,
+    this.horizontalFocus = 0.5,
+    this.alternateLabel,
+    this.alternateColor,
+    this.fasterLabelColors,
+    this.slowerLabelColors,
+    this.searchPinColor,
   });
 
   final NavigationSession session;
@@ -140,6 +166,59 @@ class MapboxNavigationView extends StatefulWidget {
   /// on each change.
   final double bottomInset;
 
+  /// Called with the place the user taps on the map (a tap interaction on
+  /// the map itself). A tap on a feature the adapter draws (a route option
+  /// or its label, an alternate or its bubble, a search pin or the
+  /// destination pin) does not call it: the SDK reports none for it, and a
+  /// map tap that comes in the same frame after such a tap, or that such a
+  /// tap follows in the same turn of the event loop, is dropped anyway. A
+  /// tap is delivered one turn of the event loop after the SDK reports it,
+  /// and not once the view is gone. A tap on the route line itself is a map
+  /// tap, also where an alternate shares the road (the alternate's line is
+  /// drawn only where it differs). A touch on the map still stops following
+  /// the vehicle.
+  final void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place the user long-presses on the map (a long-tap
+  /// interaction on the map itself), wherever it is, such as to pin a
+  /// destination of the app's own
+  /// ([DestinationPinMap.showDestinationPin]). Mapbox GL JS (the web) has
+  /// no long tap, so there it is never called.
+  final void Function(GeoPoint point)? onMapLongPress;
+
+  /// Where the followed vehicle sits across the map, as a fraction of the
+  /// width (see [NavigationMapFrame.horizontalFocus]). It is physical: 0 is
+  /// the left edge in both text directions, so a caller that places it
+  /// beside a start-side panel mirrors it in RTL. The camera insets that
+  /// move the focus also keep the logo (bottom left) clear of a panel on
+  /// the left (a focus above 0.5) and the attribution button (bottom right)
+  /// clear of one on the right (a focus below 0.5); see
+  /// [MapboxNavigationMap.setSideInsets].
+  final double horizontalFocus;
+
+  /// The text of the bubble on each alternate route drawn while navigating
+  /// (see [MapboxNavigationMap.alternateLabel]); null draws none.
+  /// Forwarded to the map.
+  final String Function(AlternateRoute alternate)? alternateLabel;
+
+  /// The colour of the alternate routes drawn while navigating. When null
+  /// the map's own colour is kept; forwarded to
+  /// [MapboxNavigationMap.alternateColor].
+  final Color? alternateColor;
+
+  /// The bubble colours of a faster alternate route. When null the map's
+  /// own are kept; see [MapboxNavigationMap.setAlternateLabelColors].
+  final RouteLabelColors? fasterLabelColors;
+
+  /// The bubble colours of a slower (or as fast) alternate route. When null
+  /// the map's own are kept; see
+  /// [MapboxNavigationMap.setAlternateLabelColors].
+  final RouteLabelColors? slowerLabelColors;
+
+  /// The colour of the search pins. When null the map's own colour is
+  /// kept; forwarded to [MapboxNavigationMap.pinColor].
+  final Color? searchPinColor;
+
   ({String styleUri, String? lightPreset}) get _dayNight =>
       dayNightStyle(styleUri, nightStyleUri, night: night);
 
@@ -149,9 +228,10 @@ class MapboxNavigationView extends StatefulWidget {
 
 /// What a [MapboxNavigationView] does with its [MapboxNavigationMap], apart
 /// from building the SDK's map: it creates the adapter, attaches it to the
-/// session, forwards the view's parameters, switches day and night, places
-/// the ornaments once the map exists, reports the view's size and detaches
-/// on dispose. The view and the tests' stand-in view share it, so the two
+/// session, forwards the view's parameters (the tap callbacks among them),
+/// switches day and night, places the ornaments once the map exists and
+/// beside the frame's side insets, reports the view's size and detaches on
+/// dispose. The view and the tests' stand-in view share it, so the two
 /// cannot drift. Not part of the public API (hidden by the library export).
 class MapboxViewBinding {
   /// Creates the adapter of [view] and attaches it to the view's session.
@@ -175,16 +255,39 @@ class MapboxViewBinding {
   /// The adapter the view draws with.
   final MapboxNavigationMap adapter;
 
-  // What the adapter takes from the view's properties.
+  // What the adapter takes from the view's properties. A null colour keeps
+  // the adapter's own.
   void _sync(MapboxNavigationView view) {
     adapter
       ..routeLabel = view.routeLabel
       ..onRouteOptionTap = view.onRouteOptionTap
+      ..onMapTap = view.onMapTap
+      ..onMapLongPress = view.onMapLongPress
       ..routeColors = view.routeColors
       ..alternativeColor = view.alternativeRouteColor
       ..labelColors = view.labelColors
+      ..alternateLabel = view.alternateLabel
       ..bottomInset = view.bottomInset;
+    final alternateColor = view.alternateColor;
+    if (alternateColor != null) adapter.alternateColor = alternateColor;
+    final faster = view.fasterLabelColors;
+    final slower = view.slowerLabelColors;
+    if (faster != null || slower != null) {
+      adapter.setAlternateLabelColors(
+        faster: faster ?? adapter.fasterLabelColors,
+        slower: slower ?? adapter.slowerLabelColors,
+      );
+    }
+    final pinColor = view.searchPinColor;
+    if (pinColor != null) adapter.pinColor = pinColor;
   }
+
+  /// The frame's map padding ([padding], the focus): the camera insets,
+  /// and the sides the logo and the attribution keep clear of (a side
+  /// panel's width, from [MapboxNavigationView.horizontalFocus]).
+  void framePadding(EdgeInsets padding) => adapter
+    ..padding = padding
+    ..setSideInsets(left: padding.left, right: padding.right);
 
   /// The view was rebuilt from [old] to [view].
   void update(MapboxNavigationView old, MapboxNavigationView view) {
@@ -269,10 +372,11 @@ class _MapboxNavigationViewState extends State<MapboxNavigationView> {
       session: widget.session,
       vehicleMarkers: _map,
       focus: widget.focus,
+      horizontalFocus: widget.horizontalFocus,
       puck: widget.puck,
       recenterButton: widget.recenterButton,
       mapBuilder: (context, padding) {
-        _map.padding = padding;
+        _binding.framePadding(padding);
         return LayoutBuilder(
           builder: (context, constraints) {
             _binding.reportViewport(

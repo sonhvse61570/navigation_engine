@@ -129,6 +129,14 @@ void _expectCameraShows(
   expect(shown.dy, closeTo(at.dy, 1e-3));
 }
 
+/// The label bubble in a marker's child: under the map's tap target and an
+/// [Align], each with one `child`.
+RouteLabelBubble? _bubbleIn(Widget w) {
+  if (w is RouteLabelBubble) return w;
+  final child = (w as dynamic).child;
+  return child is Widget ? _bubbleIn(child) : null;
+}
+
 void main() {
   late FlutterMapNavigationMap map;
 
@@ -213,7 +221,8 @@ void main() {
       final m = labels.singleWhere((m) => m.point == toLatLng(p));
       // The bubble's bottom-centre is on the point: the box sits above it.
       expect(m.alignment, Alignment.topCenter);
-      expect(m.child, isA<GestureDetector>());
+      // The tap target holds the bubble (it is the map's own widget).
+      expect(_bubbleIn(m.child), isA<RouteLabelBubble>());
     }
   });
 
@@ -222,13 +231,7 @@ void main() {
     map
       ..routeLabel = _label
       ..showRouteOptions(_routes, 0);
-    String textOf(fm.Marker m) =>
-        ((m.child as GestureDetector).child! as Align).child!
-            is RouteLabelBubble
-        ? (((m.child as GestureDetector).child! as Align).child!
-                  as RouteLabelBubble)
-              .text
-        : '';
+    String textOf(fm.Marker m) => _bubbleIn(m.child)?.text ?? '';
     expect(map.routeOptionLabels.value.map(textOf), {'west', 'north'});
     map.routeLabel = (r) => 'new ${_label(r)}';
     expect(map.routeOptionLabels.value.map(textOf), {'new west', 'new north'});

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 
+import 'destination_pin_map.dart';
 import 'navigation_flow_actions.dart';
 import 'navigation_flow_controller.dart';
 import 'navigation_flow_state.dart';
@@ -68,6 +69,16 @@ import 'trip_progress.dart';
 ///   [NavigationMapConfig.bottomOverlayHeight];
 /// - redraws the overview when the map reports itself ready
 ///   ([NavigationMapConfig.onMapReady]);
+/// - pins the trip's destination when the session's map is a
+///   [DestinationPinMap]: the end of the selected route in the overview,
+///   while navigating and arrived (moved when the selection, an alternate
+///   or a reroute changes the route, sent again for a new [flow] and on a
+///   map that reports itself ready; a new [session]'s map gets it once it
+///   reports itself ready). The flow's pin is removed when the flow goes
+///   back to idle, and while a request loads or has failed, as the route
+///   options are (a cancel back to the overview shows it again); a pin the
+///   app shows itself then is left alone. A pin call that throws is
+///   reported through [FlutterError];
 /// - maps a back (the system back button or gesture): it leaves the screen
 ///   only while idle, navigating or arrived; otherwise loading and error
 ///   cancel, a route preview closes, and the trip overview resumes the trip;
@@ -414,6 +425,7 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
       _arrivalHeight,
     ]);
     flow.state.addListener(_syncFollowing);
+    flow.state.addListener(_syncDestinationPin);
   }
 
   void _subscribe(NavigationSession session) {
@@ -426,8 +438,11 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   void didUpdateWidget(NavigationFlowScaffold old) {
     super.didUpdateWidget(old);
     if (!identical(old.flow, widget.flow)) {
-      old.flow.state.removeListener(_syncFollowing);
+      old.flow.state
+        ..removeListener(_syncFollowing)
+        ..removeListener(_syncDestinationPin);
       _listen(widget.flow);
+      _syncDestinationPin();
       _schedulePadding();
     }
     if (!identical(old.session, widget.session)) _subscribe(widget.session);
@@ -442,7 +457,9 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
 
   @override
   void dispose() {
-    widget.flow.state.removeListener(_syncFollowing);
+    widget.flow.state
+      ..removeListener(_syncFollowing)
+      ..removeListener(_syncDestinationPin);
     unawaited(_followSub?.cancel());
     _following.dispose();
     _headerHeight.dispose();
@@ -462,6 +479,50 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
   /// map view), with or without frames, and at once on a state change (the
   /// flow turns following on and off with it).
   void _syncFollowing() => _following.value = _session.follow;
+
+  /// Whether the flow's destination pin is shown (on the session's map as
+  /// it was then): a return to idle clears only that one, not a pin the app
+  /// shows itself while idle.
+  bool _pinShown = false;
+
+  /// Shows the flow's destination pin for the state of the moment on the
+  /// session's map, when it is a [DestinationPinMap]: the end of the
+  /// selected route, or none when idle, loading or in an error.
+  void _syncDestinationPin() {
+    final GeoPoint? point;
+    switch (_flow.state.value) {
+      case FlowOverview(:final route) ||
+          FlowNavigating(:final route) ||
+          FlowArrived(:final route):
+        point = route.points.last;
+      case FlowIdle() || FlowLoading() || FlowError():
+        // The route options go too; a pin the app shows itself stays.
+        if (!_pinShown) return;
+        point = null;
+    }
+    _pinShown = point != null;
+    final map = switch (_session.map) {
+      final DestinationPinMap m => m,
+      _ => null,
+    };
+    if (map == null) return;
+    try {
+      map.showDestinationPin(point);
+    } catch (e, st) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: e,
+          stack: st,
+          library: 'navigation_engine_flutter',
+          context: ErrorDescription(
+            point == null
+                ? 'while clearing the destination pin'
+                : 'while showing the destination pin',
+          ),
+        ),
+      );
+    }
+  }
 
   void _onPanelSize(Size size) {
     _panelHeight = size.height;
@@ -711,6 +772,7 @@ class _NavigationFlowScaffoldState extends State<NavigationFlowScaffold> {
     if (!mounted) return;
     _flow.refreshOverview();
     _flow.refreshAlternates();
+    _syncDestinationPin();
   }
 
   @override
