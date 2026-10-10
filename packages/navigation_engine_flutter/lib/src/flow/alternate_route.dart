@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 
@@ -6,11 +8,13 @@ import 'package:navigation_engine/navigation_engine.dart';
 @immutable
 final class AlternateRoute {
   /// Creates an alternate [route] that leaves the current route [divergence]
-  /// metres along itself and arrives [timeDelta] later (negative: sooner).
+  /// metres along itself and arrives [timeDelta] later (negative: sooner);
+  /// [rejoin] is where it comes back onto the current route, if it does.
   const AlternateRoute({
     required this.route,
     required this.timeDelta,
     required this.divergence,
+    this.rejoin,
   });
 
   /// The alternate route.
@@ -23,14 +27,60 @@ final class AlternateRoute {
   /// Metres along [route] where it leaves the current route.
   final double divergence;
 
+  /// Where [route] comes back onto the current route to share its end:
+  /// `alternate` metres along [route] and `current` metres along the
+  /// current route. Null when it does not (it ends elsewhere), or was not
+  /// measured. `NavigationFlowController` measures it as the divergence of
+  /// the two routes reversed.
+  final ({double alternate, double current})? rejoin;
+
   /// [timeDelta] rounded to whole minutes, as a label shows it.
   int get minutesDelta => (timeDelta.inSeconds / 60).round();
 
   @override
   String toString() =>
       'AlternateRoute(${route.name}, $timeDelta, at '
-      '${divergence.toStringAsFixed(0)} m)';
+      '${divergence.toStringAsFixed(0)} m'
+      '${rejoin == null ? '' : ', back at '
+                '${rejoin!.alternate.toStringAsFixed(0)} m'})';
 }
+
+/// The part of [alternate]'s route that a map draws (and makes tappable)
+/// as its line: from 40 m before it leaves the current route to 40 m after
+/// it rejoins it ([AlternateRoute.rejoin]), or to its end when it does not.
+///
+/// The stretches it shares with the current route are left out, so a tap
+/// on the current route there is a tap on the map, not on the alternate.
+/// The 40 m lead ([routeDivergence]'s 30 m threshold plus its 10 m step)
+/// keeps the line emerging from under the route instead of starting with a
+/// gap. The bundled map adapters draw their alternates with it.
+List<GeoPoint> alternateLinePoints(AlternateRoute alternate) {
+  final route = alternate.route;
+  final from = math.max(0.0, alternate.divergence - _alternateLineLead);
+  final rejoin = alternate.rejoin?.alternate;
+  final to = rejoin == null
+      ? route.length
+      : math.min(route.length, rejoin + _alternateLineLead);
+  return route.pointsBetween(from, to);
+}
+
+/// Metres along [alternate]'s route where a map puts its bubble: [lead]
+/// metres past its divergence, so it shows near the car at follow zoom, or
+/// the middle of the part where it differs from the current route (to its
+/// [AlternateRoute.rejoin], else to its end) when that is nearer. The
+/// bubble is then always on the line [alternateLinePoints] gives, never on
+/// the road the two routes share. The bundled map adapters place their
+/// bubbles with it (with a [lead] of 400 m).
+double alternateLabelDistance(AlternateRoute alternate, {double lead = 400}) {
+  final end = alternate.rejoin?.alternate ?? alternate.route.length;
+  return math.min(
+    alternate.divergence + lead,
+    (alternate.divergence + end) / 2,
+  );
+}
+
+/// How far (m) [alternateLinePoints] reaches onto the shared stretches.
+const double _alternateLineLead = 40;
 
 /// Where [alternate] first leaves [current] by more than [threshold] metres,
 /// sampling [alternate] every [step] metres from [from] metres along it:

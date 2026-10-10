@@ -29,6 +29,14 @@ Widget _showView(BuildContext context, MapboxNavigationView view) => view;
 /// override the selected option and the session's route line; the other
 /// options use [MapboxStyleColors.alternative].
 ///
+/// While navigating, the flow's alternate routes are drawn in
+/// [MapboxStyleColors.alternative] with a bubble in [strings] ("2 min
+/// faster"); a tap on one switches to it. The end of the selected route is
+/// pinned in the overview, while navigating and arrived (see
+/// [MapboxStyleFlowScaffold]). [onMapTap] and [onMapLongPress] get the
+/// app's taps on the map; a tap on a route option, an alternate or a pin is
+/// not one.
+///
 /// The map is a [MapboxNavigationView] showing [styleUri]. At night the
 /// [MapboxStyles.STANDARD] style switches to its `night` light preset (no
 /// reload); another style loads [nightStyleUri] when it is set. The view
@@ -61,6 +69,8 @@ class MapboxStyleNavigation extends StatefulWidget {
     this.focus = 0.7,
     this.initialZoom = 17,
     this.onMapCreated,
+    this.onMapTap,
+    this.onMapLongPress,
     @visibleForTesting this.mapViewBuilder = _showView,
   });
 
@@ -132,6 +142,14 @@ class MapboxStyleNavigation extends StatefulWidget {
   /// the new map; see [MapboxNavigationView.onMapCreated].
   final void Function(MapboxMap map)? onMapCreated;
 
+  /// Called with the place the user taps on the map; see
+  /// [MapboxNavigationView.onMapTap].
+  final void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place the user long-presses on the map; see
+  /// [MapboxNavigationView.onMapLongPress].
+  final void Function(GeoPoint point)? onMapLongPress;
+
   /// Builds the map from the [MapboxNavigationView] the screen would show;
   /// by default it shows that view. Widget tests, where the Mapbox map
   /// cannot be created, replace it with a stand-in for the view.
@@ -146,6 +164,10 @@ class _MapboxStyleNavigationState extends State<MapboxStyleNavigation> {
   /// Keeps the map view, and so the platform map, across rebuilds.
   final _mapKey = GlobalKey();
 
+  // A method, not a closure: its tear-off stays equal across builds.
+  String _alternateLabel(AlternateRoute alternate) =>
+      alternateRouteLabel(alternate, widget.strings);
+
   @override
   Widget build(BuildContext context) => MapboxStyleFlowScaffold(
     session: widget.session,
@@ -159,39 +181,48 @@ class _MapboxStyleNavigationState extends State<MapboxStyleNavigation> {
     speedLimitSign: widget.speedLimitSign,
     idleBuilder: widget.idleBuilder,
     onEnd: widget.onEnd,
-    mapBuilder: (context, config, colors, routeColors, routeLabel) =>
-        ValueListenableBuilder<double>(
-          valueListenable: config.bottomOverlayHeight,
-          builder: (context, bottomInset, _) => widget.mapViewBuilder(
-            context,
-            MapboxNavigationView(
-              key: _mapKey,
-              session: widget.session,
-              styleUri: widget.styleUri,
-              nightStyleUri: widget.nightStyleUri,
-              night: config.isNight,
-              initialCenter: widget.initialCenter,
-              initialZoom: widget.initialZoom,
-              routeColors: routeColors,
-              puck: widget.puck,
-              vehicleImage: widget.vehicleImage,
-              focus: widget.focus,
-              // The scaffold shows the recenter button.
-              recenterButton: (_) => const SizedBox.shrink(),
-              routeLabel: routeLabel,
-              onRouteOptionTap: config.onRouteOptionTap,
-              labelColors: colors.routeLabelColors,
-              alternativeRouteColor: colors.alternative,
-              // Nullable so that the widget tests' stand-in view, which has
-              // no MapboxMap, can call it; the app gets only a real map.
-              onMapCreated: (MapboxMap? map) {
-                config.onMapReady();
-                if (map != null) widget.onMapCreated?.call(map);
-              },
-              // The logo and the attribution keep above the panels.
-              bottomInset: bottomInset,
-            ),
+    mapBuilder: (context, config, colors, routeColors, routeLabel) {
+      final alternateColors = alternateLabelColorsOf(colors);
+      return ValueListenableBuilder<double>(
+        valueListenable: config.bottomOverlayHeight,
+        builder: (context, bottomInset, _) => widget.mapViewBuilder(
+          context,
+          MapboxNavigationView(
+            key: _mapKey,
+            session: widget.session,
+            styleUri: widget.styleUri,
+            nightStyleUri: widget.nightStyleUri,
+            night: config.isNight,
+            initialCenter: widget.initialCenter,
+            initialZoom: widget.initialZoom,
+            routeColors: routeColors,
+            puck: widget.puck,
+            vehicleImage: widget.vehicleImage,
+            focus: widget.focus,
+            // The scaffold shows the recenter button.
+            recenterButton: (_) => const SizedBox.shrink(),
+            routeLabel: routeLabel,
+            onRouteOptionTap: config.onRouteOptionTap,
+            labelColors: colors.routeLabelColors,
+            alternativeRouteColor: colors.alternative,
+            alternateLabel: _alternateLabel,
+            alternateColor: colors.alternative,
+            fasterLabelColors: alternateColors.faster,
+            slowerLabelColors: alternateColors.slower,
+            searchPinColor: colors.warning,
+            onMapTap: widget.onMapTap,
+            onMapLongPress: widget.onMapLongPress,
+            // Nullable so that the widget tests' stand-in view, which has
+            // no MapboxMap, can call it; the app gets only a real map.
+            onMapCreated: (MapboxMap? map) {
+              config.onMapReady();
+              if (map != null) widget.onMapCreated?.call(map);
+            },
+            // The logo and the attribution keep above the panels.
+            bottomInset: bottomInset,
           ),
         ),
+      );
+    },
   );
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' show max;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -10,6 +11,32 @@ import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 /// Mapbox geometry for a [GeoPoint] (Mapbox positions are lng, lat).
 Point toPoint(GeoPoint p) => Point(coordinates: Position(p.lng, p.lat));
+
+/// The [GeoPoint] of a Mapbox point (Mapbox positions are lng, lat). Not
+/// part of the public API (hidden by the library export).
+GeoPoint toGeoPoint(Point p) =>
+    GeoPoint(p.coordinates.lat.toDouble(), p.coordinates.lng.toDouble());
+
+/// A GeoJSON feature collection of one point feature per entry of [points],
+/// its id and `index` property the entry's index, its `image` property
+/// from [image].
+Map<String, Object?> _pointFeatures(
+  List<(int index, GeoPoint point, String image)> points,
+) => {
+  'type': 'FeatureCollection',
+  'features': [
+    for (final (index, point, image) in points)
+      {
+        'type': 'Feature',
+        'id': index,
+        'properties': {'index': index, 'image': image},
+        'geometry': {
+          'type': 'Point',
+          'coordinates': [point.lng, point.lat],
+        },
+      },
+  ],
+};
 
 // A CameraTarget zoom uses the 256 dp world of Google Maps and flutter_map;
 // Mapbox's tiles are 512 px, so the same scale is one zoom level less.
@@ -100,6 +127,15 @@ abstract interface class MapboxBackend {
   /// belongs to the map, not to the style: it stays through style reloads
   /// and while the layer is gone. Add it once per layer id.
   void addTapInteraction(String layerId, FeatureTap onTap);
+
+  /// Reports taps ([onTap]) and long taps ([onLongTap]) on the map itself,
+  /// with the place under the finger. A tap that an interaction on a layer
+  /// took ([addTapInteraction]) is not reported. Like those interactions
+  /// they belong to the map: add them once per map.
+  void addMapTapInteractions({
+    required void Function(GeoPoint point) onTap,
+    required void Function(GeoPoint point) onLongTap,
+  });
   Future<void> setCamera(CameraOptions options);
 
   /// Animates the camera to [options].
@@ -192,6 +228,35 @@ class _MapboxMapBackend implements MapboxBackend {
         interactionID: 'navigation_engine_tap_$layerId',
       );
 
+  // The map's own taps go to interactions with no target, which the SDK
+  // calls only when no interaction on a layer stopped the tap (the layer
+  // ones above stop it: `stopPropagation` defaults to true). These do not
+  // stop it, so an app's own interaction on the map still gets it.
+  @override
+  void addMapTapInteractions({
+    required void Function(GeoPoint point) onTap,
+    required void Function(GeoPoint point) onLongTap,
+  }) {
+    map.addInteraction(
+      TapInteraction.onMap(
+        (context) => onTap(toGeoPoint(context.point)),
+        stopPropagation: false,
+      ),
+      interactionID: 'navigation_engine_map_tap',
+    );
+    try {
+      map.addInteraction(
+        LongTapInteraction.onMap(
+          (context) => onLongTap(toGeoPoint(context.point)),
+          stopPropagation: false,
+        ),
+        interactionID: 'navigation_engine_map_long_tap',
+      );
+    } on UnsupportedError {
+      // Mapbox GL JS (the web) has no long tap yet.
+    }
+  }
+
   @override
   Future<void> setCamera(CameraOptions options) => map.setCamera(options);
 
@@ -205,7 +270,8 @@ class _MapboxMapBackend implements MapboxBackend {
 // How many label images are kept (see `_labelImages`).
 const _labelImageLimit = 32;
 
-/// [NavigationMap], [VehicleMarkerMap] and [RoutePreviewMap] on top of
+/// [NavigationMap], [VehicleMarkerMap], [RoutePreviewMap],
+/// [AlternateRoutesMap], [SearchPinsMap] and [DestinationPinMap] on top of
 /// mapbox_maps_flutter.
 ///
 /// Wire [onMapCreated] and [onStyleLoaded] to the `MapWidget` callbacks, and
@@ -215,8 +281,10 @@ const _labelImageLimit = 32;
 /// reload).
 ///
 /// The source, layer and image ids are reserved (see [drivenSource],
-/// [aheadSource], [vehicleSource], [vehicleImageId], and every id starting
-/// with `navigation_engine_option_`): do not reuse them.
+/// [aheadSource], [vehicleSource], [vehicleImageId], every id starting
+/// with `navigation_engine_option_`, `navigation_engine_alternate`,
+/// `navigation_engine_search` or `navigation_engine_destination`, and the
+/// interaction ids starting with `navigation_engine_`): do not reuse them.
 ///
 /// ## Route options
 ///
@@ -245,11 +313,65 @@ const _labelImageLimit = 32;
 /// A tap reaches [onRouteOptionTap] only through the option layers and the
 /// label layer (a tap interaction on each of them); the session's own
 /// layers take no taps. So a tap on the vehicle where it sits over an
-/// option line selects that option, as on MapLibre and flutter_map.
+/// option line selects that option, as on MapLibre and flutter_map. A tap
+/// on a line or a label drawn for other routes than the option now at its
+/// index (a newer [showRouteOptions] not drawn yet) is ignored.
 ///
 /// [fitRoutes] needs the map and [viewportSize]; called earlier, it is kept
 /// and applied once both exist. Fits account for [padding], the camera
 /// insets the view sets.
+///
+/// ## Alternate routes
+///
+/// [showAlternates] draws the alternates as the line features of one
+/// GeoJSON source and line layer, [alternatesSource] and [alternatesLayer],
+/// below the route options and the session's route, in [alternateColor]
+/// and 70 % as wide as the route. A line is the alternate's own part
+/// ([alternateLinePoints]): from 40 m before it leaves the route to 40 m
+/// after it rejoins it, so a tap on the route where the two share the road
+/// is a map tap, as on every adapter. An empty list is [clearAlternates].
+/// With [alternateLabel] set, each gets a
+/// bubble (image [alternateLabelImage], rendered like the route option
+/// labels in [fasterLabelColors] or [slowerLabelColors]) in the symbol
+/// source and layer [alternateLabels], at the middle of the part that
+/// differs (from the divergence to the rejoin, else the end) but at most
+/// [alternateLabelLead] metres past the divergence
+/// ([alternateLabelDistance]), so always on its line. A tap on a
+/// line or a bubble calls the `onTap` given to [showAlternates]. Until the
+/// new lines and bubbles are drawn the old ones stay, but a tap on one that
+/// stands for another route than the alternate now at its index is
+/// ignored. A failed bubble render removes the bubbles (the lines stay) and
+/// is reported through [FlutterError].
+///
+/// ## Search pins and the destination pin
+///
+/// [showSearchPins] draws one pin per place (the images [searchPinImage]
+/// and [searchPinFocusedImage], rendered by [pinPainter] in [pinColor]) in
+/// the symbol source and layer [searchPins], the focused one last (on
+/// top). A tap on one calls the newest `onTap` with its place, only while
+/// a place with that id is still shown. [showDestinationPin] draws the
+/// shared red pin of [paintDestinationPin] (image [destinationImage]) in
+/// the symbol source and layer [destination]. Both are anchored at their
+/// tip. A failed render removes the pins and is reported through
+/// [FlutterError]; a newer call drops a render still pending.
+///
+/// The symbol layers sit above the route and below the vehicle, bottom to
+/// top: [alternateLabels], [optionLabels], [destination], [searchPins],
+/// whatever order they are drawn in. Every line, bubble and pin is kept and
+/// drawn again after a style reload.
+///
+/// ## Map taps
+///
+/// [onMapTap] and [onMapLongPress] get the taps and long taps on the map
+/// itself (interactions on the map, with no target). A tap on a feature the
+/// map draws (a route option or its label, an alternate or its bubble, a
+/// search pin or the destination pin) is not a map tap: the SDK calls the
+/// map's interaction only when no interaction on a layer stopped the tap,
+/// and the map drops (with a [MapTapGuard]) a map tap that comes in the
+/// same frame after such a tap, or that such a tap follows in the same turn
+/// of the event loop. A map tap is delivered one turn of the event loop
+/// after the SDK reports it. A long tap is always delivered (not on the
+/// web, whose Mapbox GL JS has no long tap).
 ///
 /// ## Night
 ///
@@ -257,7 +379,13 @@ const _labelImageLimit = 32;
 /// reloading the style; for other styles switch to a night style with
 /// [changeStyle].
 class MapboxNavigationMap
-    implements NavigationMap, VehicleMarkerMap, RoutePreviewMap {
+    implements
+        NavigationMap,
+        VehicleMarkerMap,
+        RoutePreviewMap,
+        AlternateRoutesMap,
+        SearchPinsMap,
+        DestinationPinMap {
   /// [vehicleImage] renders the vehicle's PNG at a pixel ratio; the default
   /// is the default [CarPuck]. Use `vehicleImageFor(puck)` to render a
   /// `CarPuck` with its own size and colour.
@@ -299,6 +427,50 @@ class MapboxNavigationMap
   /// The style import of the Standard style that [lightPreset] configures.
   static const basemapImport = 'basemap';
 
+  /// The GeoJSON source of the alternate routes: one line feature per
+  /// alternate, its id and `index` property the alternate's index.
+  static const alternatesSource = 'navigation_engine_alternates';
+
+  /// The line layer of the alternate routes, on [alternatesSource].
+  static const alternatesLayer = alternatesSource;
+
+  /// The source and the symbol layer of the alternate routes' bubbles.
+  static const alternateLabels = 'navigation_engine_alternate_labels';
+
+  /// The bubble image of alternate [index].
+  static String alternateLabelImage(int index) =>
+      'navigation_engine_alternate_label_$index';
+
+  /// How far past its divergence an alternate's bubble sits at most, in
+  /// metres: the middle of a long alternate's own part is off screen at
+  /// follow zoom.
+  static const double alternateLabelLead = 400;
+
+  /// The source and the symbol layer of the search pins: one point feature
+  /// per place, its id and `index` property the place's index.
+  static const searchPins = 'navigation_engine_search';
+
+  /// The image of a search pin.
+  static const searchPinImage = 'navigation_engine_search_pin';
+
+  /// The image of the focused search pin.
+  static const searchPinFocusedImage = 'navigation_engine_search_pin_focused';
+
+  /// The source and the symbol layer of the destination pin.
+  static const destination = 'navigation_engine_destination';
+
+  /// The image of the destination pin.
+  static const destinationImage = 'navigation_engine_destination_pin';
+
+  // The symbol layers above the route, bottom to top (the vehicle is above
+  // them all).
+  static const _symbolOrder = [
+    alternateLabels,
+    optionLabels,
+    destination,
+    searchPins,
+  ];
+
   /// Where debug reports go; defaults to `debugPrint`. Tests inject a sink.
   @visibleForTesting
   void Function(String message)? log;
@@ -316,6 +488,15 @@ class MapboxNavigationMap
   /// tapped.
   void Function(int index)? onRouteOptionTap;
 
+  /// Called with the place of a tap on the map itself, one turn of the
+  /// event loop after the SDK reports it; read then. A tap on a feature the
+  /// map draws is not one (see "Map taps" above).
+  void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place of a long tap on the map, wherever it is (also
+  /// on a feature the map draws). Mapbox GL JS (the web) reports none.
+  void Function(GeoPoint point)? onMapLongPress;
+
   /// Renders a label bubble as PNG bytes in [labelColors] (passed as
   /// `colors`). It defaults to [paintRouteLabel]; tests replace it to control
   /// when (and whether) a render finishes.
@@ -328,7 +509,7 @@ class MapboxNavigationMap
   labelPainter;
 
   Color _alternativeColor = const Color(0xFF9AA0A6);
-  RouteLabelColors _labelColors = const RouteLabelColors();
+  RouteLabelColors _labelColors = MapDefaultColors.routeLabels;
   String? _lightPreset;
 
   // What showRouteOptions was last given; null when no options are shown.
@@ -355,8 +536,12 @@ class MapboxNavigationMap
   // The layers with a tap interaction on the current map.
   final _tapLayers = <String>{};
 
-  // Route option updates run one at a time, in order.
+  // Style updates (route options, alternates, pins) run one at a time, in
+  // order.
   Future<void> _optionQueue = Future.value();
+
+  // Drops the map tap of a gesture a feature the map draws took.
+  final _tapGuard = MapTapGuard();
 
   Size? _viewportSize;
   _PendingFit? _pendingFit;
@@ -384,6 +569,7 @@ class MapboxNavigationMap
       });
     }
     _restyleOptions();
+    _restyleAlternates();
   }
 
   /// The colour of the route options that are not selected. Changing it
@@ -395,7 +581,8 @@ class MapboxNavigationMap
     _restyleOptions();
   }
 
-  /// The colours of the label bubbles (see [labelPainter]). Changing them
+  /// The colours of the label bubbles (see [labelPainter]), by default
+  /// [MapDefaultColors.routeLabels], as on every adapter. Changing them
   /// while options are shown renders the labels again; the old bubbles stay
   /// until the new ones are ready.
   RouteLabelColors get labelColors => _labelColors;
@@ -443,9 +630,10 @@ class MapboxNavigationMap
     _applyPendingFit();
   }
 
-  /// The device pixel ratio the vehicle image and the route option labels
-  /// are rendered at (default 3). A change re-adds the vehicle image once
-  /// the style is ready; labels use it from the next [showRouteOptions].
+  /// The device pixel ratio the vehicle image, the route option labels,
+  /// the alternates' bubbles and the pins are rendered at (default 3). A
+  /// change re-adds the vehicle image once the style is ready; the labels,
+  /// bubbles and pins use it from their next `show` call.
   set pixelRatio(double value) {
     if (value == _pixelRatio) return;
     _pixelRatio = value;
@@ -500,7 +688,29 @@ class MapboxNavigationMap
     _styleReady = false;
     _drawn = _Drawn();
     _tapLayers.clear();
+    try {
+      backend.addMapTapInteractions(
+        onTap: (point) => _onMapTapped(backend, point),
+        onLongTap: (point) => _onMapLongTapped(backend, point),
+      );
+    } catch (e) {
+      _report(e);
+    }
     _applyPendingFit();
+  }
+
+  // A tap on the map itself, from [backend]'s map.
+  void _onMapTapped(MapboxBackend backend, GeoPoint point) {
+    if (!identical(backend, _backend) || onMapTap == null) return;
+    // Not the map's side of a tap one of the map's features took; the
+    // callback is read when the tap is delivered.
+    _tapGuard.dispatch(() {
+      if (identical(backend, _backend)) onMapTap?.call(point);
+    });
+  }
+
+  void _onMapLongTapped(MapboxBackend backend, GeoPoint point) {
+    if (identical(backend, _backend)) onMapLongPress?.call(point);
   }
 
   /// Turns the compass and the scale bar off. [MapboxNavigationView] calls
@@ -527,23 +737,61 @@ class MapboxNavigationMap
   double _bottomInset = 0;
   bool _ornamentsPlaced = false;
 
+  /// The width of what the app shows over the left of the map (a side
+  /// panel): [placeOrnaments] keeps the Mapbox logo (bottom left)
+  /// [ornamentMargin] beside it. See [setSideInsets].
+  double get leftInset => _leftInset;
+
+  /// The width of what the app shows over the right of the map: the
+  /// attribution button (bottom right) keeps [ornamentMargin] beside it.
+  /// See [setSideInsets].
+  double get rightInset => _rightInset;
+
+  double _leftInset = 0;
+  double _rightInset = 0;
+
+  /// Sets [leftInset] and [rightInset] (physical sides, in both text
+  /// directions). A change places the ornaments again once the map exists.
+  void setSideInsets({required double left, required double right}) {
+    if (left == _leftInset && right == _rightInset) return;
+    _leftInset = left;
+    _rightInset = right;
+    if (_ornamentsPlaced) placeOrnaments();
+  }
+
   /// The space between the logo or the attribution button and
   /// [bottomInset].
   static const double ornamentMargin = 8;
 
-  /// Places the logo and the attribution button [ornamentMargin] above
-  /// [bottomInset], in their own corner. [MapboxNavigationView] calls it
-  /// from its `onMapCreated`; changing [bottomInset] then places them again.
-  /// Does nothing before the map exists; never throws.
+  /// Places the logo bottom left and the attribution button bottom right,
+  /// [ornamentMargin] above [bottomInset] and beside [leftInset] (the logo)
+  /// or [rightInset] (the attribution). The corners are set on every
+  /// platform, so both keep clear of a side panel on either side.
+  /// [MapboxNavigationView] calls it from its `onMapCreated`; changing
+  /// [bottomInset] or the side insets then places them again. Does nothing
+  /// before the map exists; never throws.
   void placeOrnaments() {
     final backend = _backend;
     if (backend == null) return;
     _ornamentsPlaced = true;
     final bottom = _bottomInset + ornamentMargin;
-    _fire(() => backend.updateLogo(LogoSettings(marginBottom: bottom)));
     _fire(
-      () =>
-          backend.updateAttribution(AttributionSettings(marginBottom: bottom)),
+      () => backend.updateLogo(
+        LogoSettings(
+          position: OrnamentPosition.BOTTOM_LEFT,
+          marginLeft: _leftInset + ornamentMargin,
+          marginBottom: bottom,
+        ),
+      ),
+    );
+    _fire(
+      () => backend.updateAttribution(
+        AttributionSettings(
+          position: OrnamentPosition.BOTTOM_RIGHT,
+          marginRight: _rightInset + ornamentMargin,
+          marginBottom: bottom,
+        ),
+      ),
     );
   }
 
@@ -581,6 +829,9 @@ class MapboxNavigationMap
           _styleGeneration++;
           _drawn = drawn;
           _fireOptions(_syncOptions);
+          _fireOptions(_syncAlternates);
+          _fireOptions(_syncDestination);
+          _fireOptions(_syncPins);
         }
         rethrow;
       }
@@ -612,8 +863,12 @@ class MapboxNavigationMap
     if (_lightPreset != preset) await _guard(_applyLightPreset);
     await _pushRoute();
     await _pushVehicle();
-    // The new style has none of the route options: draw them again.
+    // The new style has none of the route options, the alternates and the
+    // pins: draw them again.
     await _enqueueOptions(_syncOptions);
+    await _enqueueOptions(_syncAlternates);
+    await _enqueueOptions(_syncDestination);
+    await _enqueueOptions(_syncPins);
   }
 
   /// Returns false when a newer style load (or a new map) has taken over.
@@ -716,9 +971,13 @@ class MapboxNavigationMap
     try {
       await f();
     } catch (e) {
-      if (kDebugMode && _reportedErrors.add(e.runtimeType.toString())) {
-        (log ?? debugPrint)('navigation_engine_mapbox: $e');
-      }
+      _report(e);
+    }
+  }
+
+  void _report(Object e) {
+    if (kDebugMode && _reportedErrors.add(e.runtimeType.toString())) {
+      (log ?? debugPrint)('navigation_engine_mapbox: $e');
     }
   }
 
@@ -856,6 +1115,18 @@ class MapboxNavigationMap
     _labels = null;
     _pendingFit = null;
     _labelImages.clear();
+    _alternateGeneration++;
+    _shownAlternates = null;
+    _alternateTap = null;
+    _alternateTexts = null;
+    _alternateBubbles = null;
+    _pinGeneration++;
+    _shownPins = null;
+    _pins = null;
+    _destinationGeneration++;
+    _destinationPin = null;
+    _destinationImage = null;
+    _tapGuard.dispose();
     _drawn = _Drawn();
     _tapLayers.clear();
   }
@@ -875,13 +1146,94 @@ class MapboxNavigationMap
     String? id,
     Map<String, Object?> properties,
   ) {
+    if (!identical(backend, _backend)) return;
+    final drawn = _drawn;
+    switch (layerId) {
+      case alternatesLayer:
+        _tapGuard.featureTapped();
+        _tapAlternate(_featureIndex(id, properties), drawn.alternateLines);
+      case alternateLabels:
+        _tapGuard.featureTapped();
+        _tapAlternate(_featureIndex(id, properties), drawn.alternateBubbles);
+      case searchPins:
+        _tapGuard.featureTapped();
+        _tapPin(_featureIndex(id, properties), drawn.pins);
+      case destination:
+        _tapGuard.featureTapped();
+      default:
+        if (!layerId.startsWith(optionPrefix)) return;
+        _tapGuard.featureTapped();
+        _tapOption(layerId, id, properties, drawn);
+    }
+  }
+
+  // A tap on a route option line or label: reported only while the route
+  // it was drawn for is still the option at its index.
+  void _tapOption(
+    String layerId,
+    String? id,
+    Map<String, Object?> properties,
+    _Drawn drawn,
+  ) {
     final routes = _shownRoutes;
     final onTap = onRouteOptionTap;
-    if (!identical(backend, _backend) || routes == null || onTap == null) {
+    if (routes == null || onTap == null) return;
+    final index = _tappedIndex(layerId, id, properties);
+    if (index == null || index < 0 || index >= routes.length) return;
+    final shownThere = layerId == optionLabels
+        ? drawn.labelRoutes?.elementAtOrNull(index)
+        : drawn.optionRoutes[optionSource(index)];
+    if (!identical(shownThere, routes[index])) return;
+    onTap(index);
+  }
+
+  /// The index of a tapped point or line feature: its `index` property, or
+  /// else its id (which the SDK may report as a double).
+  static int? _featureIndex(String? id, Map<String, Object?> properties) {
+    final index = properties['index'];
+    if (index is num) return index.toInt();
+    return id == null ? null : num.tryParse(id)?.toInt();
+  }
+
+  // A tap on alternate [index] as drawn: [drawn] are the routes the drawn
+  // features stand for. A feature drawn for an older list, which may stand
+  // for another route than the alternate now at [index], is ignored.
+  void _tapAlternate(int? index, List<NavRoute>? drawn) {
+    final shown = _shownAlternates;
+    final onTap = _alternateTap;
+    if (index == null || drawn == null || shown == null || onTap == null) {
       return;
     }
-    final index = _tappedIndex(layerId, id, properties);
-    if (index != null && index >= 0 && index < routes.length) onTap(index);
+    if (index < 0 || index >= drawn.length || index >= shown.length) return;
+    if (!identical(drawn[index], shown[index].route)) return;
+    onTap(index);
+  }
+
+  // A tap on search pin [index] as drawn ([drawn]): its place, with the
+  // newest onTap, while a place with its id is still shown.
+  void _tapPin(int? index, _Pins? drawn) {
+    final shown = _shownPins;
+    if (index == null || drawn == null || shown == null) return;
+    if (index < 0 || index >= drawn.places.length) return;
+    final id = drawn.places[index].id;
+    for (final place in shown.places) {
+      if (place.id == id) {
+        shown.onTap?.call(place);
+        return;
+      }
+    }
+  }
+
+  /// The layer the symbol layer [id] goes below: the lowest of those above
+  /// it in [_symbolOrder] that [drawn] holds in place, else the vehicle's.
+  String _symbolBelow(String id, _Drawn drawn) {
+    for (final above in _symbolOrder.skip(_symbolOrder.indexOf(id) + 1)) {
+      final placed = above == optionLabels
+          ? drawn.labelLayerPlaced
+          : drawn.placedLayers.contains(above);
+      if (placed) return above;
+    }
+    return vehicleLayer;
   }
 
   /// The route index of a tapped feature: from the layer id for the option
@@ -975,6 +1327,7 @@ class MapboxNavigationMap
       await step(() async {
         await backend.removeSource(id);
         drawn.sources.remove(id);
+        drawn.optionRoutes.remove(id);
       });
       if (!current()) return;
     }
@@ -989,6 +1342,7 @@ class MapboxNavigationMap
         );
         if (!current()) return;
         drawn.sources.add(id);
+        drawn.optionRoutes[id] = routes[i];
       }
       if (inPlace) {
         await _reorderLines(backend, drawn, order, current);
@@ -1058,6 +1412,7 @@ class MapboxNavigationMap
   ) async {
     final labels = _shownRoutes == null ? null : _labels;
     if (labels == null) {
+      drawn.labelRoutes = null;
       if (drawn.labelLayer) {
         await backend.removeLayer(optionLabels);
         if (!current()) return;
@@ -1085,6 +1440,7 @@ class MapboxNavigationMap
     );
     if (!current()) return;
     drawn.labelSource = true;
+    drawn.labelRoutes = labels.routes;
     await _removeImages(
       backend,
       drawn,
@@ -1113,7 +1469,10 @@ class MapboxNavigationMap
       _listenTaps(backend, optionLabels);
     }
     if (drawn.labelLayerPlaced) return;
-    await backend.moveLayer(optionLabels, below: vehicleLayer);
+    await backend.moveLayer(
+      optionLabels,
+      below: _symbolBelow(optionLabels, drawn),
+    );
     if (!current()) return;
     drawn.labelLayerPlaced = true;
   }
@@ -1252,6 +1611,653 @@ class MapboxNavigationMap
     );
     return image;
   }
+
+  void _reportError(Object e, StackTrace st, String what) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: e,
+        stack: st,
+        library: 'navigation_engine_mapbox',
+        context: ErrorDescription('while $what'),
+      ),
+    );
+  }
+
+  /// Removes the layer [layer], the source [source] and the images of the
+  /// layer (see [_putImages]) of the alternates, the pins or the
+  /// destination, when [drawn] holds them. Returns false when something
+  /// newer took over meanwhile.
+  Future<bool> _removeExtra(
+    MapboxBackend backend,
+    _Drawn drawn,
+    bool Function() current,
+    String layer,
+    String source,
+  ) async {
+    if (drawn.extraLayers.contains(layer)) {
+      await backend.removeLayer(layer);
+      if (!current()) return false;
+      drawn.extraLayers.remove(layer);
+      drawn.placedLayers.remove(layer);
+    }
+    if (drawn.extraSources.contains(source)) {
+      await backend.removeSource(source);
+      if (!current()) return false;
+      drawn.extraSources.remove(source);
+    }
+    return _putImages(backend, drawn, current, layer, const [], 1);
+  }
+
+  /// Adds [images] (id and PNG, rendered at [ratio]) for the layer [layer]
+  /// and removes the layer's images no longer among them. Returns false
+  /// when something newer took over meanwhile.
+  Future<bool> _putImages(
+    MapboxBackend backend,
+    _Drawn drawn,
+    bool Function() current,
+    String layer,
+    List<(String, Uint8List)> images,
+    double ratio,
+  ) async {
+    final had = drawn.extraImages.putIfAbsent(layer, () => <String>{});
+    for (final (id, png) in images) {
+      await backend.addImage(id, ratio, StyleImage.bytes(png));
+      if (!current()) return false;
+      had.add(id);
+    }
+    final keep = {for (final (id, _) in images) id};
+    for (final id in had.difference(keep)) {
+      await backend.removeImage(id);
+      if (!current()) return false;
+      had.remove(id);
+    }
+    return true;
+  }
+
+  /// Adds the source [id] with [data], or sets its data. Returns false when
+  /// something newer took over meanwhile.
+  Future<bool> _putExtraSource(
+    MapboxBackend backend,
+    _Drawn drawn,
+    bool Function() current,
+    String id,
+    Map<String, Object?> data,
+  ) async {
+    await _putSource(
+      backend,
+      id,
+      data,
+      exists: drawn.extraSources.contains(id),
+    );
+    if (!current()) return false;
+    drawn.extraSources.add(id);
+    return true;
+  }
+
+  /// Adds [layer] (unless [drawn] holds it), with a tap interaction, and
+  /// moves it below the layer [below] names (unless it was moved already).
+  /// A failed move is done again on the next update.
+  Future<void> _putExtraLayer(
+    MapboxBackend backend,
+    _Drawn drawn,
+    bool Function() current,
+    Layer layer,
+    String Function() below,
+  ) async {
+    if (!drawn.extraLayers.contains(layer.id)) {
+      await _addLayer(backend, layer);
+      if (!current()) return;
+      // Known before the move: a removal removes it whatever happens next.
+      drawn.extraLayers.add(layer.id);
+      _listenTaps(backend, layer.id);
+    }
+    if (drawn.placedLayers.contains(layer.id)) return;
+    await backend.moveLayer(layer.id, below: below());
+    if (!current()) return;
+    drawn.placedLayers.add(layer.id);
+  }
+
+  /// A symbol layer on the source of the same [id]: the image named by each
+  /// feature's `image`, anchored at its bottom, drawn in the source's order
+  /// (the last on top).
+  static SymbolLayer _symbolLayer(String id) => SymbolLayer(
+    id: id,
+    sourceId: id,
+    iconImageExpression: ['get', 'image'],
+    iconAnchor: IconAnchor.BOTTOM,
+    iconSize: 1,
+    iconAllowOverlap: true,
+    iconIgnorePlacement: true,
+    symbolZOrder: SymbolZOrder.SOURCE,
+  );
+
+  // ---- Alternate routes ----
+
+  // What showAlternates was last given; null when no alternates are shown.
+  List<AlternateRoute>? _shownAlternates;
+  void Function(int index)? _alternateTap;
+
+  // Bumped by every showAlternates / clearAlternates (and bubble change); a
+  // bubble render started under an older value is dropped.
+  int _alternateGeneration = 0;
+
+  // The texts of the bubbles last asked for; null when none.
+  List<String>? _alternateTexts;
+
+  // The rendered bubbles of the shown alternates; null until rendered.
+  _AlternateBubbles? _alternateBubbles;
+
+  String Function(AlternateRoute alternate)? _alternateLabel;
+
+  /// The text of the bubble on each alternate, such as "2 min faster"; when
+  /// null, [showAlternates] draws no bubbles. Setting it while alternates
+  /// are shown paints their bubbles again when the texts change (such as a
+  /// new language), and removes them when null.
+  String Function(AlternateRoute alternate)? get alternateLabel =>
+      _alternateLabel;
+  set alternateLabel(String Function(AlternateRoute alternate)? value) {
+    _alternateLabel = value;
+    final shown = _shownAlternates;
+    if (shown == null) return;
+    if (value == null) {
+      // Nothing drawn or rendering: nothing to remove (a view sets it on
+      // every rebuild).
+      if (_alternateTexts == null && _alternateBubbles == null) return;
+      _alternateGeneration++;
+      _alternateTexts = null;
+      _alternateBubbles = null;
+      _fireOptions(_syncAlternates);
+      return;
+    }
+    if (listEquals([for (final a in shown) value(a)], _alternateTexts)) return;
+    unawaited(_renderAlternateBubbles(shown, ++_alternateGeneration));
+  }
+
+  Color _alternateColor = MapDefaultColors.alternate;
+
+  /// The colour of the alternate lines (by default
+  /// [MapDefaultColors.alternate]); a change restyles them.
+  Color get alternateColor => _alternateColor;
+  set alternateColor(Color value) {
+    if (value == _alternateColor) return;
+    _alternateColor = value;
+    _restyleAlternates();
+  }
+
+  RouteLabelColors _fasterLabelColors = MapDefaultColors.fasterLabels;
+  RouteLabelColors _slowerLabelColors = MapDefaultColors.slowerLabels;
+
+  /// The bubble colours of a faster alternate (by default
+  /// [MapDefaultColors.fasterLabels], as on every adapter).
+  RouteLabelColors get fasterLabelColors => _fasterLabelColors;
+
+  /// The bubble colours of a slower (or as fast) alternate (by default
+  /// [MapDefaultColors.slowerLabels]).
+  RouteLabelColors get slowerLabelColors => _slowerLabelColors;
+
+  /// Sets the bubble colours; bubbles shown are painted again.
+  void setAlternateLabelColors({
+    required RouteLabelColors faster,
+    required RouteLabelColors slower,
+  }) {
+    if (faster == _fasterLabelColors && slower == _slowerLabelColors) return;
+    _fasterLabelColors = faster;
+    _slowerLabelColors = slower;
+    final shown = _shownAlternates;
+    if (shown != null && _alternateLabel != null) {
+      unawaited(_renderAlternateBubbles(shown, ++_alternateGeneration));
+    }
+  }
+
+  /// Draws [alternates] (see the class documentation); an empty list is
+  /// [clearAlternates].
+  @override
+  void showAlternates(
+    List<AlternateRoute> alternates, {
+    required void Function(int index) onTap,
+  }) {
+    if (alternates.isEmpty) {
+      clearAlternates();
+      return;
+    }
+    final generation = ++_alternateGeneration;
+    _shownAlternates = alternates;
+    _alternateTap = onTap;
+    if (_alternateLabel == null) {
+      _alternateTexts = null;
+      _alternateBubbles = null;
+    }
+    _fireOptions(_syncAlternates);
+    if (_alternateLabel != null) {
+      unawaited(_renderAlternateBubbles(alternates, generation));
+    }
+  }
+
+  @override
+  void clearAlternates() {
+    _alternateGeneration++;
+    _shownAlternates = null;
+    _alternateTap = null;
+    _alternateTexts = null;
+    _alternateBubbles = null;
+    _fireOptions(_syncAlternates);
+  }
+
+  LineLayer _alternatesLine() => _lineLayer(
+    alternatesLayer,
+    alternatesSource,
+    _alternateColor,
+    max(1.0, _routeColors.aheadWidth * 0.7),
+  );
+
+  // Restyles the drawn alternate line after a colour or width change.
+  void _restyleAlternates() {
+    if (_shownAlternates == null || !_styleReady) return;
+    _fireOptions(() async {
+      final backend = _backend;
+      if (backend == null || !_styleReady) return;
+      if (!_drawn.extraLayers.contains(alternatesLayer)) return;
+      await backend.updateLayer(_alternatesLine());
+    });
+  }
+
+  Future<void> _renderAlternateBubbles(
+    List<AlternateRoute> alternates,
+    int generation,
+  ) async {
+    final label = _alternateLabel;
+    if (label == null) return;
+    final ratio = _pixelRatio;
+    final faster = _fasterLabelColors;
+    final slower = _slowerLabelColors;
+    final List<String> texts;
+    final List<Uint8List> images;
+    try {
+      texts = [for (final a in alternates) label(a)];
+      _alternateTexts = texts;
+      images = await Future.wait([
+        for (var i = 0; i < alternates.length; i++)
+          _labelImage(
+            texts[i],
+            false,
+            ratio,
+            alternates[i].minutesDelta < 0 ? faster : slower,
+          ),
+      ]);
+    } on Object catch (e, st) {
+      // The lines stay; only the bubbles go, and only when this render is
+      // still the latest.
+      if (generation != _alternateGeneration) return;
+      _alternateBubbles = null;
+      _fireOptions(_syncAlternates);
+      _reportError(e, st, 'rendering alternate route bubbles');
+      return;
+    }
+    if (generation != _alternateGeneration) return;
+    _alternateBubbles = _AlternateBubbles.of(alternates, images, ratio);
+    _fireOptions(_syncAlternates);
+  }
+
+  /// Makes the style hold the shown alternates: the line source and layer
+  /// (below the route options and the session's route), and the bubbles
+  /// when rendered.
+  Future<void> _syncAlternates() async {
+    final backend = _backend;
+    if (backend == null || !_styleReady) return;
+    final generation = _styleGeneration;
+    final drawn = _drawn;
+    bool current() =>
+        generation == _styleGeneration && identical(backend, _backend);
+    final shown = _shownAlternates;
+    if (shown == null || shown.isEmpty) {
+      drawn.alternateLines = null;
+      if (!await _removeExtra(
+        backend,
+        drawn,
+        current,
+        alternatesLayer,
+        alternatesSource,
+      )) {
+        return;
+      }
+    } else {
+      final routes = [for (final a in shown) a.route];
+      final lines = {
+        'type': 'FeatureCollection',
+        'features': [
+          for (var i = 0; i < shown.length; i++)
+            {
+              'type': 'Feature',
+              'id': i,
+              'properties': {'index': i},
+              'geometry': {
+                'type': 'LineString',
+                // Only its own part: a tap where it shares the route is a
+                // map tap.
+                'coordinates': [
+                  for (final p in alternateLinePoints(shown[i])) [p.lng, p.lat],
+                ],
+              },
+            },
+        ],
+      };
+      if (!await _putExtraSource(
+        backend,
+        drawn,
+        current,
+        alternatesSource,
+        lines,
+      )) {
+        return;
+      }
+      drawn.alternateLines = routes;
+      await _putExtraLayer(
+        backend,
+        drawn,
+        current,
+        _alternatesLine(),
+        // Under the lowest route option, else under the session's route.
+        () => drawn.lines.isEmpty ? drivenLayer : drawn.lines.first.id,
+      );
+      if (!current()) return;
+    }
+    final bubbles = shown == null ? null : _alternateBubbles;
+    if (bubbles == null) {
+      drawn.alternateBubbles = null;
+      await _removeExtra(
+        backend,
+        drawn,
+        current,
+        alternateLabels,
+        alternateLabels,
+      );
+      return;
+    }
+    if (!await _putImages(
+      backend,
+      drawn,
+      current,
+      alternateLabels,
+      bubbles.images,
+      bubbles.pixelRatio,
+    )) {
+      return;
+    }
+    if (!await _putExtraSource(
+      backend,
+      drawn,
+      current,
+      alternateLabels,
+      bubbles.features,
+    )) {
+      return;
+    }
+    drawn.alternateBubbles = bubbles.routes;
+    await _putExtraLayer(
+      backend,
+      drawn,
+      current,
+      _symbolLayer(alternateLabels),
+      () => _symbolBelow(alternateLabels, drawn),
+    );
+  }
+
+  // ---- Search pins ----
+
+  Color _pinColor = MapDefaultColors.searchPin;
+
+  /// The colour of the search pins (by default [MapDefaultColors.searchPin],
+  /// as on every adapter); a change paints the pins shown again (same places, focus
+  /// and taps).
+  Color get pinColor => _pinColor;
+  set pinColor(Color value) {
+    if (value == _pinColor) return;
+    _pinColor = value;
+    final shown = _shownPins;
+    if (shown != null) {
+      unawaited(
+        showSearchPins(
+          shown.places,
+          focusedId: shown.focusedId,
+          onTap: shown.onTap,
+        ),
+      );
+    }
+  }
+
+  /// Renders a search pin as PNG bytes. It defaults to [paintSearchPin];
+  /// tests replace it.
+  Future<Uint8List> Function({
+    required bool focused,
+    required double pixelRatio,
+    required Color color,
+  })?
+  pinPainter;
+
+  // What showSearchPins was last given; null when no pins are shown.
+  ({
+    List<AlongRoutePlace> places,
+    String? focusedId,
+    void Function(AlongRoutePlace place)? onTap,
+  })?
+  _shownPins;
+
+  // Bumped by every showSearchPins / clearSearchPins; a pin render started
+  // under an older value is dropped.
+  int _pinGeneration = 0;
+
+  // The rendered pins; null when none.
+  _Pins? _pins;
+
+  /// Pins [places] on the map, the one with [focusedId] larger and on top;
+  /// a tap on a pin calls [onTap] (and does not move the camera). Pins are
+  /// rendered asynchronously at the pixel ratio; a newer call or
+  /// [clearSearchPins] drops a render still pending. When the render fails,
+  /// the pins are cleared and the error is reported through [FlutterError].
+  /// The future completes once the pins are drawn (or the style is not
+  /// ready yet: they are drawn once it is), or were dropped.
+  @override
+  Future<void> showSearchPins(
+    List<AlongRoutePlace> places, {
+    String? focusedId,
+    void Function(AlongRoutePlace place)? onTap,
+  }) async {
+    final generation = ++_pinGeneration;
+    if (places.isEmpty) {
+      _shownPins = null;
+      _pins = null;
+      await _enqueueOptions(_syncPins);
+      return;
+    }
+    _shownPins = (places: places, focusedId: focusedId, onTap: onTap);
+    final ratio = _pixelRatio;
+    final color = _pinColor;
+    final paint = pinPainter ?? paintSearchPin;
+    final List<Uint8List> images;
+    try {
+      images = await Future.wait([
+        Future.sync(
+          () => paint(focused: false, pixelRatio: ratio, color: color),
+        ),
+        Future.sync(
+          () => paint(focused: true, pixelRatio: ratio, color: color),
+        ),
+      ]);
+    } on Object catch (e, st) {
+      // The pins of an older search must not stand for this one.
+      if (generation != _pinGeneration) return;
+      _shownPins = null;
+      _pins = null;
+      _reportError(e, st, 'rendering search pins');
+      await _enqueueOptions(_syncPins);
+      return;
+    }
+    if (generation != _pinGeneration) return;
+    _pins = _Pins(places, focusedId, images[0], images[1], ratio);
+    await _enqueueOptions(_syncPins);
+  }
+
+  /// Removes the search pins, also those still being rendered.
+  @override
+  void clearSearchPins() {
+    _pinGeneration++;
+    _shownPins = null;
+    _pins = null;
+    _fireOptions(_syncPins);
+  }
+
+  Future<void> _syncPins() async {
+    final backend = _backend;
+    if (backend == null || !_styleReady) return;
+    final generation = _styleGeneration;
+    final drawn = _drawn;
+    bool current() =>
+        generation == _styleGeneration && identical(backend, _backend);
+    final pins = _pins;
+    if (pins == null) {
+      drawn.pins = null;
+      await _removeExtra(backend, drawn, current, searchPins, searchPins);
+      return;
+    }
+    if (!await _putImages(backend, drawn, current, searchPins, [
+      (searchPinImage, pins.png),
+      (searchPinFocusedImage, pins.focusedPng),
+    ], pins.pixelRatio)) {
+      return;
+    }
+    if (!await _putExtraSource(
+      backend,
+      drawn,
+      current,
+      searchPins,
+      pins.features,
+    )) {
+      return;
+    }
+    drawn.pins = pins;
+    await _putExtraLayer(
+      backend,
+      drawn,
+      current,
+      _symbolLayer(searchPins),
+      () => _symbolBelow(searchPins, drawn),
+    );
+  }
+
+  // ---- Destination pin ----
+
+  /// Renders the destination pin as PNG bytes. It defaults to
+  /// [paintDestinationPin]; tests replace it.
+  Future<Uint8List> Function({required double pixelRatio})?
+  destinationPinPainter;
+
+  // Bumped by every showDestinationPin; a render started under an older
+  // value is dropped.
+  int _destinationGeneration = 0;
+
+  // The destination pin image and the pixel ratio it was rendered at.
+  ({double ratio, Future<Uint8List> png})? _destinationImage;
+
+  // The pin shown, once rendered; null when none.
+  ({GeoPoint point, Uint8List png, double ratio})? _destinationPin;
+
+  /// Pins the trip's destination at [point] (the shared red pin, anchored
+  /// at its tip), replacing the one shown; null removes it. The pin is
+  /// rendered asynchronously at the pixel ratio, once per ratio; a newer
+  /// call drops a render still pending. When the render fails, the pin is
+  /// removed and the error is reported through [FlutterError]. A tap on the
+  /// pin does nothing (it is no map tap).
+  @override
+  void showDestinationPin(GeoPoint? point) {
+    final generation = ++_destinationGeneration;
+    if (point == null) {
+      _destinationPin = null;
+      _fireOptions(_syncDestination);
+      return;
+    }
+    unawaited(_showDestination(point, generation));
+  }
+
+  Future<void> _showDestination(GeoPoint point, int generation) async {
+    final ratio = _pixelRatio;
+    final Uint8List png;
+    try {
+      png = await _destinationPng(ratio);
+    } on Object catch (e, st) {
+      if (generation != _destinationGeneration) return;
+      _destinationPin = null;
+      _fireOptions(_syncDestination);
+      _reportError(e, st, 'rendering the destination pin');
+      return;
+    }
+    if (generation != _destinationGeneration) return;
+    _destinationPin = (point: point, png: png, ratio: ratio);
+    _fireOptions(_syncDestination);
+  }
+
+  // The pin image at [ratio], rendered once; a failed render is not kept.
+  Future<Uint8List> _destinationPng(double ratio) {
+    final cached = _destinationImage;
+    if (cached != null && cached.ratio == ratio) return cached.png;
+    final paint = destinationPinPainter;
+    final png = Future.sync(
+      () => paint != null
+          ? paint(pixelRatio: ratio)
+          : paintDestinationPin(pixelRatio: ratio),
+    );
+    final entry = (ratio: ratio, png: png);
+    _destinationImage = entry;
+    png.then<void>(
+      (_) {},
+      onError: (Object _) {
+        if (identical(_destinationImage, entry)) _destinationImage = null;
+      },
+    );
+    return png;
+  }
+
+  Future<void> _syncDestination() async {
+    final backend = _backend;
+    if (backend == null || !_styleReady) return;
+    final generation = _styleGeneration;
+    final drawn = _drawn;
+    bool current() =>
+        generation == _styleGeneration && identical(backend, _backend);
+    final pin = _destinationPin;
+    if (pin == null) {
+      await _removeExtra(backend, drawn, current, destination, destination);
+      return;
+    }
+    if (!await _putImages(backend, drawn, current, destination, [
+      (destinationImage, pin.png),
+    ], pin.ratio)) {
+      return;
+    }
+    if (!await _putExtraSource(
+      backend,
+      drawn,
+      current,
+      destination,
+      _pointFeatures([(0, pin.point, destinationImage)]),
+    )) {
+      return;
+    }
+    await _putExtraLayer(
+      backend,
+      drawn,
+      current,
+      SymbolLayer(
+        id: destination,
+        sourceId: destination,
+        iconImage: destinationImage,
+        iconAnchor: IconAnchor.BOTTOM,
+        iconSize: 1,
+        iconAllowOverlap: true,
+        iconIgnorePlacement: true,
+      ),
+      () => _symbolBelow(destination, drawn),
+    );
+  }
 }
 
 /// Test seam: attaches a fake [MapboxBackend] instead of a `MapboxMap`, as
@@ -1267,7 +2273,7 @@ typedef _OptionLine = ({String id, int index, bool casing, bool selected});
 /// The key of a cached label image.
 typedef _LabelKey = (String, bool, double, RouteLabelColors);
 
-/// What a style holds of the route options.
+/// What a style holds of the route options, the alternates and the pins.
 class _Drawn {
   final lines = <_OptionLine>[];
   final sources = <String>{};
@@ -1275,14 +2281,35 @@ class _Drawn {
   bool labelSource = false;
   bool labelLayer = false;
 
-  /// Whether the label layer was moved below the vehicle (a failed move is
-  /// done again on the next update).
+  /// Whether the label layer was moved into place (a failed move is done
+  /// again on the next update).
   bool labelLayerPlaced = false;
+
+  /// The route each option source holds, by source id.
+  final optionRoutes = <String, NavRoute>{};
+
+  /// The routes the option labels stand for, by index; null when none.
+  List<NavRoute>? labelRoutes;
+
+  /// The sources and layers of the alternates, the pins and the
+  /// destination; the layers moved into place; the images by layer.
+  final extraSources = <String>{};
+  final extraLayers = <String>{};
+  final placedLayers = <String>{};
+  final extraImages = <String, Set<String>>{};
+
+  /// The routes the alternate lines and bubbles stand for, by index; null
+  /// when none.
+  List<NavRoute>? alternateLines;
+  List<NavRoute>? alternateBubbles;
+
+  /// The search pins drawn; null when none.
+  _Pins? pins;
 }
 
 /// The rendered labels of the shown route options.
 class _Labels {
-  _Labels(this.images, this.features, this.pixelRatio);
+  _Labels(this.routes, this.images, this.features, this.pixelRatio);
 
   /// One label per route, at the middle of the route; the selected one last.
   factory _Labels.of(
@@ -1299,6 +2326,7 @@ class _Labels {
     String image(int i) =>
         MapboxNavigationMap.optionLabelImage(i, selected: i == selected);
     return _Labels(
+      routes,
       [for (var i = 0; i < routes.length; i++) (image(i), pngs[i])],
       {
         'type': 'FeatureCollection',
@@ -1322,6 +2350,9 @@ class _Labels {
     );
   }
 
+  /// The route each label stands for, by index.
+  final List<NavRoute> routes;
+
   /// The image id and PNG of each label.
   final List<(String, Uint8List)> images;
 
@@ -1337,4 +2368,78 @@ class _PendingFit {
   const _PendingFit(this.points, this.padding);
   final List<GeoPoint> points;
   final EdgeInsets padding;
+}
+
+/// The rendered bubbles of the shown alternates.
+class _AlternateBubbles {
+  _AlternateBubbles(this.routes, this.images, this.features, this.pixelRatio);
+
+  /// One bubble per alternate, at most
+  /// [MapboxNavigationMap.alternateLabelLead] metres past its divergence
+  /// and at most at the middle of the part that differs
+  /// ([alternateLabelDistance]).
+  factory _AlternateBubbles.of(
+    List<AlternateRoute> alternates,
+    List<Uint8List> pngs,
+    double pixelRatio,
+  ) {
+    String image(int i) => MapboxNavigationMap.alternateLabelImage(i);
+    return _AlternateBubbles(
+      [for (final a in alternates) a.route],
+      [for (var i = 0; i < alternates.length; i++) (image(i), pngs[i])],
+      _pointFeatures([
+        for (var i = 0; i < alternates.length; i++)
+          (
+            i,
+            alternates[i].route.pointAt(
+              alternateLabelDistance(
+                alternates[i],
+                lead: MapboxNavigationMap.alternateLabelLead,
+              ),
+            ),
+            image(i),
+          ),
+      ]),
+      pixelRatio,
+    );
+  }
+
+  /// The route each bubble stands for, by index.
+  final List<NavRoute> routes;
+
+  /// The image id and PNG of each bubble.
+  final List<(String, Uint8List)> images;
+
+  /// The GeoJSON of the bubble source.
+  final Map<String, Object?> features;
+
+  /// The pixel ratio the PNGs were rendered at: their style image scale.
+  final double pixelRatio;
+}
+
+/// Rendered search pins.
+class _Pins {
+  _Pins(
+    this.places,
+    this.focusedId,
+    this.png,
+    this.focusedPng,
+    this.pixelRatio,
+  );
+
+  final List<AlongRoutePlace> places;
+  final String? focusedId;
+  final Uint8List png;
+  final Uint8List focusedPng;
+  final double pixelRatio;
+
+  /// One point per place, the focused one last (drawn on top).
+  Map<String, Object?> get features => _pointFeatures([
+    for (var i = 0; i < places.length; i++)
+      if (places[i].id != focusedId)
+        (i, places[i].position, MapboxNavigationMap.searchPinImage),
+    for (var i = 0; i < places.length; i++)
+      if (places[i].id == focusedId)
+        (i, places[i].position, MapboxNavigationMap.searchPinFocusedImage),
+  ]);
 }

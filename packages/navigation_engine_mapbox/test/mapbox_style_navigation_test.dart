@@ -83,6 +83,17 @@ Future<Uint8List> _painter(
   required RouteLabelColors colors,
 }) async => Uint8List.fromList(text.codeUnits);
 
+/// Renders a search pin without the engine.
+Future<Uint8List> _pinPainter({
+  required bool focused,
+  required double pixelRatio,
+  required Color color,
+}) async => Uint8List.fromList('pin'.codeUnits);
+
+/// Renders the destination pin without the engine.
+Future<Uint8List> _destinationPainter({required double pixelRatio}) async =>
+    Uint8List.fromList('destination'.codeUnits);
+
 /// The vehicle image, without the engine.
 Future<Uint8List> _vehicle(double ratio) async => Uint8List(4);
 
@@ -162,6 +173,8 @@ class Harness {
     TextScaler? textScaler,
     bool pushed = false,
     void Function(mb.MapboxMap map)? onMapCreated,
+    void Function(GeoPoint point)? onMapTap,
+    void Function(GeoPoint point)? onMapLongPress,
   }) {
     final screen = MapboxStyleNavigation(
       session: session,
@@ -182,6 +195,8 @@ class Harness {
       focus: focus,
       initialZoom: initialZoom,
       onMapCreated: onMapCreated,
+      onMapTap: onMapTap,
+      onMapLongPress: onMapLongPress,
       mapViewBuilder: views.build,
     );
     return MaterialApp(
@@ -229,6 +244,8 @@ class Harness {
     TextScaler? textScaler,
     bool pushed = false,
     void Function(mb.MapboxMap map)? onMapCreated,
+    void Function(GeoPoint point)? onMapTap,
+    void Function(GeoPoint point)? onMapLongPress,
     bool createMap = true,
   }) async {
     tester.view
@@ -254,6 +271,8 @@ class Harness {
         textScaler: textScaler,
         pushed: pushed,
         onMapCreated: onMapCreated,
+        onMapTap: onMapTap,
+        onMapLongPress: onMapLongPress,
       ),
     );
     if (pushed) {
@@ -262,7 +281,10 @@ class Harness {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
     }
-    map.labelPainter = _painter;
+    map
+      ..labelPainter = _painter
+      ..pinPainter = _pinPainter
+      ..destinationPinPainter = _destinationPainter;
     await tester.pump();
     if (createMap) await this.createMap(tester);
   }
@@ -1012,4 +1034,119 @@ void main() {
       expect(recenterRect.overlaps(speedRect), isFalse);
     });
   }
+
+  group('map taps, pins and alternates', () {
+    const p = GeoPoint(10.77, 106.69);
+
+    List<double> pin(Harness h) => [
+      for (final n
+          in ((((h.views.backend.sources[_Map.destination]! as Map)['features']
+                              as List)
+                          .single
+                      as Map)['geometry']
+                  as Map)['coordinates']
+              as List)
+        (n as num).toDouble(),
+    ];
+
+    navTest('onMapTap and onMapLongPress reach the app; a route option tap '
+        'selects it and is no map tap', (tester, h) async {
+      final taps = <GeoPoint>[];
+      final longs = <GeoPoint>[];
+      await h.mount(tester, onMapTap: taps.add, onMapLongPress: longs.add);
+      h.views.tapMap(p);
+      await h.settle(tester);
+      expect(taps, [p]);
+      h.views.longPressMap(p);
+      expect(longs, [p]);
+
+      h.flow.previewRoutes([route, alt]);
+      await h.settle(tester);
+      h.views.backend.tapFeature(_Map.optionLayer(1));
+      h.views.tapMap(p);
+      await h.settle(tester);
+      expect((h.flow.state.value as FlowOverview).selected, 1);
+      expect(taps, [p]);
+    });
+
+    navTest('the destination pin shows in the overview, stays through the '
+        'night light preset and a style reload, and goes on stop', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester);
+      expect(h.map, isA<DestinationPinMap>());
+      expect(h.map, isA<SearchPinsMap>());
+      expect(h.map, isA<AlternateRoutesMap>());
+      h.flow.previewRoutes([route, alt]);
+      await h.settle(tester);
+      final end = route.points.last;
+      expect(pin(h), [end.lng, end.lat]);
+
+      // Night on Standard is its light preset: nothing is reloaded.
+      h.flow.nightMode = NightMode.alwaysNight;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      await h.settle(tester);
+      expect(h.lightPreset, 'night');
+      expect(h.views.backend.names, isNot(contains('loadStyleURI')));
+      expect(pin(h), [end.lng, end.lat]);
+
+      // A style reload: drawn again, at night.
+      h.views.backend.resetStyle();
+      await h.loadStyle(tester);
+      expect(h.lightPreset, 'night');
+      expect(pin(h), [end.lng, end.lat]);
+      expect(h.optionLines, hasLength(2));
+
+      h.flow.stop();
+      await tester.pump();
+      await h.settle(tester);
+      expect(h.views.backend.layerIds, isNot(contains(_Map.destination)));
+    });
+
+    navTest('on another style the night style load draws the pin '
+        'again', (tester, h) async {
+      await h.mount(tester, styleUri: _dayStyle, nightStyleUri: _nightStyle);
+      h.flow.previewRoutes([route, alt]);
+      await h.settle(tester);
+      h.flow.nightMode = NightMode.alwaysNight;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(h.views.backend.argsOf('loadStyleURI'), [_nightStyle]);
+      h.views.backend.resetStyle();
+      await h.loadStyle(tester);
+      final end = route.points.last;
+      expect(pin(h), [end.lng, end.lat]);
+    });
+
+    for (final (name, nightMode, colors) in [
+      ('by day', NightMode.alwaysDay, day),
+      ('at night', NightMode.alwaysNight, night),
+    ]) {
+      navTest('the alternates are worded by strings and drawn in the '
+          'theme\'s colours $name', (tester, h) async {
+        const strings = NavigationStrings.vietnamese();
+        await h.mount(tester, strings: strings);
+        final view = h.views.view;
+        AlternateRoute alternate(int minutes) => AlternateRoute(
+          route: alt,
+          timeDelta: Duration(minutes: minutes),
+          divergence: 0,
+        );
+        expect(view.alternateLabel!(alternate(-2)), strings.minFaster(2));
+        expect(view.alternateLabel!(alternate(3)), strings.minSlower(3));
+        expect(view.alternateLabel!(alternate(0)), strings.similarEta);
+        final bubbles = alternateLabelColorsOf(colors);
+        expect(view.alternateColor, colors.alternative);
+        expect(view.fasterLabelColors, bubbles.faster);
+        expect(view.slowerLabelColors, bubbles.slower);
+        expect(view.searchPinColor, colors.warning);
+        expect(h.map.alternateColor, colors.alternative);
+        expect(h.map.fasterLabelColors, bubbles.faster);
+        expect(h.map.slowerLabelColors, bubbles.slower);
+        expect(h.map.pinColor, colors.warning);
+      }, nightMode: nightMode);
+    }
+  });
 }

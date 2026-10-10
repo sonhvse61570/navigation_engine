@@ -28,6 +28,15 @@ import 'flutter_map_navigation_view.dart';
 /// the session's route line; the other options use
 /// [MapboxStyleColors.alternative].
 ///
+/// While navigating, the alternates the flow finds are drawn in
+/// [MapboxStyleColors.alternative], each with a bubble worded by [strings]
+/// ([NavigationStrings.minFaster], [NavigationStrings.minSlower],
+/// [NavigationStrings.similarEta]): the text in the accent colour for a
+/// faster one, in the muted text colour otherwise, on the surface; a tap on
+/// one switches to it. Search pins are drawn in [MapboxStyleColors.warning],
+/// and the destination pin at the end of the route. [onMapTap] and
+/// [onMapLongPress] give the app the taps on the map itself.
+///
 /// The map is a [FlutterMapNavigationView] with the [tileUrlTemplate] tiles
 /// ([nightTileUrlTemplate] at night, when set): it attaches itself to
 /// [session] and ticks it while on screen. Its [attribution] stays above
@@ -60,6 +69,8 @@ class NeutralNavigation extends StatefulWidget {
     this.initialZoom = 17,
     this.onMapReady,
     this.children = const [],
+    this.onMapTap,
+    this.onMapLongPress,
   });
 
   /// The session shown on the map. Owned by the app.
@@ -141,6 +152,16 @@ class NeutralNavigation extends StatefulWidget {
   /// see [FlutterMapNavigationView.children].
   final List<Widget> children;
 
+  /// Called with the place the user taps on the map, but not on what the
+  /// screen draws (a route option, an alternate, a pin); see
+  /// [FlutterMapNavigationView.onMapTap].
+  final void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place the user long-presses on the map, such as to pin
+  /// a destination of the app's own while idle; see
+  /// [FlutterMapNavigationView.onMapLongPress].
+  final void Function(GeoPoint point)? onMapLongPress;
+
   @override
   State<NeutralNavigation> createState() => _NeutralNavigationState();
 }
@@ -167,6 +188,10 @@ class _NeutralNavigationState extends State<NeutralNavigation> {
     );
   }
 
+  // A method, not a closure: its tear-off stays equal across builds.
+  String _alternateLabel(AlternateRoute alternate) =>
+      alternateRouteLabel(alternate, widget.strings);
+
   @override
   Widget build(BuildContext context) {
     _syncTheme(Theme.of(context).colorScheme);
@@ -182,37 +207,46 @@ class _NeutralNavigationState extends State<NeutralNavigation> {
       speedLimitSign: widget.speedLimitSign,
       idleBuilder: widget.idleBuilder,
       onEnd: widget.onEnd,
-      mapBuilder: (context, config, colors, routeColors, routeLabel) =>
-          ValueListenableBuilder<double>(
-            valueListenable: config.bottomOverlayHeight,
-            builder: (context, bottomInset, _) => FlutterMapNavigationView(
-              key: _mapKey,
-              session: widget.session,
-              initialCenter: widget.initialCenter,
-              initialZoom: widget.initialZoom,
-              userAgentPackageName: widget.userAgentPackageName,
-              tileUrlTemplate: widget.tileUrlTemplate,
-              nightTileUrlTemplate: widget.nightTileUrlTemplate,
-              attribution: widget.attribution,
-              night: config.isNight,
-              routeColors: routeColors,
-              puck: widget.puck,
-              focus: widget.focus,
-              // The scaffold shows the recenter button.
-              recenterButton: (_) => const SizedBox.shrink(),
-              routeLabel: routeLabel,
-              onRouteOptionTap: config.onRouteOptionTap,
-              labelColors: colors.routeLabelColors,
-              alternativeRouteColor: colors.alternative,
-              onMapReady: (controller) {
-                config.onMapReady();
-                widget.onMapReady?.call(controller);
-              },
-              // The attribution keeps above the panels.
-              bottomInset: bottomInset,
-              children: widget.children,
-            ),
+      mapBuilder: (context, config, colors, routeColors, routeLabel) {
+        final alternateColors = alternateLabelColorsOf(colors);
+        return ValueListenableBuilder<double>(
+          valueListenable: config.bottomOverlayHeight,
+          builder: (context, bottomInset, _) => FlutterMapNavigationView(
+            key: _mapKey,
+            session: widget.session,
+            initialCenter: widget.initialCenter,
+            initialZoom: widget.initialZoom,
+            userAgentPackageName: widget.userAgentPackageName,
+            tileUrlTemplate: widget.tileUrlTemplate,
+            nightTileUrlTemplate: widget.nightTileUrlTemplate,
+            attribution: widget.attribution,
+            night: config.isNight,
+            routeColors: routeColors,
+            puck: widget.puck,
+            focus: widget.focus,
+            // The scaffold shows the recenter button.
+            recenterButton: (_) => const SizedBox.shrink(),
+            routeLabel: routeLabel,
+            onRouteOptionTap: config.onRouteOptionTap,
+            labelColors: colors.routeLabelColors,
+            alternativeRouteColor: colors.alternative,
+            alternateLabel: _alternateLabel,
+            alternateColor: colors.alternative,
+            fasterLabelColors: alternateColors.faster,
+            slowerLabelColors: alternateColors.slower,
+            searchPinColor: colors.warning,
+            onMapTap: widget.onMapTap,
+            onMapLongPress: widget.onMapLongPress,
+            onMapReady: (controller) {
+              config.onMapReady();
+              widget.onMapReady?.call(controller);
+            },
+            // The attribution keeps above the panels.
+            bottomInset: bottomInset,
+            children: widget.children,
           ),
+        );
+      },
     );
   }
 }

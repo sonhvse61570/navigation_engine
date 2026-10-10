@@ -1,4 +1,7 @@
+// ignore_for_file: implementation_imports
+
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -8,6 +11,8 @@ import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 import 'package:navigation_engine_flutter_map/navigation_engine_flutter_map.dart';
+import 'package:navigation_engine_flutter_map/src/flutter_map_navigation_map.dart'
+    show toLatLng;
 
 class FakeFixSource implements FixSource {
   final _controller = StreamController<NavFix>.broadcast(sync: true);
@@ -101,6 +106,25 @@ List<Color> _fields(MapboxStyleColors c) => [
   c.end,
 ];
 
+/// A 1x1 transparent PNG, for the engine-free pin painters.
+final _png = Uint8List.fromList(const [
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, //
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+  0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+  0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+]);
+
+Future<Uint8List> _fakeSearchPin({
+  required bool focused,
+  required double pixelRatio,
+  required Color color,
+}) async => _png;
+
+Future<Uint8List> _fakeDestinationPin({required double pixelRatio}) async =>
+    _png;
+
 /// A session and a flow on a fake clock, and the drop-in on a 400x800
 /// surface.
 class Harness {
@@ -153,6 +177,8 @@ class Harness {
     void Function(fm.MapController controller)? onMapReady,
     List<Widget> children = const [],
     String? attribution,
+    void Function(GeoPoint point)? onMapTap,
+    void Function(GeoPoint point)? onMapLongPress,
   }) {
     final screen = NeutralNavigation(
       session: session,
@@ -174,6 +200,8 @@ class Harness {
       initialZoom: initialZoom,
       onMapReady: onMapReady,
       attribution: attribution ?? 'OpenStreetMap contributors',
+      onMapTap: onMapTap,
+      onMapLongPress: onMapLongPress,
       children: children,
     );
     return MaterialApp(
@@ -221,6 +249,8 @@ class Harness {
     void Function(fm.MapController controller)? onMapReady,
     List<Widget> children = const [],
     String? attribution,
+    void Function(GeoPoint point)? onMapTap,
+    void Function(GeoPoint point)? onMapLongPress,
   }) async {
     tester.view
       ..physicalSize = size
@@ -246,8 +276,16 @@ class Harness {
         onMapReady: onMapReady,
         children: children,
         attribution: attribution,
+        onMapTap: onMapTap,
+        onMapLongPress: onMapLongPress,
       ),
     );
+    // Engine-free pins: the real painters render through the engine.
+    if (session.map case final FlutterMapNavigationMap map) {
+      map
+        ..pinPainter = _fakeSearchPin
+        ..destinationPinPainter = _fakeDestinationPin;
+    }
     if (pushed) {
       await tester.tap(find.text('HOME'));
       // No pumpAndSettle: the map frame's ticker always schedules a frame.
@@ -1018,6 +1056,117 @@ void main() {
       await h.mount(tester, attribution: 'X');
       expect(find.text('© X'), findsOneWidget);
       expect(find.text('© OpenStreetMap contributors'), findsNothing);
+    });
+  });
+
+  group('map taps, pins and alternates (SP6)', () {
+    navTest('map taps and long presses reach the app', (tester, h) async {
+      final taps = <GeoPoint>[];
+      final presses = <GeoPoint>[];
+      void onTap(GeoPoint p) => taps.add(p);
+      void onPress(GeoPoint p) => presses.add(p);
+      await h.mount(tester, onMapTap: onTap, onMapLongPress: onPress);
+      final view = tester.widget<FlutterMapNavigationView>(
+        find.byType(FlutterMapNavigationView),
+      );
+      expect(view.onMapTap, same(onTap));
+      expect(view.onMapLongPress, same(onPress));
+
+      const at = Offset(200, 300);
+      final expected = h.map.controller.camera.screenOffsetToLatLng(at);
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(Duration.zero);
+      expect(taps, hasLength(1));
+      expect(taps.single.lat, closeTo(expected.latitude, 1e-9));
+      expect(taps.single.lng, closeTo(expected.longitude, 1e-9));
+      await tester.longPressAt(at);
+      await tester.pump();
+      expect(presses, hasLength(1));
+      expect(taps, hasLength(1));
+    });
+
+    navTest('a tap on a route option selects it and is no map tap', (
+      tester,
+      h,
+    ) async {
+      final taps = <GeoPoint>[];
+      await h.mount(tester, onMapTap: taps.add);
+      h.flow.previewRoutes([route, alt]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.tap(
+        find.byWidgetPredicate((w) => w is RouteLabelBubble && !w.selected),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(Duration.zero);
+      expect((h.flow.state.value as FlowOverview).selected, 1);
+      expect(taps, isEmpty);
+    });
+
+    navTest('the overview pins the destination; stop removes it', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester);
+      expect(h.map, isA<DestinationPinMap>());
+      expect(h.map, isA<SearchPinsMap>());
+      expect(h.map, isA<AlternateRoutesMap>());
+      h.flow.previewRoutes([route, alt]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(h.map.destinationPin.value?.point, toLatLng(route.points.last));
+
+      h.flow.stop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(h.map.destinationPin.value, isNull);
+    });
+
+    navTest('alternates and pins use the screen\'s words and the theme\'s '
+        'colours', (tester, h) async {
+      await h.mount(tester);
+      AlternateRoute a(int minutes) => AlternateRoute(
+        route: alt,
+        timeDelta: Duration(minutes: minutes),
+        divergence: 0,
+      );
+      const strings = NavigationStrings();
+      final label = h.map.alternateLabel!;
+      expect(label(a(-2)), strings.minFaster(2));
+      expect(label(a(3)), strings.minSlower(3));
+      expect(label(a(0)), strings.similarEta);
+      expect(h.map.alternateColor, _day.alternative);
+      expect(h.map.pinColor, _day.warning);
+      expect(h.map.fasterLabelColors.text, _day.accent);
+      expect(h.map.fasterLabelColors.fill, _day.surface);
+      expect(h.map.slowerLabelColors.text, _day.onSurfaceVariant);
+
+      h.flow.nightMode = NightMode.alwaysNight;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(h.map.alternateColor, _night.alternative);
+      expect(h.map.pinColor, _night.warning);
+      expect(h.map.fasterLabelColors.text, _night.accent);
+      expect(h.map.slowerLabelColors.text, _night.onSurfaceVariant);
+    });
+
+    navTest('the screen\'s strings word the alternate bubbles', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester, strings: const NavigationStrings.vietnamese());
+      final label = h.map.alternateLabel!;
+      expect(
+        label(
+          AlternateRoute(
+            route: alt,
+            timeDelta: const Duration(minutes: -4),
+            divergence: 0,
+          ),
+        ),
+        const NavigationStrings.vietnamese().minFaster(4),
+      );
     });
   });
 }

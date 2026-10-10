@@ -168,3 +168,54 @@
   header. When that step is the arrival, the Mapbox-style banner shows it
   with the flag and `NavigationBanner` still leaves it out. Speech is
   unchanged (`NavGuidance.spokenThenWithin`, 100 m).
+- `DestinationPinMap` (`showDestinationPin(GeoPoint?)`, null clears): the
+  interface of maps that pin the trip's destination, next to
+  `SearchPinsMap`. `NavigationFlowScaffold`, and so both
+  `GoogleStyleFlowScaffold` and `MapboxStyleFlowScaffold`, pins the end of
+  the selected route in the overview, while navigating and arrived, moves
+  it when the selection, an alternate or a reroute changes the route, shows
+  it again for a new flow and on a map that reports itself ready, and
+  removes it when the flow goes back to idle and while a request loads or
+  has failed, as the route options (a cancel back to the overview shows it
+  again). A pin the app shows itself meanwhile is left alone until the
+  overview replaces it. A call that throws is reported through
+  `FlutterError`.
+- `paintSearchPin` (moved from navigation_engine_google_maps) and
+  `paintDestinationPin`: the shared search result pin and the destination
+  pin (a red pin of this package's own design, 32×42 logical px) as PNG
+  bytes for native marker images, for every adapter.
+- `MapTapGuard`: keeps the map tap of a gesture whose tap a feature the
+  map draws took (a route option, an alternate, a bubble, a pin) away from
+  the app, on a platform that reports both, in either order: a feature tap
+  drops the next map tap of its frame, and a map tap is held one turn of
+  the event loop so that a feature tap following it drops it. No wall
+  clock. Every bundled adapter uses it for `onMapTap`.
+- `alternateRouteLabel(alternate, strings)` and
+  `alternateLabelColorsOf(colors)`: the words of an alternate route's
+  bubble ("2 min faster", "+3 min", "Similar ETA", from
+  `NavigationStrings`) and the bubble colours of a faster and a slower
+  alternate in `MapboxStyleColors`. `GoogleStyleFlowScaffold` and the
+  MapLibre, flutter_map and Mapbox drop-ins use them instead of their own
+  copies; nothing looks different.
+- `AlternateRoute.rejoin` (optional): where an alternate comes back onto
+  the current route to share its end, as distances along both routes.
+  `NavigationFlowController` measures it as the divergence of the two
+  routes reversed, once per alternate fetch, mapped back onto each route
+  by vertex (each route measures metres in its own planar frame, so a
+  long trip stays exact); null for an alternate that ends elsewhere.
+- `alternateLinePoints(alternate)`: the part of an alternate a map draws
+  as its line, from 40 m before it leaves the current route to 40 m after
+  it rejoins it (or to its end). Every bundled adapter draws its alternates
+  with it, so a tap on the current route where an alternate shares the
+  road is a map tap on every adapter, not a switch to the alternate.
+- `alternateLabelDistance(alternate, {lead = 400})`: where a map puts an
+  alternate's bubble, `min(divergence + lead, the middle of the part that
+  differs)`, the part running to the rejoin (else the end). The bundled
+  adapters use it, so a bubble always lies on the drawn line; before, on a
+  detour shorter than about 400 m, it could sit on the shared road.
+- `MapDefaultColors`: the colours every bundled map view gives what an app
+  leaves unset, the same on every adapter: the route option labels
+  (`RouteLabelColors()`), the faster and slower alternate bubbles and the
+  search pins (`MapboxStyleColors.day`, through `alternateLabelColorsOf`),
+  and the grey alternate lines. The drop-ins still pass their theme's
+  colours.

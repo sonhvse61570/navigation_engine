@@ -89,6 +89,90 @@ void main() {
     expect(done.length + ahead.length, route.points.length + 2);
   });
 
+  group('pointsBetween', () {
+    // 0 m, 100 m, 200 m, 300 m due north.
+    final line = NavRoute.fromPoints([
+      for (var d = 0.0; d <= 300; d += 100)
+        offsetPoint(const GeoPoint(10.77, 106.70), 0, d),
+    ]);
+
+    void expectNear(List<GeoPoint> actual, List<GeoPoint> expected) {
+      expect(actual, hasLength(expected.length));
+      for (var i = 0; i < actual.length; i++) {
+        expect(
+          distanceBetween(actual[i], expected[i]),
+          lessThan(0.01),
+          reason: 'point $i',
+        );
+      }
+    }
+
+    test('interpolates both ends and keeps the vertices between', () {
+      expectNear(line.pointsBetween(50, 250), [
+        line.pointAt(50),
+        line.points[1],
+        line.points[2],
+        line.pointAt(250),
+      ]);
+    });
+
+    test('an end on a vertex (to the millimetre) is that vertex, once', () {
+      expect(line.pointsBetween(100, 200), [line.points[1], line.points[2]]);
+      expect(line.pointsBetween(100 - 1e-4, 200 - 1e-4), [
+        line.points[1],
+        line.points[2],
+      ]);
+      expect(line.pointsBetween(100 + 1e-4, 200 + 1e-4), [
+        line.points[1],
+        line.points[2],
+      ]);
+      expect(line.pointsBetween(0, line.length), line.points);
+    });
+
+    test('within one segment it is the two ends', () {
+      expectNear(line.pointsBetween(120, 180), [
+        line.pointAt(120),
+        line.pointAt(180),
+      ]);
+    });
+
+    test('the ends are clamped to the route; an empty range is its one '
+        'point twice', () {
+      expect(line.pointsBetween(-50, 400), line.points);
+      expectNear(line.pointsBetween(150, 150), [
+        line.pointAt(150),
+        line.pointAt(150),
+      ]);
+      expectNear(line.pointsBetween(200, 100), [
+        line.pointAt(200),
+        line.pointAt(200),
+      ]);
+    });
+
+    test('on the sample route it covers the same ground as splitAt', () {
+      final part = route.pointsBetween(1000, 3000);
+      final (_, ahead) = route.splitAt(1000);
+      final (done, _) = route.splitAt(3000);
+      final inner = ahead.where((p) => done.contains(p)).toList();
+      expectNear(part, [route.pointAt(1000), ...inner, route.pointAt(3000)]);
+    });
+  });
+
+  test('distanceAtVertex is the distance along the route at each point', () {
+    expect(route.distanceAtVertex(0), 0);
+    expect(route.distanceAtVertex(route.points.length - 1), route.length);
+    for (final i in [1, 50, 120, 203]) {
+      final d = route.distanceAtVertex(i);
+      expect(
+        distanceBetween(route.pointAt(d), route.points[i]),
+        lessThan(0.01),
+      );
+      expect(d, greaterThanOrEqualTo(route.distanceAtVertex(i - 1)));
+    }
+    expect(() => route.distanceAtVertex(-1), throwsRangeError);
+    expect(() => route.distanceAtVertex(route.points.length), throwsRangeError);
+  });
+
   test('nextStep returns the first step strictly ahead', () {
     final second = route.steps[1];
     expect(route.nextStep(second.distance - 10), same(second));

@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
+import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_mapbox/src/mapbox_navigation_map.dart' as mba;
 
 /// A layer of the fake style: the layer and the id it was last moved below
@@ -41,6 +42,18 @@ class RecordingBackend implements mba.MapboxBackend {
   /// The tap interactions, by layer id.
   final taps = <String, mba.FeatureTap>{};
 
+  /// The map's own tap and long-tap listeners (the interactions on the map
+  /// itself), and how often they were added. Not recorded in [calls].
+  void Function(GeoPoint point)? mapTap;
+  void Function(GeoPoint point)? mapLongTap;
+  var mapTapListeners = 0;
+
+  /// A tap on the map where no feature took it, as the SDK reports one.
+  void tapMap(GeoPoint point) => mapTap?.call(point);
+
+  /// A long tap on the map, as the SDK reports one (wherever it is).
+  void longPressMap(GeoPoint point) => mapLongTap?.call(point);
+
   /// Held back until completed; consumed by the first addImage call.
   Completer<void>? get addImageGate => _addImageGate;
   set addImageGate(Completer<void>? gate) {
@@ -63,6 +76,9 @@ class RecordingBackend implements mba.MapboxBackend {
 
   /// A layer id whose move throws once (the layer stays where it is).
   String? failMoveOf;
+
+  /// A layer id whose removal throws once (the layer stays).
+  String? failRemoveOf;
 
   /// A new style: the sources, layers, images and config so far are gone.
   void resetStyle() {
@@ -221,6 +237,10 @@ class RecordingBackend implements mba.MapboxBackend {
   @override
   Future<void> removeLayer(String layerId) async {
     await _record('removeLayer', layerId);
+    if (layerId == failRemoveOf) {
+      failRemoveOf = null;
+      _fail('removal of $layerId failed');
+    }
     final at = layerIds.indexOf(layerId);
     if (at < 0) _fail('Layer $layerId not found.');
     layers.removeAt(at);
@@ -263,6 +283,16 @@ class RecordingBackend implements mba.MapboxBackend {
   void addTapInteraction(String layerId, mba.FeatureTap onTap) {
     calls.add(('addTapInteraction', layerId));
     taps[layerId] = onTap;
+  }
+
+  @override
+  void addMapTapInteractions({
+    required void Function(GeoPoint point) onTap,
+    required void Function(GeoPoint point) onLongTap,
+  }) {
+    mapTapListeners++;
+    mapTap = onTap;
+    mapLongTap = onLongTap;
   }
 
   @override

@@ -146,6 +146,61 @@ void main() {
       expect(taps, [0]);
     });
 
+    test('the line is the alternate\'s own part: from 40 m before the '
+        'divergence to 40 m after the rejoin (alternateLinePoints)', () {
+      final map = GoogleMapsNavigationMap();
+      addTearDown(map.dispose);
+      final rejoining = AlternateRoute(
+        route: alt,
+        timeDelta: const Duration(minutes: -2),
+        divergence: 300,
+        rejoin: (alternate: alt.length - 300, current: 1000),
+      );
+      map.showAlternates([faster, rejoining], onTap: (_) {});
+      List<gm.LatLng> points(int i) => map.alternatePolylines.value
+          .singleWhere(
+            (p) => p.polylineId.value == 'navigation_engine_alternate_$i',
+          )
+          .points;
+      expect(points(0), [
+        for (final p in alternateLinePoints(faster)) gm.LatLng(p.lat, p.lng),
+      ]);
+      expect(points(1), [
+        for (final p in alternateLinePoints(rejoining)) gm.LatLng(p.lat, p.lng),
+      ]);
+      expect(points(0).length, lessThan(alt.points.length));
+      final start = alt.pointAt(260);
+      expect(points(0).first.latitude, closeTo(start.lat, 1e-9));
+      expect(points(0).first.longitude, closeTo(start.lng, 1e-9));
+      final end = alt.pointAt(alt.length - 260);
+      expect(points(1).last.latitude, closeTo(end.lat, 1e-9));
+      expect(points(1).last.longitude, closeTo(end.lng, 1e-9));
+    });
+
+    test('a tap on a line drawn for an older list is ignored', () {
+      final map = GoogleMapsNavigationMap();
+      addTearDown(map.dispose);
+      final taps = <int>[];
+      map.showAlternates([faster, slower], onTap: taps.add);
+      gm.Polyline line(int i) => map.alternatePolylines.value.singleWhere(
+        (p) => p.polylineId.value == 'navigation_engine_alternate_$i',
+      );
+      // The SDK still holds the old polylines for one round trip.
+      final old = line(0).onTap!;
+      map.showAlternates([slower, faster], onTap: taps.add);
+      old();
+      expect(taps, isEmpty, reason: 'index 0 is another route now');
+      line(0).onTap!();
+      expect(taps, [0]);
+      final kept = line(1).onTap!;
+      map.showAlternates([slower, faster], onTap: taps.add);
+      kept();
+      expect(taps, [0, 1], reason: 'the same route at index 1');
+      map.clearAlternates();
+      kept();
+      expect(taps, [0, 1]);
+    });
+
     test('clearAlternates removes them and drops a bubble render still '
         'pending', () async {
       final map = GoogleMapsNavigationMap();
@@ -497,7 +552,7 @@ void main() {
         focusedId: 'b',
         onTap: tapped.add,
       );
-      expect(colors.toSet(), {GoogleStyleColors.day.warning});
+      expect(colors.toSet(), {MapDefaultColors.searchPin});
       map.pinColor = GoogleStyleColors.night.warning;
       await pumpEventQueue();
       expect(colors.last, GoogleStyleColors.night.warning);
@@ -522,6 +577,36 @@ void main() {
       await pumpEventQueue();
       expect(colors, hasLength(painted));
       expect(map.searchMarkers.value, isEmpty);
+    });
+
+    test('a tap on a pin drawn for an older list reports only a place still '
+        'shown, with the newest onTap', () async {
+      final map = GoogleMapsNavigationMap();
+      addTearDown(map.dispose);
+      map.pinPainter = ({
+        required bool focused,
+        required double pixelRatio,
+        required Color color,
+      }) async => _pixel;
+      final first = <AlongRoutePlace>[];
+      final second = <AlongRoutePlace>[];
+      await map.showSearchPins([place, other], onTap: first.add);
+      gm.Marker pin(String id) => map.searchMarkers.value.singleWhere(
+        (m) => m.markerId.value == 'navigation_engine_search_$id',
+      );
+      // The SDK still holds the old markers for one round trip.
+      final oldA = pin('a').onTap!;
+      final oldB = pin('b').onTap!;
+      final pending = map.showSearchPins([other], onTap: second.add);
+      oldA();
+      oldB();
+      expect(first, isEmpty);
+      expect(second, [other]);
+      await pending;
+      final kept = pin('b').onTap!;
+      map.clearSearchPins();
+      kept();
+      expect(second, [other]);
     });
 
     test('clearSearchPins drops a pin render still pending', () async {
@@ -751,7 +836,8 @@ void main() {
           session: session,
           initialCenter: sampleRoute.points.first,
           alternateLabel: (a) => '${a.minutesDelta} min',
-          labelColors: GoogleStyleColors.night,
+          labelColors: GoogleStyleColors.night.routeLabelColors,
+          alternateColor: GoogleStyleColors.night.alternative,
         ),
       );
       final map = session.map! as GoogleMapsNavigationMap;

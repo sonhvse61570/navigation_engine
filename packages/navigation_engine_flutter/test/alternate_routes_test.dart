@@ -139,6 +139,153 @@ void main() {
     });
   });
 
+  group('alternateLabelDistance', () {
+    AlternateRoute alt({required double divergence, double? rejoin}) =>
+        AlternateRoute(
+          route: detourRoute(),
+          timeDelta: Duration.zero,
+          divergence: divergence,
+          rejoin: rejoin == null ? null : (alternate: rejoin, current: 0),
+        );
+
+    test('without a rejoin: 400 m past the divergence, or the middle of '
+        'the rest when nearer', () {
+      expect(alternateLabelDistance(alt(divergence: 1000)), 1400);
+      final rest = (3000 + detourRoute().length) / 2;
+      expect(alternateLabelDistance(alt(divergence: 3000)), rest);
+    });
+
+    test('with a rejoin: the middle of the part that differs when nearer '
+        'than 400 m, so the bubble is on the drawn line', () {
+      expect(alternateLabelDistance(alt(divergence: 1040, rejoin: 1240)), 1140);
+      expect(alternateLabelDistance(alt(divergence: 1040, rejoin: 2560)), 1440);
+    });
+
+    test('takes another lead', () {
+      expect(alternateLabelDistance(alt(divergence: 1000), lead: 100), 1100);
+    });
+  });
+
+  group('alternateLinePoints', () {
+    test('runs from 40 m before the divergence to the end without a '
+        'rejoin', () {
+      final branch = branchRoute(1500);
+      final a = AlternateRoute(
+        route: branch,
+        timeDelta: Duration.zero,
+        divergence: 1550,
+      );
+      expect(a.rejoin, isNull);
+      final points = alternateLinePoints(a);
+      expect(points, branch.pointsBetween(1510, branch.length));
+      expect(points.last, branch.points.last);
+      expect(
+        distanceBetween(points.first, branch.pointAt(1510)),
+        lessThan(0.01),
+      );
+    });
+
+    test('stops 40 m after the rejoin', () {
+      final detour = detourRoute();
+      final a = AlternateRoute(
+        route: detour,
+        timeDelta: Duration.zero,
+        divergence: 1040,
+        rejoin: (alternate: 2560, current: 2000),
+      );
+      expect(alternateLinePoints(a), detour.pointsBetween(1000, 2600));
+    });
+
+    test('is clamped to the route at both ends', () {
+      final detour = detourRoute();
+      final a = AlternateRoute(
+        route: detour,
+        timeDelta: Duration.zero,
+        divergence: 10,
+        rejoin: (alternate: detour.length - 5, current: 2995),
+      );
+      expect(alternateLinePoints(a), detour.points);
+    });
+  });
+
+  flowTest('a detour that comes back to the route is measured to its '
+      'rejoin', (tester, h) async {
+    final north = northRoute();
+    final detour = detourRoute();
+    h.flow.previewRoutes([north, detour]);
+    h.flow.start();
+    final alt = h.flow.alternates.value.single;
+    expect(alt.route, same(detour));
+    expect(alt.divergence, closeTo(1040, 3));
+    // Measured as the divergence of the two routes reversed: the first
+    // sample more than 30 m into the 300 m leg back, counted from the end
+    // (the 30 m sample sits on the threshold).
+    expect(
+      alt.rejoin!.alternate,
+      inInclusiveRange(detour.length - 1041, detour.length - 1029),
+    );
+    expect(alt.rejoin!.current, closeTo(2000, 3));
+    // The line drawn for it leaves out both shared stretches but 40 m.
+    final line = alternateLinePoints(alt);
+    expect(
+      distanceBetween(line.first, detour.pointAt(alt.divergence - 40)),
+      lessThan(0.01),
+    );
+    expect(
+      distanceBetween(line.last, detour.pointAt(alt.rejoin!.alternate + 40)),
+      lessThan(0.01),
+    );
+  });
+
+  // A long trip: each route measures metres in its own planar frame
+  // (anchored at its first point), so the rejoin, found on the routes
+  // reversed, must be mapped back by position, not by length.
+  for (final (lat, bearing) in [(21.0, 45.0), (21.0, 225.0), (50.0, 45.0)]) {
+    flowTest('on a 100 km trip at latitude $lat, heading $bearing°, the '
+        'line ends just past the real rejoin', (tester, h) async {
+      final origin = GeoPoint(lat, 105.8);
+      final (main, detour) = longDetour(origin, bearing);
+      h.flow.previewRoutes([main, detour]);
+      h.flow.start();
+      final alt = h.flow.alternates.value.single;
+      final back = offsetPoint(origin, bearing, 3000);
+      expect(alt.rejoin!.current, closeTo(3000, 15));
+      // The last sample off the route is 30 to 40 m before the rejoin, and
+      // the line reaches 40 m past it.
+      final line = alternateLinePoints(alt);
+      expect(distanceBetween(line.last, back), lessThan(15));
+      expect(
+        distanceBetween(detour.pointAt(alt.rejoin!.alternate), back),
+        inInclusiveRange(25, 45),
+      );
+    });
+  }
+
+  flowTest('an alternate to another end has no rejoin', (tester, h) async {
+    h.flow.previewRoutes([northRoute(), branchRoute(1500)]);
+    h.flow.start();
+    expect(h.flow.alternates.value.single.rejoin, isNull);
+  });
+
+  flowTest('the rejoin is kept when the time delta is measured again', (
+    tester,
+    h,
+  ) async {
+    final north = northRoute();
+    // 180 s in all at 20 m/s against 300 s.
+    final detour = detourRoute(speed: 20);
+    h.flow.previewRoutes([north, detour]);
+    h.flow.start();
+    final before = h.flow.alternates.value.single;
+    expect(before.minutesDelta, -2);
+    // At ~900 m: 135 s left on the detour against 210 s.
+    await h.run(tester, 3, fixAt: (s) => h.fixOn(north, 880.0 + 10 * s));
+    final after = h.flow.alternates.value.single;
+    expect(after.minutesDelta, -1);
+    expect(after.rejoin, isNotNull);
+    expect(after.rejoin, before.rejoin);
+  });
+
   test('minutesDelta rounds the time delta to whole minutes', () {
     AlternateRoute alt(int seconds) => AlternateRoute(
       route: northRoute(),

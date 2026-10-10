@@ -1,0 +1,29 @@
+name: navigation_engine_geolocator_example
+description: Shows the device GPS fixes of navigation_engine_geolocator.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_geolocator:
+    path: ../
+
+dependency_overrides:
+  navigation_engine:
+    path: ../../navigation_engine
+  navigation_engine_geolocator:
+    path: ../
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

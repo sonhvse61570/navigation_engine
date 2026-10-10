@@ -25,10 +25,18 @@ import 'maplibre_navigation_view.dart';
 /// override the selected option and the session's route line; the other
 /// options use [MapboxStyleColors.alternative].
 ///
+/// While navigating, the flow's alternate routes are drawn in
+/// [MapboxStyleColors.alternative] with a bubble in [strings] ("2 min
+/// faster"); a tap on one switches to it. The end of the selected route is
+/// pinned in the overview, while navigating and arrived (see
+/// [MapboxStyleFlowScaffold]). [onMapTap] and [onMapLongPress] get the
+/// app's taps on the map; a tap on a route option, an alternate or a pin is
+/// not one.
+///
 /// The map is a [MapLibreNavigationView] showing [styleString] by day and
 /// [nightStyleString] (when set) at night: it attaches itself to [session]
-/// and ticks it while on screen; its attribution button and logo stay
-/// above the panels. The pieces and the flow binding (the
+/// and ticks it while on screen; its attribution button stays above the
+/// panels. The pieces and the flow binding (the
 /// states, the back, the overview padding, the step sheet, the recenter)
 /// are a [MapboxStyleFlowScaffold]. The app owns, starts and disposes
 /// [session] and [flow].
@@ -55,6 +63,8 @@ class MapLibreStyleNavigation extends StatefulWidget {
     this.focus = 0.7,
     this.initialZoom = 17,
     this.onMapCreated,
+    this.onMapTap,
+    this.onMapLongPress,
   });
 
   /// The session shown on the map. Owned by the app.
@@ -125,6 +135,14 @@ class MapLibreStyleNavigation extends StatefulWidget {
   /// is drawn on the new map; see [MapLibreNavigationView.onMapCreated].
   final void Function(MapLibreMapController controller)? onMapCreated;
 
+  /// Called with the place the user taps on the map; see
+  /// [MapLibreNavigationView.onMapTap].
+  final void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place the user long-presses on the map; see
+  /// [MapLibreNavigationView.onMapLongPress].
+  final void Function(GeoPoint point)? onMapLongPress;
+
   @override
   State<MapLibreStyleNavigation> createState() =>
       _MapLibreStyleNavigationState();
@@ -133,6 +151,10 @@ class MapLibreStyleNavigation extends StatefulWidget {
 class _MapLibreStyleNavigationState extends State<MapLibreStyleNavigation> {
   /// Keeps the map view, and so the platform map, across rebuilds.
   final _mapKey = GlobalKey();
+
+  // A method, not a closure: its tear-off stays equal across builds.
+  String _alternateLabel(AlternateRoute alternate) =>
+      alternateRouteLabel(alternate, widget.strings);
 
   @override
   Widget build(BuildContext context) => MapboxStyleFlowScaffold(
@@ -147,34 +169,43 @@ class _MapLibreStyleNavigationState extends State<MapLibreStyleNavigation> {
     speedLimitSign: widget.speedLimitSign,
     idleBuilder: widget.idleBuilder,
     onEnd: widget.onEnd,
-    mapBuilder: (context, config, colors, routeColors, routeLabel) =>
-        ValueListenableBuilder<double>(
-          valueListenable: config.bottomOverlayHeight,
-          builder: (context, bottomInset, _) => MapLibreNavigationView(
-            key: _mapKey,
-            session: widget.session,
-            styleString: widget.styleString,
-            nightStyleString: widget.nightStyleString,
-            night: config.isNight,
-            initialCenter: widget.initialCenter,
-            initialZoom: widget.initialZoom,
-            routeColors: routeColors,
-            puck: widget.puck,
-            vehicleImage: widget.vehicleImage,
-            focus: widget.focus,
-            // The scaffold shows the recenter button.
-            recenterButton: (_) => const SizedBox.shrink(),
-            routeLabel: routeLabel,
-            onRouteOptionTap: config.onRouteOptionTap,
-            labelColors: colors.routeLabelColors,
-            alternativeRouteColor: colors.alternative,
-            onMapCreated: (controller) {
-              config.onMapReady();
-              widget.onMapCreated?.call(controller);
-            },
-            // The attribution and the logo keep above the panels.
-            bottomInset: bottomInset,
-          ),
+    mapBuilder: (context, config, colors, routeColors, routeLabel) {
+      final alternateColors = alternateLabelColorsOf(colors);
+      return ValueListenableBuilder<double>(
+        valueListenable: config.bottomOverlayHeight,
+        builder: (context, bottomInset, _) => MapLibreNavigationView(
+          key: _mapKey,
+          session: widget.session,
+          styleString: widget.styleString,
+          nightStyleString: widget.nightStyleString,
+          night: config.isNight,
+          initialCenter: widget.initialCenter,
+          initialZoom: widget.initialZoom,
+          routeColors: routeColors,
+          puck: widget.puck,
+          vehicleImage: widget.vehicleImage,
+          focus: widget.focus,
+          // The scaffold shows the recenter button.
+          recenterButton: (_) => const SizedBox.shrink(),
+          routeLabel: routeLabel,
+          onRouteOptionTap: config.onRouteOptionTap,
+          labelColors: colors.routeLabelColors,
+          alternativeRouteColor: colors.alternative,
+          alternateLabel: _alternateLabel,
+          alternateColor: colors.alternative,
+          fasterLabelColors: alternateColors.faster,
+          slowerLabelColors: alternateColors.slower,
+          searchPinColor: colors.warning,
+          onMapTap: widget.onMapTap,
+          onMapLongPress: widget.onMapLongPress,
+          onMapCreated: (controller) {
+            config.onMapReady();
+            widget.onMapCreated?.call(controller);
+          },
+          // The attribution keeps above the panels.
+          bottomInset: bottomInset,
         ),
+      );
+    },
   );
 }

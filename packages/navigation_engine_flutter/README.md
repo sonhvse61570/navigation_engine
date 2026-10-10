@@ -95,11 +95,11 @@ route colours and bubble texts of the moment (day or night). Apply them
 on every build; the map may be built again with equal layers, never for
 progress ticks.
 
-The scaffold uses two optional interfaces of the session's map when it
+The scaffold uses three optional interfaces of the session's map when it
 implements them, and works without them: `AlternateRoutesMap` (alternate
-routes while navigating) and `SearchPinsMap` (pins for the places found
+routes while navigating), `SearchPinsMap` (pins for the places found
 along the route; a place focused from the list or a pin still moves the
-camera through any map).
+camera through any map) and `DestinationPinMap` (see below).
 
 The pieces are public, so a screen of your own can mix them:
 `GoogleStyleManeuverHeader`, `GoogleStyleLaneGuidance`,
@@ -262,11 +262,45 @@ A map builder also gets `config.startOverlayWidth`: the width a landscape
 side panel covers on the map's start side (0 without one). It changes
 without a new config; shift the follow focus to the middle of the rest.
 
+### The destination pin
+
+When the session's map implements `DestinationPinMap`
+(`showDestinationPin(GeoPoint?)`, null clears), both styled scaffolds (any
+`NavigationFlowScaffold`) pin the end of the selected route in the
+overview, while navigating and arrived. The pin moves when the selection,
+an alternate or a reroute changes the route, is shown again for a new
+flow and on a map that reports itself ready (a new session's map gets it
+once it reports itself ready), and is removed when the flow goes back to
+idle and while a request loads or has failed, as the route options are (a
+cancel back to the overview shows it again). While the flow shows no pin
+the app may pin a place of its own through the same interface, such as
+one the user long-pressed; the flow's pin replaces it once the overview
+shows:
+
+```dart
+GoogleStyleNavigation(
+  // …
+  onMapLongPress: (point) {
+    if (session.map case final DestinationPinMap pin) {
+      pin.showDestinationPin(point);
+    }
+    flow.preview(to: point);
+  },
+);
+```
+
+Every adapter draws the same marker, `paintDestinationPin` (a red pin of
+this package's own design, as PNG bytes for native marker images), as it
+draws the search results with `paintSearchPin`.
+
 ## Shared vocabulary
 
-Used by every adapter. The Google Maps package re-exports all of it but
-`SpeedLimitSign` and `RouteLabelBubble`; the others re-export
-`NavigationStrings` and `SpeedLimitSign`:
+Used by every adapter. The Google Maps package re-exports
+`NavigationStrings`, `fitCameraToBounds`, `paintRouteLabel`,
+`RouteLabelColors`, `laneDirectionIcon`, `paintSearchPin` and
+`paintDestinationPin`; the others re-export `NavigationStrings`,
+`SpeedLimitSign`, `paintSearchPin` and `paintDestinationPin`. Import this
+package for the rest:
 
 - `NavigationStrings`: the words of the UIs, English by default and
   `NavigationStrings.vietnamese()`. Distances, durations and speeds come from
@@ -279,6 +313,20 @@ Used by every adapter. The Google Maps package re-exports all of it but
   them.
 - `SpeedLimitSign`: the circular or rectangular speed limit sign.
 - `laneDirectionIcon`: the arrow of a lane direction.
+- `paintSearchPin` and `paintDestinationPin`: the search result pin and the
+  destination pin as PNG bytes for native marker images, anchored at their
+  tip.
+- `alternateRouteLabel(alternate, strings)`: the bubble text of an
+  alternate route from its time difference in whole minutes, "2 min faster"
+  (`NavigationStrings.minFaster`), "+3 min" (`minSlower`) or "Similar ETA"
+  (`similarEta`). Every drop-in passes it as its view's `alternateLabel`.
+- `alternateLabelColorsOf(colors)`: the bubble colours (`faster`, `slower`)
+  of the alternates in `MapboxStyleColors`, the text in the accent or the
+  muted text colour on the surface. The MapLibre, flutter_map and Mapbox
+  drop-ins pass them as their views' `fasterLabelColors` and
+  `slowerLabelColors`.
+- `MapTapGuard`: keeps the map tap of a gesture from the app when a feature
+  the adapter draws took it (see Writing an adapter).
 
 ## How the session is driven
 
@@ -304,3 +352,38 @@ To draw route options for `NavigationFlowController`'s overview, also
 implement `RoutePreviewMap` (`showRouteOptions`, `clearRouteOptions`,
 `fitRoutes`); every bundled adapter implements it. Route option ids start
 with `navigation_engine_option_`.
+
+Three more optional interfaces give the screens their map features; every
+bundled adapter implements all of them, and a screen works without them:
+
+| Interface | Methods | Used for |
+| --- | --- | --- |
+| `AlternateRoutesMap` | `showAlternates(alternates, onTap:)`, `clearAlternates()` | the alternate routes while navigating, each with a bubble (`AlternateRoute`: the route, its time difference and where it leaves the route) |
+| `SearchPinsMap` | `showSearchPins(places, focusedId:, onTap:)`, `clearSearchPins()` | the places found along the route (`AlongRoutePlace`) |
+| `DestinationPinMap` | `showDestinationPin(point)` (null removes it) | the trip's destination, or a place the app pins itself |
+
+Draw the pins with `paintSearchPin` and `paintDestinationPin`, so every
+adapter looks the same. A drop-in words the alternates' bubbles with
+`alternateRouteLabel` and, in Mapbox-style colours, colours them with
+`alternateLabelColorsOf`.
+
+A view's `onMapTap` must not fire for a tap on a feature the adapter draws
+(a route option, an alternate, a bubble, a pin), and some SDKs report a map
+tap as well for such a gesture. `MapTapGuard` drops it: call
+`featureTapped()` from each tap on your own features, pass every map tap to
+`dispatch`, and `dispose()` the guard with the map. A feature tap leaves a
+one-shot token that the next map tap of the same frame spends; a map tap is
+held for one turn of the event loop, and a feature tap in that turn drops
+it. No wall clock is involved.
+
+```dart
+final guard = MapTapGuard();
+// From each tap on an option line, alternate, bubble or pin:
+guard.featureTapped();
+// From the SDK's map tap:
+guard.dispatch(() => widget.onMapTap?.call(point));
+// When the map goes:
+guard.dispose();
+```
+
+A long press is not guarded: `onMapLongPress` fires wherever it is.

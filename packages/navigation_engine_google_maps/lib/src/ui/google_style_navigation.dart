@@ -90,6 +90,8 @@ class GoogleStyleNavigation extends StatefulWidget {
     this.onAddStop,
     this.onShareTrip,
     this.onSettings,
+    this.onMapTap,
+    this.onMapLongPress,
   });
 
   /// The session shown on the map. Owned by the app.
@@ -219,6 +221,14 @@ class GoogleStyleNavigation extends StatefulWidget {
   /// Called by the menu's "Settings" row; hidden when null.
   final VoidCallback? onSettings;
 
+  /// Called with the place the user taps on the map, not on a route, a
+  /// bubble or a pin; see [GoogleMapsNavigationView.onMapTap].
+  final void Function(GeoPoint point)? onMapTap;
+
+  /// Called with the place the user long-presses on the map; see
+  /// [GoogleMapsNavigationView.onMapLongPress].
+  final void Function(GeoPoint point)? onMapLongPress;
+
   @override
   State<GoogleStyleNavigation> createState() => _GoogleStyleNavigationState();
 }
@@ -281,7 +291,13 @@ class _GoogleStyleNavigationState extends State<GoogleStyleNavigation> {
       alternateLabel: layers.alternateLabel,
       onRouteOptionTap: config.onRouteOptionTap,
       alternativeRouteColor: layers.colors.alternative,
-      labelColors: layers.colors,
+      labelColors: layers.colors.routeLabelColors,
+      alternateColor: layers.colors.alternative,
+      fasterLabelColors: layers.colors.fasterLabelColors,
+      slowerLabelColors: layers.colors.slowerLabelColors,
+      searchPinColor: layers.colors.warning,
+      onMapTap: widget.onMapTap,
+      onMapLongPress: widget.onMapLongPress,
       onMapCreated: (controller) {
         config.onMapReady();
         widget.onMapCreated?.call(controller);

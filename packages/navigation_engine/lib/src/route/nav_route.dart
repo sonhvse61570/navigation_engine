@@ -321,6 +321,44 @@ final class NavRoute {
     return ([...points.sublist(0, i + 1), at], [at, ...points.sublist(i + 1)]);
   }
 
+  /// The distance in metres along the route at `points[index]`, in the
+  /// route's own planar frame (the one [pointAt] and [snap] use). Throws a
+  /// [RangeError] when [index] is not a vertex.
+  double distanceAtVertex(int index) {
+    RangeError.checkValidIndex(index, points, 'index');
+    return _cum[index];
+  }
+
+  /// The part of the route from [from] to [to] metres along it: the point at
+  /// [from], the vertices strictly between, and the point at [to]. An end
+  /// within a millimetre of a vertex is that vertex, once. Both ends are
+  /// clamped to the route, and [to] to at least [from]: an empty range is
+  /// its one point twice, so the result always has 2 points or more.
+  List<GeoPoint> pointsBetween(double from, double to) {
+    final a = from.clamp(0.0, length);
+    final b = math.max(a, to.clamp(0.0, length));
+    // Vertex k lies in (a, b) only for k in (segment of a, segment of b].
+    final last = _segmentAt(b);
+    return [
+      _pointAtOrVertex(a),
+      for (var k = _segmentAt(a) + 1; k <= last; k++)
+        if (_cum[k] > a + _vertexSnap && _cum[k] < b - _vertexSnap) points[k],
+      _pointAtOrVertex(b),
+    ];
+  }
+
+  /// How close (m) to a vertex an end of [pointsBetween] is that vertex.
+  static const double _vertexSnap = 1e-3;
+
+  /// The vertex within [_vertexSnap] of [distance] when there is one, else
+  /// [pointAt].
+  GeoPoint _pointAtOrVertex(double distance) {
+    final i = _segmentAt(distance);
+    if ((_cum[i] - distance).abs() <= _vertexSnap) return points[i];
+    if ((_cum[i + 1] - distance).abs() <= _vertexSnap) return points[i + 1];
+    return pointAt(distance);
+  }
+
   /// Index of the segment that contains [distance].
   int _segmentAt(double distance) {
     if (distance <= 0) return 0;

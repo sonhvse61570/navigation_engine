@@ -1,0 +1,1 @@
+Demo of navigation_engine_geolocator: streams the device GPS as `NavFix`es and shows the latest one (position, accuracy, speed, heading) or the error. It declares the location permissions (`ACCESS_FINE_LOCATION` on Android, `NSLocationWhenInUseUsageDescription` on iOS).

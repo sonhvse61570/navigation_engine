@@ -10,6 +10,8 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
     as gmp;
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine/testing.dart';
+import 'package:navigation_engine_flutter/navigation_engine_flutter.dart'
+    show MapDefaultColors;
 import 'package:navigation_engine_google_maps/navigation_engine_google_maps.dart';
 import 'package:navigation_engine_google_maps/src/google_maps_navigation_map.dart'
     show toCameraPosition;
@@ -130,6 +132,33 @@ void main() {
     option('navigation_engine_option_casing_1').onTap!();
 
     expect(taps, [0, 1]);
+  });
+
+  test('a tap on an option line drawn for an older list is ignored; the '
+      'same routes with another selection still count', () {
+    addTearDown(map.dispose);
+    final taps = <int>[];
+    map.onRouteOptionTap = taps.add;
+    map.showRouteOptions(routes, 0);
+    // The SDK still holds the old polylines for one round trip.
+    final old = option('navigation_engine_option_1').onTap!;
+    final oldCasing = option('navigation_engine_option_casing_1').onTap!;
+    map.showRouteOptions(routes, 1);
+    old();
+    expect(taps, [1], reason: 'the same route at index 1');
+    final reversed = NavRoute.fromPoints(sampleRoute.points.reversed.toList());
+    final stale = option('navigation_engine_option_1').onTap!;
+    map.showRouteOptions([sampleRoute, reversed], 1);
+    stale();
+    oldCasing();
+    expect(taps, [1], reason: 'drawn for another route at index 1');
+    option('navigation_engine_option_1').onTap!();
+    expect(taps, [1, 1]);
+    // Cleared: an old line reports nothing.
+    final last = option('navigation_engine_option_0').onTap!;
+    map.clearRouteOptions();
+    last();
+    expect(taps, [1, 1]);
   });
 
   test('clearRouteOptions removes them', () {
@@ -366,6 +395,42 @@ void main() {
       (m) => m.markerId.value == 'navigation_engine_option_label_$i',
     );
 
+    test('a tap on a label drawn for an older list is ignored', () async {
+      addTearDown(map.dispose);
+      final taps = <int>[];
+      map
+        ..routeLabel = label
+        ..onRouteOptionTap = taps.add
+        ..labelPainter = (
+          text, {
+          required selected,
+          required pixelRatio,
+          required colors,
+        }) => Future.value(pixel);
+      map.showRouteOptions(routes, 0);
+      await pumpEventQueue();
+      // The SDK still holds the old markers for one round trip.
+      final old = marker(1).onTap!;
+      map.showRouteOptions(routes, 1);
+      old();
+      expect(taps, [1], reason: 'the same route at index 1');
+      await pumpEventQueue();
+      final stale = marker(1).onTap!;
+      final reversed = NavRoute.fromPoints(
+        sampleRoute.points.reversed.toList(),
+      );
+      map.showRouteOptions([sampleRoute, reversed], 1);
+      stale();
+      expect(taps, [1], reason: 'drawn for another route at index 1');
+      await pumpEventQueue();
+      marker(1).onTap!();
+      expect(taps, [1, 1]);
+      final last = marker(0).onTap!;
+      map.clearRouteOptions();
+      last();
+      expect(taps, [1, 1]);
+    });
+
     test('labels appear once rendered', () async {
       addTearDown(map.dispose);
       final gate = Completer<void>();
@@ -433,12 +498,12 @@ void main() {
               painted.add('$text/$selected/${key(colors)}');
               return pixel;
             };
-      expect(map.labelColors, GoogleStyleColors.day.routeLabelColors);
+      expect(map.labelColors, MapDefaultColors.routeLabels);
       map.showRouteOptions(routes, 0);
       await pumpEventQueue();
       expect(painted, [
-        '${label(routes[0])}/true/${key(GoogleStyleColors.day.routeLabelColors)}',
-        '${label(routes[1])}/false/${key(GoogleStyleColors.day.routeLabelColors)}',
+        '${label(routes[0])}/true/${key(MapDefaultColors.routeLabels)}',
+        '${label(routes[1])}/false/${key(MapDefaultColors.routeLabels)}',
       ]);
       final dayMarkers = map.routeOptionMarkers.value;
       painted.clear();
@@ -483,7 +548,7 @@ void main() {
               // The day renders wait; the night ones are immediate.
               if (calls++ < 2) await gate.future;
               return Uint8List.fromList([
-                colors == GoogleStyleColors.day.routeLabelColors ? 1 : 2,
+                colors == MapDefaultColors.routeLabels ? 1 : 2,
               ]);
             };
       map.showRouteOptions(routes, 0);
