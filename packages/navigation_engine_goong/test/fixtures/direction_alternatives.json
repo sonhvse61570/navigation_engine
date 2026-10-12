@@ -1,0 +1,319 @@
+{
+  "geocoded_waypoints": [
+    {
+      "geocoder_status": "OK",
+      "place_id": "REDACTED-place-origin"
+    },
+    {
+      "geocoder_status": "OK",
+      "place_id": "REDACTED-place-destination"
+    }
+  ],
+  "routes": [
+    {
+      "bounds": {},
+      "legs": [
+        {
+          "distance": {
+            "text": "2.51 km",
+            "value": 2512
+          },
+          "duration": {
+            "text": "4 phút",
+            "value": 255
+          },
+          "end_address": "Nguyễn Văn Huyên, Nghĩa Đô, Hà Nội",
+          "end_location": {
+            "lat": 21.05671,
+            "lng": 105.79017
+          },
+          "start_address": "11 Trần Cung, Nghĩa Đô, Hà Nội",
+          "start_location": {
+            "lat": 21.04663,
+            "lng": 105.79022
+          },
+          "steps": [
+            {
+              "distance": {
+                "text": "41 m",
+                "value": 41
+              },
+              "duration": {
+                "text": "10 giây",
+                "value": 10
+              },
+              "end_location": {
+                "lat": 21.04626,
+                "lng": 105.79026
+              },
+              "html_instructions": "Bắt đầu đi từ Trần Cung",
+              "maneuver": "right",
+              "polyline": {
+                "points": "mtm_C{cudShAG"
+              },
+              "start_location": {
+                "lat": 21.04663,
+                "lng": 105.79022
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "754 m",
+                "value": 754
+              },
+              "duration": {
+                "text": "2 phút",
+                "value": 95
+              },
+              "end_location": {
+                "lat": 21.04607,
+                "lng": 105.79752
+              },
+              "html_instructions": "Rẽ trái vào Hoàng Quốc Việt",
+              "maneuver": "left",
+              "polyline": {
+                "points": "crm_CcdudSJcPXg["
+              },
+              "start_location": {
+                "lat": 21.04626,
+                "lng": 105.79026
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "549 m",
+                "value": 549
+              },
+              "duration": {
+                "text": "1 phút",
+                "value": 60
+              },
+              "end_location": {
+                "lat": 21.051,
+                "lng": 105.7977
+              },
+              "html_instructions": "Turn <b>right</b> onto <b>Phạm Văn Đồng</b><div style=\"font-size:0.9em\">Toll road</div>",
+              "maneuver": "turn-right",
+              "polyline": {
+                "points": "}pm_CoqvdSaKOwQS"
+              },
+              "start_location": {
+                "lat": 21.04607,
+                "lng": 105.79752
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "115 m",
+                "value": 115
+              },
+              "duration": {
+                "text": "20 giây",
+                "value": 20
+              },
+              "end_location": {
+                "lat": 21.052,
+                "lng": 105.798
+              },
+              "html_instructions": "Hướng sang phải",
+              "maneuver": "slight right",
+              "polyline": {
+                "points": "won_CsrvdSgE{@"
+              },
+              "start_location": {
+                "lat": 21.051,
+                "lng": 105.7977
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "228 m",
+                "value": 228
+              },
+              "duration": {
+                "text": "30 giây",
+                "value": 30
+              },
+              "end_location": {
+                "lat": 21.054,
+                "lng": 105.7975
+              },
+              "html_instructions": "Keep <b>left</b> to stay on <b>Xu&#226;n Tảo</b>",
+              "maneuver": "keep-left",
+              "polyline": {
+                "points": "_vn_CotvdSoKbB"
+              },
+              "start_location": {
+                "lat": 21.052,
+                "lng": 105.798
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "825 m",
+                "value": 825
+              },
+              "duration": {
+                "text": "40 giây",
+                "value": 40
+              },
+              "end_location": {
+                "lat": 21.05671,
+                "lng": 105.79017
+              },
+              "html_instructions": "Tại vòng xuyến, đi theo lối ra thứ 2 vào Nguyễn Văn Huyên",
+              "maneuver": "roundabout-right",
+              "polyline": {
+                "points": "obo_CkqvdSgEjHuIlc@"
+              },
+              "start_location": {
+                "lat": 21.054,
+                "lng": 105.7975
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "0 m",
+                "value": 0
+              },
+              "duration": {
+                "text": "0 giây",
+                "value": 0
+              },
+              "end_location": {
+                "lat": 21.05671,
+                "lng": 105.79017
+              },
+              "html_instructions": "Bạn đã đến điểm đích",
+              "maneuver": "",
+              "polyline": {
+                "points": "mso_CqcudS"
+              },
+              "start_location": {
+                "lat": 21.05671,
+                "lng": 105.79017
+              },
+              "travel_mode": "DRIVING"
+            }
+          ]
+        }
+      ],
+      "overview_polyline": {
+        "points": "mtm_C{cudShAGJcPXg[aKOwQSgE{@oKbBgEjHuIlc@"
+      },
+      "summary": "",
+      "warnings": [],
+      "waypoint_order": []
+    },
+    {
+      "bounds": {},
+      "legs": [
+        {
+          "distance": {
+            "text": "2.78 km",
+            "value": 2778
+          },
+          "duration": {
+            "text": "5 phút",
+            "value": 300
+          },
+          "end_address": "Nguyễn Văn Huyên, Nghĩa Đô, Hà Nội",
+          "end_location": {
+            "lat": 21.05671,
+            "lng": 105.79017
+          },
+          "start_address": "11 Trần Cung, Nghĩa Đô, Hà Nội",
+          "start_location": {
+            "lat": 21.04663,
+            "lng": 105.79022
+          },
+          "steps": [
+            {
+              "distance": {
+                "text": "181 m",
+                "value": 181
+              },
+              "duration": {
+                "text": "30 giây",
+                "value": 30
+              },
+              "end_location": {
+                "lat": 21.045,
+                "lng": 105.7903
+              },
+              "html_instructions": "Head <b>south</b> on <b>Trần Cung</b>",
+              "polyline": {
+                "points": "mtm_C{cudSdIO"
+              },
+              "start_location": {
+                "lat": 21.04663,
+                "lng": 105.79022
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "1.75 km",
+                "value": 1746
+              },
+              "duration": {
+                "text": "3 phút",
+                "value": 200
+              },
+              "end_location": {
+                "lat": 21.053,
+                "lng": 105.783
+              },
+              "html_instructions": "Turn <b>left</b> onto <b>Phạm Văn Đồng</b>",
+              "maneuver": "turn-left",
+              "polyline": {
+                "points": "gjm_CkdudSSzr@kp@gE"
+              },
+              "start_location": {
+                "lat": 21.045,
+                "lng": 105.7903
+              },
+              "travel_mode": "DRIVING"
+            },
+            {
+              "distance": {
+                "text": "851 m",
+                "value": 851
+              },
+              "duration": {
+                "text": "1 phút",
+                "value": 70
+              },
+              "end_location": {
+                "lat": 21.05671,
+                "lng": 105.79017
+              },
+              "html_instructions": "Slight <b>right</b> onto <b>Xuân Đỉnh</b>",
+              "maneuver": "turn-slight-right",
+              "polyline": {
+                "points": "g|n_CwvsdSeVyk@"
+              },
+              "start_location": {
+                "lat": 21.053,
+                "lng": 105.783
+              },
+              "travel_mode": "DRIVING"
+            }
+          ]
+        }
+      ],
+      "overview_polyline": {
+        "points": "mtm_C{cudSdIOSzr@kp@gEeVyk@"
+      },
+      "summary": "Phạm Văn Đồng",
+      "warnings": [],
+      "waypoint_order": []
+    }
+  ]
+}

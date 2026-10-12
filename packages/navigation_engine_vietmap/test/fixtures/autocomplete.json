@@ -1,0 +1,38 @@
+[
+  {
+    "ref_id": "auto:REDACTED-ref-1",
+    "distance": 0.42,
+    "address": "Lê Lợi, Phường Bến Thành, Thành Phố Hồ Chí Minh",
+    "name": "Chợ Bến Thành",
+    "display": "Chợ Bến Thành, Lê Lợi, Phường Bến Thành, Thành Phố Hồ Chí Minh",
+    "boundaries": [
+      {"type": 2, "id": 26734, "name": "Bến Thành", "prefix": "Phường", "full_name": "Phường Bến Thành"},
+      {"type": 0, "id": 12, "name": "Hồ Chí Minh", "prefix": "Thành Phố", "full_name": "Thành Phố Hồ Chí Minh"}
+    ],
+    "categories": ["1001"],
+    "entry_points": []
+  },
+  {
+    "ref_id": "auto:REDACTED-ref-2",
+    "distance": 1.37,
+    "address": "197 Trần Phú",
+    "name": "",
+    "display": "197 Trần Phú, Phường Chợ Quán, Thành Phố Hồ Chí Minh",
+    "boundaries": [
+      {"type": 2, "id": 18700, "name": "Chợ Quán", "prefix": "Phường", "full_name": "Phường Chợ Quán"},
+      {"type": 0, "id": 12, "name": "Hồ Chí Minh", "prefix": "Thành Phố", "full_name": "Thành Phố Hồ Chí Minh"}
+    ],
+    "categories": [],
+    "entry_points": []
+  },
+  {
+    "ref_id": "auto:REDACTED-ref-3",
+    "distance": 2.05,
+    "address": "",
+    "name": "",
+    "display": "Phường Sài Gòn, Thành Phố Hồ Chí Minh",
+    "boundaries": [],
+    "categories": [],
+    "entry_points": []
+  }
+]

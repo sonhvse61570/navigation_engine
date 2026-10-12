@@ -51,13 +51,23 @@ jobs:
             echo "::endgroup::"
           done
 
-      # Code whose behaviour differs under dart2js (tests tagged `js`, see
-      # packages/navigation_engine_osrm/dart_test.yaml) also runs on node.
+      # Code whose behaviour differs under dart2js (tests tagged `js`) also
+      # runs on node, in every package whose dart_test.yaml declares the
+      # `js` tag (see packages/navigation_engine_osrm/dart_test.yaml). Only
+      # pure-Dart packages may declare it: `dart test -p node` cannot load
+      # Flutter.
       - name: Test on JS
         timeout-minutes: 10
         run: |
-          if command -v node > /dev/null; then
-            (cd packages/navigation_engine_osrm && dart test -p node -t js)
-          else
+          if ! command -v node > /dev/null; then
             echo "node not found: skipping the JS tests"
+            exit 0
           fi
+          for p in packages/*/; do
+            grep -qE '^[[:space:]]+js:' "$p/dart_test.yaml" 2> /dev/null || continue
+            echo "::group::test on JS $p"
+            status=0
+            (cd "$p" && dart test -p node -t js) || status=$?
+            echo "::endgroup::"
+            [ "$status" -eq 0 ] || exit "$status"
+          done

@@ -69,6 +69,7 @@ class MapLibreNavigationView extends StatefulWidget {
     this.fasterLabelColors,
     this.slowerLabelColors,
     this.searchPinColor,
+    this.attributionText,
   });
 
   final NavigationSession session;
@@ -187,9 +188,29 @@ class MapLibreNavigationView extends StatefulWidget {
   /// kept; forwarded to [MapLibreNavigationMap.pinColor].
   final Color? searchPinColor;
 
+  /// A credit drawn beside the attribution button, such as `© VIETMAP` or
+  /// `© Goong`, for a style that has no attribution string of its own (the
+  /// button lists only the style's). Small text on a translucent pill,
+  /// dark by day and light at [night], in the theme's body font whatever
+  /// the view sits under; it keeps clear of [bottomInset] and of a side
+  /// panel as the button does, is cut to one line before a panel on the
+  /// left (and left out when there is no room for it), and lets the map
+  /// have the gestures. Null or empty draws none.
+  final String? attributionText;
+
   /// The margin of the attribution button (and of the logo, not shown)
   /// from the map's edges, above [bottomInset] and beside a side panel.
   static const double _ornamentMargin = 8;
+
+  /// The room left for the native attribution button (bottom right) beside
+  /// [attributionText]: its size, which is also the height of the text's
+  /// box, and the gap between them.
+  static const double _attributionButtonSize = 24;
+  static const double _attributionGap = 4;
+
+  /// The narrowest room [attributionText] is drawn in: below it the pill
+  /// would hold little more than an ellipsis, so it is left out.
+  static const double _attributionMinWidth = 48;
 
   /// The style shown: [nightStyleString] at [night], otherwise [styleString].
   String get _shownStyle =>
@@ -299,7 +320,15 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
         return LayoutBuilder(
           builder: (context, constraints) {
             _reportViewport(constraints.biggest);
-            return _buildMap(padding);
+            final text = widget.attributionText;
+            // Always a stack, so a text that comes or goes keeps the map.
+            return Stack(
+              children: [
+                Positioned.fill(child: _buildMap(padding)),
+                if (text != null && text.isNotEmpty)
+                  ?_attribution(text, padding, constraints.biggest),
+              ],
+            );
           },
         );
       },
@@ -314,6 +343,81 @@ class _MapLibreNavigationViewState extends State<MapLibreNavigationView> {
     side + MapLibreNavigationView._ornamentMargin,
     widget.bottomInset + MapLibreNavigationView._ornamentMargin,
   );
+
+  /// [MapLibreNavigationView.attributionText] on its pill, left of the
+  /// attribution button: its margins from the bottom right are the
+  /// button's ([_ornamentMargins], physical in both text directions), plus
+  /// the button's width. It stops before the panel on the left, if any;
+  /// null when that leaves less than `_attributionMinWidth`.
+  Widget? _attribution(String text, EdgeInsets focus, Size size) {
+    final margins = _ornamentMargins(focus.right);
+    final right =
+        margins.x +
+        MapLibreNavigationView._attributionButtonSize +
+        MapLibreNavigationView._attributionGap;
+    final maxWidth =
+        size.width -
+        right -
+        focus.left -
+        MapLibreNavigationView._ornamentMargin;
+    if (maxWidth < MapLibreNavigationView._attributionMinWidth) return null;
+    final night = widget.night;
+    return Positioned(
+      right: right,
+      bottom: margins.y,
+      child: IgnorePointer(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MapLibreNavigationView._attributionButtonSize,
+            maxWidth: maxWidth,
+          ),
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            alignment: Alignment.centerRight,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: night ? _nightPill : _dayPill,
+                borderRadius: const BorderRadius.all(Radius.circular(8)),
+              ),
+              // The theme's text style, not the debug one (bold, monospace,
+              // underlined) a view outside any Material would inherit.
+              child: Material(
+                type: MaterialType.transparency,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontSize: 10,
+                      height: 1.2,
+                      fontWeight: FontWeight.w400,
+                      fontStyle: FontStyle.normal,
+                      decoration: TextDecoration.none,
+                      color: night ? _nightText : _dayText,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // The attribution text's colours: dark on light by day, light on dark at
+  // night, over any map.
+  static const _dayText = Color(0xDE000000);
+  static const _dayPill = Color(0xB3FFFFFF);
+  static const _nightText = Color(0xDEFFFFFF);
+  static const _nightPill = Color(0x99000000);
 
   Widget _buildMap(EdgeInsets focus) {
     return MapLibreMap(

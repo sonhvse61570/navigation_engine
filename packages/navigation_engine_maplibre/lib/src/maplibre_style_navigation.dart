@@ -35,11 +35,11 @@ import 'maplibre_navigation_view.dart';
 ///
 /// The map is a [MapLibreNavigationView] showing [styleString] by day and
 /// [nightStyleString] (when set) at night: it attaches itself to [session]
-/// and ticks it while on screen; its attribution button stays above the
-/// panels. The pieces and the flow binding (the
-/// states, the back, the overview padding, the step sheet, the recenter)
-/// are a [MapboxStyleFlowScaffold]. The app owns, starts and disposes
-/// [session] and [flow].
+/// and ticks it while on screen; its attribution button, and
+/// [attributionText] beside it, stay above the panels. The pieces and the
+/// flow binding (the states, the back, the overview padding, the step
+/// sheet, the recenter) are a [MapboxStyleFlowScaffold]. The app owns,
+/// starts and disposes [session] and [flow].
 class MapLibreStyleNavigation extends StatefulWidget {
   /// Creates the navigation screen for [session] driven by [flow].
   const MapLibreStyleNavigation({
@@ -65,6 +65,7 @@ class MapLibreStyleNavigation extends StatefulWidget {
     this.onMapCreated,
     this.onMapTap,
     this.onMapLongPress,
+    this.attributionText,
   });
 
   /// The session shown on the map. Owned by the app.
@@ -143,6 +144,12 @@ class MapLibreStyleNavigation extends StatefulWidget {
   /// [MapLibreNavigationView.onMapLongPress].
   final void Function(GeoPoint point)? onMapLongPress;
 
+  /// A credit drawn beside the attribution button, such as `© VIETMAP`,
+  /// for a style that has no attribution string of its own; it keeps above
+  /// the panels and follows day and night. See
+  /// [MapLibreNavigationView.attributionText].
+  final String? attributionText;
+
   @override
   State<MapLibreStyleNavigation> createState() =>
       _MapLibreStyleNavigationState();
@@ -202,8 +209,9 @@ class _MapLibreStyleNavigationState extends State<MapLibreStyleNavigation> {
             config.onMapReady();
             widget.onMapCreated?.call(controller);
           },
-          // The attribution keeps above the panels.
+          // The attribution, and its text, keep above the panels.
           bottomInset: bottomInset,
+          attributionText: widget.attributionText,
         ),
       );
     },

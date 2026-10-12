@@ -3,7 +3,7 @@
 # once, without prefixes: a name exported by two libraries for different
 # elements would be ambiguous and fail to analyze.
 #
-# It writes a throwaway app (path dependencies on all eight packages) to a
+# It writes a throwaway app (path dependencies on all ten packages) to a
 # temporary directory, resolves it offline from the workspace's lock (run
 # `flutter pub get` at the repo root first) and analyzes it; nothing is
 # built.
@@ -23,6 +23,8 @@ packages=(
   navigation_engine_mapbox
   navigation_engine_maplibre
   navigation_engine_osrm
+  navigation_engine_vietmap
+  navigation_engine_goong
 )
 
 {
@@ -111,6 +113,28 @@ final _names = <Object>[
   OsrmHttpException,
   OsrmTimeoutException,
   OsrmFormatException,
+  VietmapStyles,
+  VietmapStyle,
+  VietmapRouteProvider,
+  VietmapVehicle,
+  VietmapPlaceSearch,
+  VietmapException,
+  VietmapCodeException,
+  VietmapHttpException,
+  VietmapTimeoutException,
+  VietmapFormatException,
+  VietmapSearchException,
+  GoongStyles,
+  GoongStyle,
+  GoongRouteProvider,
+  GoongVehicle,
+  GoongPlaceSearch,
+  GoongException,
+  GoongCodeException,
+  GoongHttpException,
+  GoongTimeoutException,
+  GoongFormatException,
+  GoongSearchException,
 ];
 DART
 } > "$app/lib/import_all.dart"

@@ -86,3 +86,10 @@
 - Docs: the view shows no logo (maplibre_gl's `logoEnabled` defaults to
   false); only the attribution button is kept above `bottomInset` and
   clear of side panels.
+- `MapLibreNavigationView.attributionText` and
+  `MapLibreStyleNavigation.attributionText`: a credit such as
+  `© VIETMAP` or `© Goong`, for a style that has no attribution string of
+  its own, drawn as small text on a translucent pill beside the
+  attribution button. It keeps clear of `bottomInset` and of a side panel
+  as the button does, in both text directions, follows day and night, and
+  lets the map have the gestures.

@@ -91,6 +91,7 @@ Routes carry what a navigation UI shows besides the line:
 | `RouteProvider` | compute routes and alternatives (OSRM, Google Routes, your back end); extend it |
 | `NavigationMap` | render on Google Maps, Mapbox, flutter_map, … (~50 lines) |
 | `GuidanceFormatter` | speak another language (English and Vietnamese included) |
+| `PlaceSearchProvider` | find places for a destination search field (Vietmap, Goong, Photon, your back end): `autocomplete`, `resolve`, `reverse`, with a `PlaceSearchSession` for providers that bill per session |
 
 New `ManeuverType` and `ManeuverModifier` values may be added in minor
 versions, as routing providers add manoeuvre kinds. Give a `switch` over them

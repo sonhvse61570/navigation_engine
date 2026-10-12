@@ -1,0 +1,15 @@
+{
+  "result": {
+    "place_id": "REDACTED-place-1",
+    "formatted_address": "Hồ Hoàn Kiếm, Phường Hoàn Kiếm, Thành phố Hà Nội",
+    "geometry": {
+      "location": { "lat": 21.028772, "lng": 105.852379 }
+    },
+    "plus_code": { "compound_code": "+QG4 Hà Nội", "global_code": "7PH7+QG4" },
+    "compound": { "commune": "Phường Hoàn Kiếm", "province": "Thành phố Hà Nội" },
+    "name": "Hồ Hoàn Kiếm",
+    "url": "",
+    "types": ["lake"]
+  },
+  "status": "OK"
+}

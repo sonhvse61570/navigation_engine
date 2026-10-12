@@ -158,7 +158,11 @@ class RecordingPlatform extends ml.MapLibrePlatform {
       _viewCreated = true;
       scheduleMicrotask(() => onPlatformViewCreated(1));
     }
-    return const SizedBox.expand();
+    // Hit by the pointers that reach it, as the native map would be.
+    return const Listener(
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox.expand(),
+    );
   }
 
   @override

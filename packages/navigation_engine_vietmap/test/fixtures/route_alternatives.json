@@ -1,0 +1,120 @@
+{
+  "license": "vietmap",
+  "code": "OK",
+  "messages": null,
+  "paths": [
+    {
+      "distance": 744.182,
+      "weight": 131.2,
+      "time": 119000,
+      "transfers": 0,
+      "points_encoded": true,
+      "bbox": [106.698, 10.7729, 106.7031, 10.7761],
+      "points": "saw`AomfjSwBkCwBkCwBkCz@cBz@cBcBcBcBcBcBcBcBcB",
+      "instructions": [
+        {
+          "distance": 202.958,
+          "heading": 49.21,
+          "sign": 0,
+          "interval": [0, 2],
+          "text": "Đi tiếp vào Lê Lợi",
+          "time": 36000,
+          "street_name": "Lê Lợi"
+        },
+        {
+          "distance": 165.478,
+          "sign": 2,
+          "interval": [2, 4],
+          "text": "Rẽ phải vào Nguyễn Huệ",
+          "time": 30000,
+          "street_name": "Nguyễn Huệ"
+        },
+        {
+          "distance": 141.936,
+          "sign": -7,
+          "interval": [4, 6],
+          "text": "Đi về bên trái vào Hàm Nghi",
+          "time": 24000,
+          "street_name": "Hàm Nghi"
+        },
+        {
+          "distance": 77.937,
+          "sign": -2,
+          "interval": [6, 7],
+          "text": "Rẽ trái vào Tôn Đức Thắng",
+          "time": 12000,
+          "street_name": "Tôn Đức Thắng"
+        },
+        {
+          "distance": 77.937,
+          "sign": 6,
+          "interval": [7, 8],
+          "text": "Vào vòng xuyến, đi theo lối ra thứ 2",
+          "time": 9000,
+          "street_name": "",
+          "exit_number": 2
+        },
+        {
+          "distance": 77.937,
+          "sign": 1,
+          "interval": [8, 9],
+          "text": "Chếch sang phải vào Nguyễn Tất Thành",
+          "time": 8000,
+          "street_name": "Nguyễn Tất Thành"
+        },
+        {
+          "distance": 0,
+          "sign": 4,
+          "interval": [9, 9],
+          "text": "Đến nơi",
+          "time": 0,
+          "street_name": "",
+          "last_heading": 44.83
+        }
+      ],
+      "snapped_waypoints": "saw`AomfjS_S{^",
+      "toll_cost": 0,
+      "tolls": []
+    },
+    {
+      "distance": 817.639,
+      "weight": 140.5,
+      "time": 100000,
+      "transfers": 0,
+      "points_encoded": true,
+      "bbox": [106.698, 10.772, 106.7031, 10.7761],
+      "points": "saw`AomfjSrDgEcBkHkHkHgEcB{EwB",
+      "instructions": [
+        {
+          "distance": 554.987,
+          "heading": 132.02,
+          "sign": 0,
+          "interval": [0, 3],
+          "text": "Đi tiếp vào Đồng Khởi",
+          "time": 70000,
+          "street_name": "Đồng Khởi"
+        },
+        {
+          "distance": 262.652,
+          "sign": 3,
+          "interval": [3, 5],
+          "text": "Rẽ ngoặt phải vào Lý Tự Trọng",
+          "time": 30000,
+          "street_name": "Lý Tự Trọng"
+        },
+        {
+          "distance": 0,
+          "sign": 4,
+          "interval": [5, 5],
+          "text": "Đến nơi",
+          "time": 0,
+          "street_name": "",
+          "last_heading": 28.6
+        }
+      ],
+      "snapped_waypoints": "saw`AomfjS_S{^",
+      "toll_cost": 0,
+      "tolls": []
+    }
+  ]
+}

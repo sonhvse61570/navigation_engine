@@ -13,3 +13,5 @@ workspace:
   - packages/navigation_engine_google_maps
   - packages/navigation_engine_mapbox
   - packages/navigation_engine_osrm
+  - packages/navigation_engine_vietmap
+  - packages/navigation_engine_goong
