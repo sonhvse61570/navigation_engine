@@ -1,0 +1,112 @@
+{
+  "routes": [
+    {
+      "distanceMeters": 990,
+      "duration": "210s",
+      "staticDuration": "175.5s",
+      "polyline": {
+        "encodedPolyline": "u~v`AymfjSeCaCsD_DoFrDgJvGkPkJ"
+      },
+      "legs": [
+        {
+          "steps": [
+            {
+              "distanceMeters": 220,
+              "staticDuration": "40s",
+              "polyline": {
+                "encodedPolyline": "u~v`AymfjSeCaCsD_D"
+              },
+              "navigationInstruction": {
+                "maneuver": "DEPART",
+                "instructions": "Head northeast on Lê Lợi toward Pasteur"
+              }
+            },
+            {
+              "distanceMeters": 400,
+              "staticDuration": "75.5s",
+              "polyline": {
+                "encodedPolyline": "ohw`A{vfjSoFrDgJvG"
+              },
+              "navigationInstruction": {
+                "maneuver": "TURN_LEFT",
+                "instructions": "Turn left onto Pasteur"
+              }
+            },
+            {
+              "distanceMeters": 370,
+              "staticDuration": "60s",
+              "polyline": {
+                "encodedPolyline": "g{w`AohfjSkPkJ"
+              },
+              "navigationInstruction": {
+                "maneuver": "TURN_RIGHT",
+                "instructions": "Turn right onto Công xã Paris\nDestination will be on the left"
+              }
+            }
+          ]
+        }
+      ],
+      "routeLabels": [
+        "DEFAULT_ROUTE"
+      ]
+    },
+    {
+      "distanceMeters": 1240,
+      "duration": "200s",
+      "staticDuration": "185s",
+      "polyline": {
+        "encodedPolyline": "u~v`AymfjSxDaHsXkMcYjP"
+      },
+      "legs": [
+        {
+          "steps": [
+            {
+              "distanceMeters": 185,
+              "staticDuration": "50s",
+              "polyline": {
+                "encodedPolyline": "u~v`AymfjSxDaH"
+              },
+              "navigationInstruction": {
+                "instructions": "Head southeast on Lê Lợi"
+              }
+            },
+            {
+              "distanceMeters": 515,
+              "staticDuration": "90s",
+              "polyline": {
+                "encodedPolyline": "{xv`A{vfjSsXkM"
+              },
+              "navigationInstruction": {
+                "maneuver": "ROUNDABOUT_RIGHT",
+                "instructions": "At the roundabout, take the 2nd exit onto Đồng Khởi"
+              }
+            },
+            {
+              "polyline": {
+                "encodedPolyline": "orw`AgegjS"
+              },
+              "navigationInstruction": {
+                "maneuver": "NAME_CHANGE",
+                "instructions": "Continue onto Đồng Khởi"
+              }
+            },
+            {
+              "distanceMeters": 540,
+              "staticDuration": "45s",
+              "polyline": {
+                "encodedPolyline": "orw`AgegjScYjP"
+              },
+              "navigationInstruction": {
+                "maneuver": "STRAIGHT",
+                "instructions": "Continue straight to stay on Đồng Khởi"
+              }
+            }
+          ]
+        }
+      ],
+      "routeLabels": [
+        "DEFAULT_ROUTE_ALTERNATE"
+      ]
+    }
+  ]
+}

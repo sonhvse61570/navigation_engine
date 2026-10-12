@@ -1,0 +1,34 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"coordinates": [105.852379, 21.028772], "type": "Point"},
+      "properties": {
+        "name": "Hồ Hoàn Kiếm",
+        "mapbox_id": "REDACTED-mapbox-id-1",
+        "feature_type": "poi",
+        "address": "Đinh Tiên Hoàng",
+        "full_address": "Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội, Việt Nam",
+        "place_formatted": "Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội, Việt Nam",
+        "context": {
+          "country": {"name": "Việt Nam", "country_code": "VN", "country_code_alpha_3": "VNM"},
+          "place": {"name": "Hà Nội"}
+        },
+        "coordinates": {
+          "latitude": 21.028772,
+          "longitude": 105.852379,
+          "routable_points": [{"name": "default", "latitude": 21.0287, "longitude": 105.8526}]
+        },
+        "language": "vi",
+        "maki": "park",
+        "poi_category": ["park"],
+        "poi_category_ids": ["park"],
+        "external_ids": {},
+        "metadata": {}
+      }
+    }
+  ],
+  "attribution": "© 2026 Mapbox and its suppliers. All rights reserved. Use of this data is subject to the Mapbox Terms of Service. (https://www.mapbox.com/about/maps/)",
+  "response_id": "REDACTED-response-id"
+}

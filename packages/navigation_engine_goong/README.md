@@ -232,7 +232,7 @@ The route provider throws a `GoongException`:
 | `GoongCodeException` | Goong answered with an error code, in Google's shape (`status`: `ZERO_RESULTS` for no route, `NOT_FOUND`, `INVALID_REQUEST`, `OVER_QUERY_LIMIT`, `REQUEST_DENIED`, `UNKNOWN_ERROR`, …, with `error_message`) or as an error object (`{"error": {"code": "API_KEY_MISSING", "message": …}}`). The code, the server's message and the HTTP status are kept. |
 | `GoongHttpException` | An HTTP error without a code: 401/403 (a missing, bad or blocked key, an unpaid account, or a Maptiles key on a REST API), 429 (rate limit), a proxy error. |
 | `GoongTimeoutException` | No full answer within `timeout`. It is also a `TimeoutException`. |
-| `GoongFormatException` | The answer is not UTF-8, not JSON, or not shaped as Goong's; the message names the field. |
+| `GoongFormatException` | The answer is not UTF-8, not JSON, or not shaped as Goong's; the message names the field. For an answer that is not JSON it is the fixed `invalid JSON`, and `cause` keeps only the parser's offset: on the web the parser's own message quotes the body around the error, where part of the key could be. |
 
 Transport failures (offline, DNS, TLS) arrive as the `http` client throws
 them, usually as `http.ClientException`. A point that is not finite throws

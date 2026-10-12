@@ -5,18 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:navigation_engine/navigation_engine.dart';
 
 import 'osrm_exception.dart';
-import 'polyline.dart';
-
-/// How OSRM encodes the route geometry in its answer (`geometries=`).
-enum OsrmGeometries {
-  /// GeoJSON `LineString` coordinates: plain, but about three times larger
-  /// on the wire.
-  geojson,
-
-  /// An encoded polyline with six decimals: compact, and as precise as
-  /// OSRM's own coordinates.
-  polyline6,
-}
+import 'osrm_geometries.dart';
+import 'osrm_json.dart';
+import 'osrm_response_parser.dart';
 
 /// Routes from an [OSRM](https://project-osrm.org) server, through its
 /// route service (`/route/v1`).
@@ -39,7 +30,8 @@ enum OsrmGeometries {
 /// Each step becomes a [RouteStep]: its manoeuvre type and modifier, its
 /// road name (falling back to the road's `ref`) and its lanes, placed on the
 /// route at its manoeuvre location. The `duration` annotations give the time
-/// of each segment.
+/// of each segment. [OsrmResponseParser] reads the answers, and can read
+/// those of other servers in OSRM's format.
 ///
 /// Failures throw an [OsrmException]: [OsrmCodeException] for an OSRM error
 /// code (`NoRoute`, `NoSegment`, …), [OsrmHttpException] for an HTTP error,
@@ -230,12 +222,14 @@ class OsrmRouteProvider extends RouteProvider {
           ? 'the body is not UTF-8'
           : jsonError != null
           ? 'invalid JSON ($jsonError)'
-          : 'got ${_kind(json)}';
+          : 'got ${jsonKind(json)}';
       throw OsrmFormatException('the answer is not a JSON object: $why');
     }
     final code = body['code'];
     if (code is! String) {
-      throw OsrmFormatException('code: expected a string, got ${_kind(code)}');
+      throw OsrmFormatException(
+        'code: expected a string, got ${jsonKind(code)}',
+      );
     }
     if (code != 'Ok') {
       throw OsrmCodeException(
@@ -244,14 +238,12 @@ class OsrmRouteProvider extends RouteProvider {
         statusCode: response.statusCode,
       );
     }
-    final routes = _list(body['routes'], 'routes');
-    if (routes.isEmpty) {
-      throw const OsrmFormatException('routes: an Ok answer with no routes');
-    }
-    return [
-      for (var i = 0; i < routes.length && i <= alternatives; i++)
-        _parseRoute(routes[i], 'routes[$i]'),
-    ];
+    return OsrmResponseParser.parse(
+      body,
+      geometries: geometries,
+      speedLimits: speedLimits,
+      maxAlternatives: alternatives,
+    );
   }
 
   Future<http.Response> _send(http.BaseRequest request) async =>
@@ -317,284 +309,5 @@ class OsrmRouteProvider extends RouteProvider {
     } on FormatException {
       return null;
     }
-  }
-
-  static String _kind(Object? json) => switch (json) {
-    Map<Object?, Object?>() => 'an object',
-    List<Object?>() => 'an array',
-    String() => 'a string',
-    num() => 'a number',
-    bool() => 'a boolean',
-    null => 'null',
-    _ => 'a ${json.runtimeType}',
-  };
-
-  NavRoute _parseRoute(Object? json, String path) {
-    final route = _map(json, path);
-    final points = _points(route['geometry'], '$path.geometry');
-    final legs = _list(route['legs'], '$path.legs');
-    final seeds = <RouteStepSeed>[];
-    final summaries = <String>[];
-    for (var l = 0; l < legs.length; l++) {
-      final legPath = '$path.legs[$l]';
-      final leg = _map(legs[l], legPath);
-      final steps = _list(leg['steps'], '$legPath.steps');
-      for (var s = 0; s < steps.length; s++) {
-        seeds.add(_seed(steps[s], '$legPath.steps[$s]'));
-      }
-      final summary = _optionalString(leg['summary'], '$legPath.summary');
-      if (summary != null && summary.isNotEmpty) summaries.add(summary);
-    }
-    final durations = _durations(legs, path);
-    final limits = speedLimits ? _speedLimits(legs, path) : null;
-    final distance = _number(route['distance'], '$path.distance');
-    try {
-      return NavRoute.fromPoints(
-        points,
-        steps: seeds,
-        name: 'OSRM ${distance.round()} m',
-        summary: summaries.isEmpty ? null : summaries.join(', '),
-        segmentDurations: durations?.length == points.length - 1
-            ? durations
-            : null,
-        segmentSpeedLimits: limits?.length == points.length - 1 ? limits : null,
-      );
-    } on ArgumentError catch (e) {
-      throw OsrmFormatException('$path: ${e.message} (${e.name})');
-    }
-  }
-
-  List<GeoPoint> _points(Object? json, String path) {
-    final List<GeoPoint> points;
-    switch (geometries) {
-      case OsrmGeometries.geojson:
-        final coordinates = _list(
-          _map(json, path)['coordinates'],
-          '$path.coordinates',
-        );
-        points = [
-          for (var i = 0; i < coordinates.length; i++)
-            _lngLat(coordinates[i], '$path.coordinates[$i]'),
-        ];
-      case OsrmGeometries.polyline6:
-        if (json is! String) {
-          throw OsrmFormatException('$path: expected a polyline6 string');
-        }
-        try {
-          points = decodePolyline(json, precision: 6);
-        } on FormatException catch (e) {
-          throw OsrmFormatException('$path: ${e.message}');
-        }
-    }
-    if (points.length < 2) {
-      throw OsrmFormatException(
-        '$path: ${points.length} point(s), a route needs at least 2',
-      );
-    }
-    return points;
-  }
-
-  static RouteStepSeed _seed(Object? json, String path) {
-    final step = _map(json, path);
-    final maneuver = _map(step['maneuver'], '$path.maneuver');
-    final type = _string(maneuver['type'], '$path.maneuver.type');
-    final modifier = _optionalString(
-      maneuver['modifier'],
-      '$path.maneuver.modifier',
-    );
-    final name = _optionalString(step['name'], '$path.name') ?? '';
-    final ref = _optionalString(step['ref'], '$path.ref') ?? '';
-    return RouteStepSeed.atLocation(
-      _lngLat(maneuver['location'], '$path.maneuver.location'),
-      type: _type(type),
-      modifier: _modifier(modifier),
-      roadName: name.isNotEmpty ? name : ref,
-      lanes: _lanes(step['intersections'], '$path.intersections', modifier),
-    );
-  }
-
-  /// Each leg's `annotation.duration`, scaled so that the leg sums to its
-  /// `duration`: the annotations leave out the time of the turns. Null
-  /// when a leg has none, or when they sum to 0 for a leg that takes time.
-  static List<double>? _durations(List<Object?> legs, String path) {
-    final out = <double>[];
-    for (var l = 0; l < legs.length; l++) {
-      final legPath = '$path.legs[$l]';
-      final leg = _map(legs[l], legPath);
-      final annotation = leg['annotation'];
-      if (annotation == null) return null;
-      final raw = _map(annotation, '$legPath.annotation')['duration'];
-      if (raw == null) return null;
-      final list = _list(raw, '$legPath.annotation.duration');
-      final values = <double>[];
-      for (var i = 0; i < list.length; i++) {
-        final d = _number(list[i], '$legPath.annotation.duration[$i]');
-        if (d < 0) {
-          throw OsrmFormatException(
-            '$legPath.annotation.duration[$i]: negative ($d)',
-          );
-        }
-        values.add(d);
-      }
-      final total = _number(leg['duration'], '$legPath.duration');
-      final sum = values.fold(0.0, (a, b) => a + b);
-      if (sum == 0) {
-        if (total > 0) return null;
-        out.addAll(values);
-        continue;
-      }
-      out.addAll(values.map((d) => d * total / sum));
-    }
-    return out;
-  }
-
-  /// Each leg's `annotation.maxspeed` in m/s: `{speed, unit}` in km/h or
-  /// mph; `{unknown: true}`, `{none: true}` and speeds that are not
-  /// positive are no limit (null). Null when a leg has none.
-  static List<double?>? _speedLimits(List<Object?> legs, String path) {
-    final out = <double?>[];
-    for (var l = 0; l < legs.length; l++) {
-      final legPath = '$path.legs[$l]';
-      final annotation = _map(legs[l], legPath)['annotation'];
-      if (annotation == null) return null;
-      final raw = _map(annotation, '$legPath.annotation')['maxspeed'];
-      if (raw == null) return null;
-      final list = _list(raw, '$legPath.annotation.maxspeed');
-      for (var i = 0; i < list.length; i++) {
-        final entryPath = '$legPath.annotation.maxspeed[$i]';
-        final entry = _map(list[i], entryPath);
-        if (entry['speed'] == null) {
-          out.add(null);
-          continue;
-        }
-        final speed = _number(entry['speed'], '$entryPath.speed');
-        final unit = _optionalString(entry['unit'], '$entryPath.unit');
-        out.add(switch (unit) {
-          _ when !(speed > 0) => null,
-          'mph' => speed * 0.44704,
-          _ => speed / 3.6,
-        });
-      }
-    }
-    return out;
-  }
-
-  /// The lanes of the step's first intersection, where its manoeuvre is.
-  static List<Lane> _lanes(Object? json, String path, String? modifier) {
-    if (json == null) return const [];
-    final intersections = _list(json, path);
-    if (intersections.isEmpty) return const [];
-    final raw = _map(intersections.first, '$path[0]')['lanes'];
-    if (raw == null) return const [];
-    final lanes = _list(raw, '$path[0].lanes');
-    final follow = _laneDirection(modifier);
-    return [
-      for (var i = 0; i < lanes.length; i++)
-        _lane(lanes[i], '$path[0].lanes[$i]', follow),
-    ];
-  }
-
-  static Lane _lane(Object? json, String path, LaneDirection? follow) {
-    final lane = _map(json, path);
-    final indications = lane['indications'] == null
-        ? const <Object?>[]
-        : _list(lane['indications'], '$path.indications');
-    final directions = <LaneDirection>{
-      for (var i = 0; i < indications.length; i++)
-        ?_laneDirection(_string(indications[i], '$path.indications[$i]')),
-    };
-    // `none` (or nothing): no arrow painted, which drivers read as straight.
-    if (directions.isEmpty) directions.add(LaneDirection.straight);
-    final valid = lane['valid'] == true;
-    final given = _laneDirection(
-      _optionalString(lane['valid_indication'], '$path.valid_indication'),
-    );
-    final active = !valid
-        ? null
-        : given ??
-              (follow != null && directions.contains(follow)
-                  ? follow
-                  : directions.first);
-    return Lane(directions: directions, valid: valid, active: active);
-  }
-
-  static LaneDirection? _laneDirection(String? s) => switch (s) {
-    'uturn' => LaneDirection.uturn,
-    'sharp right' => LaneDirection.sharpRight,
-    'right' => LaneDirection.right,
-    'slight right' => LaneDirection.slightRight,
-    'straight' => LaneDirection.straight,
-    'slight left' => LaneDirection.slightLeft,
-    'left' => LaneDirection.left,
-    'sharp left' => LaneDirection.sharpLeft,
-    _ => null,
-  };
-
-  /// OSRM's `maneuver.type`. OSRM asks clients to handle a type they do not
-  /// know like `turn`.
-  static ManeuverType _type(String t) => switch (t) {
-    'depart' => ManeuverType.depart,
-    'arrive' => ManeuverType.arrive,
-    'new name' => ManeuverType.newName,
-    'continue' || 'notification' || 'use lane' => ManeuverType.continueOn,
-    'merge' => ManeuverType.merge,
-    'on ramp' => ManeuverType.onRamp,
-    'off ramp' => ManeuverType.offRamp,
-    'fork' => ManeuverType.fork,
-    'end of road' => ManeuverType.endOfRoad,
-    'roundabout' || 'rotary' => ManeuverType.roundabout,
-    'exit roundabout' || 'exit rotary' => ManeuverType.exitRoundabout,
-    // `roundabout turn`: a small roundabout driven like an intersection.
-    _ => ManeuverType.turn,
-  };
-
-  static ManeuverModifier _modifier(String? m) => switch (m) {
-    'uturn' => ManeuverModifier.uturn,
-    'sharp right' => ManeuverModifier.sharpRight,
-    'right' => ManeuverModifier.right,
-    'slight right' => ManeuverModifier.slightRight,
-    'straight' => ManeuverModifier.straight,
-    'slight left' => ManeuverModifier.slightLeft,
-    'left' => ManeuverModifier.left,
-    'sharp left' => ManeuverModifier.sharpLeft,
-    _ => ManeuverModifier.none,
-  };
-
-  // Typed reads that name the field when the JSON is not what OSRM sends.
-
-  static Map<String, Object?> _map(Object? json, String path) =>
-      json is Map<String, Object?>
-      ? json
-      : throw OsrmFormatException(
-          '$path: expected an object, got ${_kind(json)}',
-        );
-
-  static List<Object?> _list(Object? json, String path) => json is List<Object?>
-      ? json
-      : throw OsrmFormatException(
-          '$path: expected an array, got ${_kind(json)}',
-        );
-
-  static double _number(Object? json, String path) => json is num
-      ? json.toDouble()
-      : throw OsrmFormatException(
-          '$path: expected a number, got ${_kind(json)}',
-        );
-
-  static String _string(Object? json, String path) => json is String
-      ? json
-      : throw OsrmFormatException(
-          '$path: expected a string, got ${_kind(json)}',
-        );
-
-  static String? _optionalString(Object? json, String path) =>
-      json == null ? null : _string(json, path);
-
-  static GeoPoint _lngLat(Object? json, String path) {
-    final pair = _list(json, path);
-    if (pair.length < 2) {
-      throw OsrmFormatException('$path: expected [longitude, latitude]');
-    }
-    return GeoPoint(_number(pair[1], '$path[1]'), _number(pair[0], '$path[0]'));
   }
 }

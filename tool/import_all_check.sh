@@ -3,7 +3,7 @@
 # once, without prefixes: a name exported by two libraries for different
 # elements would be ambiguous and fail to analyze.
 #
-# It writes a throwaway app (path dependencies on all ten packages) to a
+# It writes a throwaway app (path dependencies on all twelve packages) to a
 # temporary directory, resolves it offline from the workspace's lock (run
 # `flutter pub get` at the repo root first) and analyzes it; nothing is
 # built.
@@ -25,6 +25,8 @@ packages=(
   navigation_engine_osrm
   navigation_engine_vietmap
   navigation_engine_goong
+  navigation_engine_mapbox_directions
+  navigation_engine_google_routes
 )
 
 {
@@ -38,9 +40,10 @@ packages=(
   for p in "${packages[@]}"; do
     echo "  $p: {path: $repo/packages/$p}"
   done
-  # The adapters depend on the core packages by version: use the local ones.
+  # The adapters depend on the core packages (and the Mapbox routing
+  # package on the OSRM one) by version: use the local ones.
   echo 'dependency_overrides:'
-  for p in navigation_engine navigation_engine_flutter; do
+  for p in navigation_engine navigation_engine_flutter navigation_engine_osrm; do
     echo "  $p: {path: $repo/packages/$p}"
   done
 } > "$app/pubspec.yaml"
@@ -58,6 +61,7 @@ mkdir -p "$app/lib"
 final _names = <Object>[
   NavigationSession,
   GeoPoint,
+  decodePolyline,
   NavRoute,
   FollowCamera,
   NavigationFlowController,
@@ -108,6 +112,7 @@ final _names = <Object>[
   GeolocatorFixSource,
   OsrmRouteProvider,
   OsrmGeometries,
+  OsrmResponseParser,
   OsrmException,
   OsrmCodeException,
   OsrmHttpException,
@@ -135,6 +140,26 @@ final _names = <Object>[
   GoongTimeoutException,
   GoongFormatException,
   GoongSearchException,
+  MapboxDirectionsRouteProvider,
+  MapboxDirectionsProfile,
+  MapboxSearch,
+  MapboxDirectionsException,
+  MapboxDirectionsCodeException,
+  MapboxDirectionsHttpException,
+  MapboxDirectionsTimeoutException,
+  MapboxDirectionsFormatException,
+  MapboxSearchException,
+  GoogleRoutesRouteProvider,
+  GoogleTravelMode,
+  GoogleRoutingPreference,
+  GooglePlacesSearch,
+  GoogleRoutesException,
+  GoogleRoutesStatusException,
+  GoogleRoutesHttpException,
+  GoogleRoutesNoRouteException,
+  GoogleRoutesTimeoutException,
+  GoogleRoutesFormatException,
+  GooglePlacesSearchException,
 ];
 DART
 } > "$app/lib/import_all.dart"

@@ -187,7 +187,7 @@ The route provider throws a `VietmapException`:
 | `VietmapCodeException` | Vietmap answered with an error `code`: `ZERO_RESULTS` (no route), `INVALID_REQUEST`, `OVER_DAILY_LIMIT`, `MAX_POINTS_EXCEED`, `ERROR_UNKNOWN`, … The `code`, the server's `messages` and the HTTP status are kept. |
 | `VietmapHttpException` | An HTTP error without a code: 401/403 (a missing or bad key), 423 (a tile key on a REST API), 429 (rate limit), a proxy error. |
 | `VietmapTimeoutException` | No full answer within `timeout`. It is also a `TimeoutException`. |
-| `VietmapFormatException` | The answer is not UTF-8, not JSON, or not shaped as Vietmap's; the message names the field. |
+| `VietmapFormatException` | The answer is not UTF-8, not JSON, or not shaped as Vietmap's; the message names the field. For an answer that is not JSON it is the fixed `invalid JSON`, and `cause` keeps only the parser's offset: on the web the parser's own message quotes the body around the error, where part of the key could be. |
 
 Transport failures (offline, DNS, TLS) arrive as the `http` client throws
 them, usually as `http.ClientException`. A point that is not finite throws

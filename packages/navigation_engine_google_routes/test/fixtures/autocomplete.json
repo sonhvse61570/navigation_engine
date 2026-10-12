@@ -1,0 +1,87 @@
+{
+  "suggestions": [
+    {
+      "placePrediction": {
+        "place": "places/REDACTED-place-id-1",
+        "placeId": "REDACTED-place-id-1",
+        "text": {
+          "text": "Chợ Bến Thành, Lê Lợi, Bến Thành, Quận 1, Hồ Chí Minh, Việt Nam",
+          "matches": [
+            {
+              "endOffset": 13
+            }
+          ]
+        },
+        "structuredFormat": {
+          "mainText": {
+            "text": "Chợ Bến Thành",
+            "matches": [
+              {
+                "endOffset": 13
+              }
+            ]
+          },
+          "secondaryText": {
+            "text": "Lê Lợi, Bến Thành, Quận 1, Hồ Chí Minh, Việt Nam"
+          }
+        },
+        "types": [
+          "market",
+          "point_of_interest",
+          "establishment"
+        ]
+      }
+    },
+    {
+      "queryPrediction": {
+        "text": {
+          "text": "chợ bến thành ăn gì",
+          "matches": [
+            {
+              "endOffset": 13
+            }
+          ]
+        },
+        "structuredFormat": {
+          "mainText": {
+            "text": "chợ bến thành ăn gì"
+          }
+        }
+      }
+    },
+    {
+      "placePrediction": {
+        "place": "places/REDACTED-place-id-2",
+        "placeId": "REDACTED-place-id-2",
+        "text": {
+          "text": "Bến Thành, Quận 1, Hồ Chí Minh, Việt Nam"
+        },
+        "structuredFormat": {
+          "mainText": {
+            "text": "Bến Thành"
+          },
+          "secondaryText": {
+            "text": "Quận 1, Hồ Chí Minh, Việt Nam"
+          }
+        },
+        "types": [
+          "sublocality_level_1",
+          "political"
+        ]
+      }
+    },
+    {
+      "placePrediction": {
+        "place": "places/REDACTED-place-id-3",
+        "placeId": "REDACTED-place-id-3",
+        "text": {
+          "text": "Việt Nam"
+        },
+        "types": [
+          "country",
+          "political"
+        ]
+      }
+    }
+  ]
+}

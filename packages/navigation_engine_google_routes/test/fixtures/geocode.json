@@ -1,0 +1,66 @@
+{
+  "plus_code": {
+    "compound_code": "QMFX+X6 Quận 1, Hồ Chí Minh, Việt Nam",
+    "global_code": "7P28QMFX+X6"
+  },
+  "results": [
+    {
+      "address_components": [
+        {
+          "long_name": "Lê Lợi",
+          "short_name": "Lê Lợi",
+          "types": [
+            "route"
+          ]
+        },
+        {
+          "long_name": "Quận 1",
+          "short_name": "Quận 1",
+          "types": [
+            "administrative_area_level_2",
+            "political"
+          ]
+        }
+      ],
+      "formatted_address": "Lê Lợi, Bến Thành, Quận 1, Hồ Chí Minh, Việt Nam",
+      "geometry": {
+        "location": {
+          "lat": 10.7724541,
+          "lng": 106.6981025
+        },
+        "location_type": "GEOMETRIC_CENTER",
+        "viewport": {
+          "northeast": {
+            "lat": 10.7738030802915,
+            "lng": 106.6994514802915
+          },
+          "southwest": {
+            "lat": 10.7711051197085,
+            "lng": 106.6967535197085
+          }
+        }
+      },
+      "place_id": "REDACTED-place-id-4",
+      "types": [
+        "route"
+      ]
+    },
+    {
+      "address_components": [],
+      "formatted_address": "Quận 1, Hồ Chí Minh, Việt Nam",
+      "geometry": {
+        "location": {
+          "lat": 10.7756587,
+          "lng": 106.7004238
+        },
+        "location_type": "APPROXIMATE"
+      },
+      "place_id": "REDACTED-place-id-5",
+      "types": [
+        "administrative_area_level_2",
+        "political"
+      ]
+    }
+  ],
+  "status": "OK"
+}

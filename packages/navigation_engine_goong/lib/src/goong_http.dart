@@ -78,8 +78,11 @@ final class GoongHttp {
   /// message, the reason phrase, the body) has the key scrubbed. Throws [GoongCodeException] for a body with another `status`
   /// than `OK`, or an `error`; [GoongHttpException] for another HTTP error;
   /// [GoongTimeoutException] after [timeout]; and [GoongFormatException]
-  /// for a body that is not UTF-8 JSON. Transport errors pass through, the
-  /// key in their URL and message redacted.
+  /// for a body that is not UTF-8 JSON (for one that is not JSON, a fixed
+  /// message and, as its cause, a `FormatException` that keeps only the
+  /// parser's offset: no text of the body, so no fragment of the key).
+  /// Transport errors pass through, the key in their URL and message
+  /// redacted.
   Future<Object?> get(
     List<String> path,
     List<(String, String)> params, {
@@ -109,12 +112,14 @@ final class GoongHttp {
     // Decoded once: UTF-8, then JSON.
     final text = _text(response);
     Object? json;
-    String? jsonError;
+    FormatException? jsonError;
     if (text != null) {
       try {
         json = jsonDecode(text);
       } on FormatException catch (e) {
-        jsonError = e.message;
+        // Only the offset is kept: on the web the parser's message quotes
+        // the body around the error, where part of the key could be.
+        jsonError = FormatException('invalid JSON', null, e.offset);
       }
     }
     final status = response.statusCode;
@@ -138,7 +143,8 @@ final class GoongHttp {
       throw const GoongFormatException('the body is not UTF-8');
     }
     if (jsonError != null) {
-      throw GoongFormatException('invalid JSON ($jsonError)');
+      // A fixed message: see [jsonError].
+      throw GoongFormatException('invalid JSON', cause: jsonError);
     }
     if (json is Map<String, Object?>) {
       final statusField = json['status'];

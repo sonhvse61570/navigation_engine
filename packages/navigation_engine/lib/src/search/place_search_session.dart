@@ -20,8 +20,9 @@ final class PlaceSearchSession {
   /// not.
   ///
   /// It comes from `Random.secure()`. On a platform without a secure
-  /// source the tokens come instead from a `Random` seeded with the clock
-  /// when the first session is created: still unique within the app, but
+  /// source (where it throws, as under dart2js on node) the tokens come
+  /// instead from a `Random` seeded with the clock when the first session
+  /// is created: still unique within the app, but
   /// predictable, and two devices that start in the same microsecond would
   /// share them. That is a deliberate downgrade: a session token only
   /// groups requests for billing, it is no secret, so search keeps working
@@ -45,11 +46,12 @@ final class PlaceSearchSession {
   }
 
   // A secure source where the platform has one, else the documented
-  // downgrade (see [token]).
+  // downgrade (see [token]). Any error, not only `UnsupportedError`: under
+  // dart2js on node, `Random.secure()` throws a plain JavaScript error.
   static Random _secureRandom() {
     try {
       return Random.secure();
-    } on UnsupportedError {
+    } catch (_) {
       return Random(DateTime.now().microsecondsSinceEpoch);
     }
   }

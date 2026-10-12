@@ -1,0 +1,261 @@
+{
+  "code": "Ok",
+  "uuid": "REDACTED-uuid",
+  "routes": [
+    {
+      "weight_name": "auto",
+      "weight": 96.4,
+      "duration": 84,
+      "distance": 1571.1,
+      "voiceLocale": "vi",
+      "geometry": "gynbg@u|u{hE_rAqFwuBv|Ag{CnzDw|Av|A_yFf{C",
+      "legs": [
+        {
+          "via_waypoints": [],
+          "admins": [{"iso_3166_1": "VN", "iso_3166_1_alpha3": "VNM"}],
+          "weight": 96.4,
+          "duration": 84,
+          "distance": 1571.1,
+          "summary": "Đinh Tiên Hoàng, Lê Thái Tổ",
+          "annotation": {
+            "distance": [148.2, 262.4, 417.4, 228.2, 514.9],
+            "duration": [10, 12, 20, 11, 25],
+            "maxspeed": [
+              {"speed": 50, "unit": "km/h"},
+              {"speed": 50, "unit": "km/h"},
+              {"unknown": true},
+              {"none": true},
+              {"speed": 30, "unit": "mph"}
+            ]
+          },
+          "steps": [
+            {
+              "geometry": "gynbg@u|u{hE_rAqFwuBv|A",
+              "maneuver": {
+                "type": "depart",
+                "instruction": "Đi về hướng bắc trên Đinh Tiên Hoàng",
+                "bearing_before": 0,
+                "bearing_after": 5,
+                "location": [105.852379, 21.028772]
+              },
+              "mode": "driving",
+              "driving_side": "right",
+              "name": "Đinh Tiên Hoàng",
+              "weight": 27.2,
+              "duration": 23.7,
+              "distance": 410.6,
+              "intersections": [
+                {
+                  "location": [105.852379, 21.028772],
+                  "bearings": [5],
+                  "entry": [true],
+                  "out": 0,
+                  "geometry_index": 0
+                }
+              ],
+              "voiceInstructions": [
+                {
+                  "distanceAlongGeometry": 410.6,
+                  "announcement": "Đi về hướng bắc trên Đinh Tiên Hoàng",
+                  "ssmlAnnouncement": "<speak>Đi về hướng bắc trên Đinh Tiên Hoàng</speak>"
+                }
+              ],
+              "bannerInstructions": [
+                {
+                  "distanceAlongGeometry": 410.6,
+                  "primary": {
+                    "text": "Lê Thái Tổ",
+                    "components": [{"text": "Lê Thái Tổ", "type": "text"}],
+                    "type": "turn",
+                    "modifier": "left"
+                  },
+                  "secondary": null
+                }
+              ]
+            },
+            {
+              "geometry": "_cubg@ofs{hEg{CnzDw|Av|A",
+              "maneuver": {
+                "type": "turn",
+                "modifier": "left",
+                "instruction": "Rẽ trái vào Lê Thái Tổ",
+                "bearing_before": 322,
+                "bearing_after": 314,
+                "location": [105.851, 21.032]
+              },
+              "mode": "driving",
+              "driving_side": "right",
+              "name": "Lê Thái Tổ",
+              "weight": 39.0,
+              "duration": 33.9,
+              "distance": 645.6,
+              "intersections": [
+                {
+                  "location": [105.851, 21.032],
+                  "bearings": [142, 314, 5],
+                  "entry": [false, true, true],
+                  "in": 0,
+                  "out": 1,
+                  "geometry_index": 2,
+                  "lanes": [
+                    {
+                      "indications": ["left"],
+                      "valid": true,
+                      "active": true,
+                      "valid_indication": "left"
+                    },
+                    {
+                      "indications": ["straight", "left"],
+                      "valid": true,
+                      "active": false,
+                      "valid_indication": "left"
+                    },
+                    {
+                      "indications": ["straight"],
+                      "valid": false,
+                      "active": false
+                    }
+                  ]
+                }
+              ],
+              "voiceInstructions": [],
+              "bannerInstructions": []
+            },
+            {
+              "geometry": "_}|bg@gmj{hE_yFf{C",
+              "maneuver": {
+                "type": "end of road",
+                "modifier": "right",
+                "instruction": "Rẽ phải vào QL1A",
+                "bearing_before": 316,
+                "bearing_after": 330,
+                "location": [105.8465, 21.036]
+              },
+              "mode": "driving",
+              "driving_side": "right",
+              "name": "",
+              "ref": "QL1A",
+              "weight": 30.2,
+              "duration": 26.4,
+              "distance": 514.9,
+              "intersections": [
+                {
+                  "location": [105.8465, 21.036],
+                  "bearings": [136, 330],
+                  "entry": [false, true],
+                  "in": 0,
+                  "out": 1,
+                  "geometry_index": 4
+                }
+              ]
+            },
+            {
+              "geometry": "_wdcg@_qe{hE??",
+              "maneuver": {
+                "type": "arrive",
+                "instruction": "Bạn đã đến nơi",
+                "bearing_before": 330,
+                "bearing_after": 0,
+                "location": [105.844, 21.04]
+              },
+              "mode": "driving",
+              "driving_side": "right",
+              "name": "",
+              "ref": "QL1A",
+              "weight": 0,
+              "duration": 0,
+              "distance": 0,
+              "intersections": [
+                {
+                  "location": [105.844, 21.04],
+                  "bearings": [150],
+                  "entry": [true],
+                  "in": 0,
+                  "geometry_index": 5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "weight_name": "auto",
+      "weight": 181.0,
+      "duration": 160,
+      "distance": 2105.1,
+      "voiceLocale": "vi",
+      "geometry": "gynbg@u|u{hEweIiaF_vJ~lV",
+      "legs": [
+        {
+          "via_waypoints": [],
+          "admins": [{"iso_3166_1": "VN", "iso_3166_1_alpha3": "VNM"}],
+          "weight": 181.0,
+          "duration": 160,
+          "distance": 2105.1,
+          "summary": "Trần Quang Khải",
+          "annotation": {
+            "distance": [692.2, 1412.9],
+            "duration": [50, 100]
+          },
+          "steps": [
+            {
+              "geometry": "gynbg@u|u{hEweIiaF_vJ~lV",
+              "maneuver": {
+                "type": "depart",
+                "instruction": "Đi về hướng đông bắc trên Trần Quang Khải",
+                "bearing_before": 0,
+                "bearing_after": 32,
+                "location": [105.852379, 21.028772]
+              },
+              "mode": "driving",
+              "driving_side": "right",
+              "name": "Trần Quang Khải",
+              "weight": 181.0,
+              "duration": 160,
+              "distance": 2105.1,
+              "intersections": [
+                {
+                  "location": [105.852379, 21.028772],
+                  "bearings": [32],
+                  "entry": [true],
+                  "out": 0,
+                  "geometry_index": 0
+                }
+              ]
+            },
+            {
+              "geometry": "_wdcg@_qe{hE??",
+              "maneuver": {
+                "type": "arrive",
+                "instruction": "Bạn đã đến nơi",
+                "bearing_before": 300,
+                "bearing_after": 0,
+                "location": [105.844, 21.04]
+              },
+              "mode": "driving",
+              "driving_side": "right",
+              "name": "Trần Quang Khải",
+              "weight": 0,
+              "duration": 0,
+              "distance": 0,
+              "intersections": [
+                {
+                  "location": [105.844, 21.04],
+                  "bearings": [120],
+                  "entry": [true],
+                  "in": 0,
+                  "geometry_index": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "waypoints": [
+    {"distance": 2.1, "name": "Đinh Tiên Hoàng", "location": [105.852379, 21.028772]},
+    {"distance": 3.4, "name": "", "location": [105.844, 21.04]}
+  ]
+}

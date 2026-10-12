@@ -1,0 +1,64 @@
+{
+  "suggestions": [
+    {
+      "name": "Hồ Hoàn Kiếm",
+      "mapbox_id": "REDACTED-mapbox-id-1",
+      "feature_type": "poi",
+      "address": "Đinh Tiên Hoàng",
+      "full_address": "Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội, Việt Nam",
+      "place_formatted": "Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội, Việt Nam",
+      "context": {
+        "country": {"name": "Việt Nam", "country_code": "VN", "country_code_alpha_3": "VNM"},
+        "place": {"name": "Hà Nội"},
+        "street": {"name": "Đinh Tiên Hoàng"}
+      },
+      "language": "vi",
+      "maki": "park",
+      "poi_category": ["park"],
+      "poi_category_ids": ["park"],
+      "external_ids": {},
+      "metadata": {},
+      "distance": 120
+    },
+    {
+      "name": "Park",
+      "mapbox_id": "park",
+      "feature_type": "category",
+      "place_formatted": "",
+      "context": {},
+      "language": "vi",
+      "maki": "park"
+    },
+    {
+      "name": "Hoàn Kiếm",
+      "mapbox_id": "REDACTED-mapbox-id-2",
+      "feature_type": "locality",
+      "place_formatted": "Hà Nội, Việt Nam",
+      "context": {
+        "country": {"name": "Việt Nam", "country_code": "VN", "country_code_alpha_3": "VNM"},
+        "place": {"name": "Hà Nội"}
+      },
+      "language": "vi"
+    },
+    {
+      "name": "Hà Nội",
+      "mapbox_id": "REDACTED-mapbox-id-6",
+      "feature_type": "place",
+      "place_formatted": "Việt Nam",
+      "context": {
+        "country": {"name": "Việt Nam", "country_code": "VN", "country_code_alpha_3": "VNM"}
+      },
+      "language": "vi"
+    },
+    {
+      "name": "Hồ Tây",
+      "mapbox_id": "REDACTED-mapbox-id-3",
+      "feature_type": "poi",
+      "place_formatted": "",
+      "context": {},
+      "language": "vi"
+    }
+  ],
+  "attribution": "© 2026 Mapbox and its suppliers. All rights reserved. Use of this data is subject to the Mapbox Terms of Service. (https://www.mapbox.com/about/maps/)",
+  "response_id": "REDACTED-response-id"
+}

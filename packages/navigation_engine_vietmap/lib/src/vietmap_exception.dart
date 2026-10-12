@@ -151,8 +151,14 @@ final class VietmapTimeoutException extends VietmapException
 /// unexpected shape. [message] names the field, such as
 /// `paths[0].instructions[2].interval`.
 final class VietmapFormatException extends VietmapException {
-  /// A malformed answer, described by [message].
-  const VietmapFormatException(super.message);
+  /// A malformed answer, described by [message], because of [cause] when
+  /// there is one.
+  const VietmapFormatException(super.message, {this.cause});
+
+  /// The error that found the problem, when there is one: for an answer
+  /// that is not JSON, a `FormatException` that keeps only the parser's
+  /// offset, since the web's parser quotes the body around the error.
+  final Object? cause;
 
   @override
   String get _name => 'VietmapFormatException';
