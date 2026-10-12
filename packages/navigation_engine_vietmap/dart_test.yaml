@@ -1,0 +1,14 @@
+# Tests tagged `js` guard code whose behaviour differs under dart2js
+# (32-bit bitwise operators, the web's User-Agent). The default run, and
+# `flutter test` in CI, run them on the VM like the rest. Run them on JS
+# too with
+#
+#     dart test -p node -t js
+#
+# The platform is named on the command line, not here: `flutter test`
+# rejects `node` in this file.
+tags:
+  js:
+  # Live requests to Vietmap, billed to the key; skipped unless
+  # VIETMAP_SERVICES_KEY is set (see test/live_test.dart).
+  live:

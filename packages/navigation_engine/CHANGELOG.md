@@ -67,3 +67,9 @@
   more.
 - `NavRoute.distanceAtVertex(index)`: the distance along the route at a
   vertex, in the route's own planar frame.
+- Place search: the provider-neutral `PlaceSearchProvider` interface
+  (`autocomplete`, `resolve`, `reverse`) with the `PlaceSuggestion` and
+  `Place` value types; `PlaceSearchSession`, an opaque random token that
+  groups the calls of one search for providers that bill per session; and
+  `PlaceSearchException` for their errors, with the HTTP `statusCode` and
+  the `cause` when known, which providers may extend.

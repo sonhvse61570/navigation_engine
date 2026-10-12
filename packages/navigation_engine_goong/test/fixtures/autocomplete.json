@@ -1,0 +1,56 @@
+{
+  "predictions": [
+    {
+      "description": "Hồ Hoàn Kiếm, Phường Hoàn Kiếm, Thành phố Hà Nội",
+      "matched_substrings": [{ "length": 2, "offset": 0 }],
+      "place_id": "REDACTED-place-1",
+      "reference": "REDACTED-place-1",
+      "structured_formatting": {
+        "main_text": "Hồ Hoàn Kiếm",
+        "main_text_matched_substrings": [{ "length": 2, "offset": 0 }],
+        "secondary_text": "Phường Hoàn Kiếm, Thành phố Hà Nội",
+        "secondary_text_matched_substrings": []
+      },
+      "has_children": false,
+      "plus_code": { "compound_code": "+QG4 Hà Nội", "global_code": "7PH7+QG4" },
+      "compound": { "commune": "Phường Hoàn Kiếm", "province": "Thành phố Hà Nội" },
+      "terms": [
+        { "offset": 0, "value": "Hồ Hoàn Kiếm" },
+        { "offset": 14, "value": "Phường Hoàn Kiếm" },
+        { "offset": 32, "value": "Thành phố Hà Nội" }
+      ],
+      "types": ["lake"],
+      "distance_meters": null
+    },
+    {
+      "description": "19 Hàng Bài, Phường Hoàn Kiếm, Thành phố Hà Nội",
+      "matched_substrings": [],
+      "place_id": "REDACTED-place-2",
+      "reference": "REDACTED-place-2",
+      "structured_formatting": {
+        "main_text": "19 Hàng Bài",
+        "main_text_matched_substrings": [],
+        "secondary_text": "",
+        "secondary_text_matched_substrings": []
+      },
+      "has_children": false,
+      "compound": { "commune": "Phường Hoàn Kiếm", "province": "Thành phố Hà Nội" },
+      "terms": [],
+      "types": ["house_number"],
+      "distance_meters": null
+    },
+    {
+      "description": "Phường Hoàn Kiếm, Thành phố Hà Nội",
+      "matched_substrings": [],
+      "place_id": "REDACTED-place-3",
+      "reference": "REDACTED-place-3",
+      "has_children": true,
+      "compound": { "commune": "Phường Hoàn Kiếm", "province": "Thành phố Hà Nội" },
+      "terms": [],
+      "types": ["commune"],
+      "distance_meters": null
+    }
+  ],
+  "execution_time": "0.031s",
+  "status": "OK"
+}

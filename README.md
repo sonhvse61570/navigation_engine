@@ -17,11 +17,34 @@ Smooth, map-agnostic turn-by-turn navigation for Dart and Flutter, split into sm
 | [`navigation_engine_mapbox`](packages/navigation_engine_mapbox) | View for Mapbox |
 | [`navigation_engine_geolocator`](packages/navigation_engine_geolocator) | GPS fixes from geolocator (`GeolocatorFixSource`) |
 | [`navigation_engine_osrm`](packages/navigation_engine_osrm) | Routes from an OSRM server (`OsrmRouteProvider`, pure Dart) |
+| [`navigation_engine_vietmap`](packages/navigation_engine_vietmap) | Vietmap: MapLibre styles, routes and place search (pure Dart) |
+| [`navigation_engine_goong`](packages/navigation_engine_goong) | Goong: MapLibre styles, routes and place search (pure Dart) |
 
 More routing adapters (such as `navigation_engine_google_routes`) will live
 next to them.
 
 Development: `dart pub get` at the root, then `dart test` in a package.
+
+## Providers
+
+| | Provider | Package | Key |
+|---|---|---|---|
+| Map tiles | OpenStreetMap, through flutter_map | `navigation_engine_flutter_map` | none |
+| | OpenFreeMap, through MapLibre | `navigation_engine_maplibre` | none |
+| | Vietmap, through MapLibre | `navigation_engine_maplibre` with `VietmapStyles` | tile key |
+| | Goong, through MapLibre | `navigation_engine_maplibre` with `GoongStyles` | Maptiles key |
+| | Google Maps | `navigation_engine_google_maps` | Maps SDK key |
+| | Mapbox | `navigation_engine_mapbox` | access token |
+| Routing | OSRM | `OsrmRouteProvider` (`navigation_engine_osrm`) | none; the public demo server is for testing only |
+| | Vietmap | `VietmapRouteProvider` (`navigation_engine_vietmap`) | services key |
+| | Goong | `GoongRouteProvider` (`navigation_engine_goong`) | API key |
+| Place search | Vietmap | `VietmapPlaceSearch` (`navigation_engine_vietmap`) | services key |
+| | Goong | `GoongPlaceSearch` (`navigation_engine_goong`) | API key |
+| | Photon, or any geocoder | bring your own: implement `PlaceSearchProvider` (`navigation_engine`) | yours |
+
+Vietmap and Goong publish no developer terms: check them with the provider
+before production use (see each package's README). Keep their REST keys
+behind your back end or a proxy; the packages take a `baseUrl` for that.
 
 ## Feature parity
 

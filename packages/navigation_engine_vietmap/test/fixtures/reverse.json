@@ -1,0 +1,29 @@
+[
+  {
+    "lat": 10.759221,
+    "lng": 106.675901,
+    "ref_id": "geocode:REDACTED-ref-4",
+    "distance": 0.003,
+    "address": "197 Trần Phú, Phường Chợ Quán, Thành Phố Hồ Chí Minh",
+    "name": "",
+    "display": "197 Trần Phú, Phường Chợ Quán, Thành Phố Hồ Chí Minh",
+    "boundaries": [
+      {"type": 2, "id": 18700, "name": "Chợ Quán", "prefix": "Phường", "full_name": "Phường Chợ Quán"},
+      {"type": 0, "id": 12, "name": "Hồ Chí Minh", "prefix": "Thành Phố", "full_name": "Thành Phố Hồ Chí Minh"}
+    ],
+    "categories": [],
+    "entry_points": []
+  },
+  {
+    "lat": 10.759418,
+    "lng": 106.676112,
+    "ref_id": "geocode:REDACTED-ref-5",
+    "distance": 0.031,
+    "address": "Trần Phú, Phường Chợ Quán, Thành Phố Hồ Chí Minh",
+    "name": "Nhà Văn hoá Phường Chợ Quán",
+    "display": "Nhà Văn hoá Phường Chợ Quán, Trần Phú, Phường Chợ Quán, Thành Phố Hồ Chí Minh",
+    "boundaries": [],
+    "categories": ["2004"],
+    "entry_points": []
+  }
+]

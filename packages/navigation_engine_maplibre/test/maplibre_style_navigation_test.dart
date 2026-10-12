@@ -170,6 +170,7 @@ class Harness {
     void Function(ml.MapLibreMapController controller)? onMapCreated,
     void Function(GeoPoint point)? onMapTap,
     void Function(GeoPoint point)? onMapLongPress,
+    String? attributionText,
   }) {
     final screen = MapLibreStyleNavigation(
       session: session,
@@ -192,6 +193,7 @@ class Harness {
       onMapCreated: onMapCreated,
       onMapTap: onMapTap,
       onMapLongPress: onMapLongPress,
+      attributionText: attributionText,
     );
     return MaterialApp(
       builder: textScaler == null
@@ -239,6 +241,7 @@ class Harness {
     void Function(ml.MapLibreMapController controller)? onMapCreated,
     void Function(GeoPoint point)? onMapTap,
     void Function(GeoPoint point)? onMapLongPress,
+    String? attributionText,
     bool loadStyle = true,
   }) async {
     tester.view
@@ -265,6 +268,7 @@ class Harness {
         onMapCreated: onMapCreated,
         onMapTap: onMapTap,
         onMapLongPress: onMapLongPress,
+        attributionText: attributionText,
       ),
     );
     if (pushed) {
@@ -720,6 +724,47 @@ void main() {
     expect(last('logoViewMargins'), [8, footer + speed + 16 + 8]);
   });
 
+  group('attributionText', () {
+    MapLibreNavigationView view(WidgetTester tester) => tester
+        .widget<MapLibreNavigationView>(find.byType(MapLibreNavigationView));
+
+    navTest('is forwarded to the view and drawn above the panels', (
+      tester,
+      h,
+    ) async {
+      await h.mount(tester, attributionText: '© VIETMAP');
+      expect(view(tester).attributionText, '© VIETMAP');
+      expect(find.text('© VIETMAP'), findsOneWidget);
+
+      h.flow.previewRoutes([route]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 16));
+      final panel = tester.getRect(find.byType(MapboxStyleRoutePanel));
+      final text = tester.getRect(find.text('© VIETMAP'));
+      expect(text.bottom, lessThanOrEqualTo(panel.top - 8));
+    });
+
+    navTest('follows the night of the flow', (tester, h) async {
+      await h.mount(tester, attributionText: '© Goong');
+      Color color() => tester.widget<Text>(find.text('© Goong')).style!.color!;
+      final day = color();
+      expect(view(tester).night, isFalse);
+
+      h.flow.nightMode = NightMode.alwaysNight;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(view(tester).night, isTrue);
+      expect(color(), isNot(day));
+      expect(color().computeLuminance(), greaterThan(0.8));
+    });
+
+    navTest('defaults to none', (tester, h) async {
+      await h.mount(tester);
+      expect(view(tester).attributionText, isNull);
+    });
+  });
+
   navTest('without a night style, night keeps the day style', (
     tester,
     h,
@@ -846,6 +891,7 @@ void main() {
     expect(screen.vehicleImage, isNull);
     expect(screen.focus, 0.7);
     expect(screen.initialZoom, 17);
+    expect(screen.attributionText, isNull);
   });
 
   navTest('onMapCreated gets the controller after the overview refresh', (

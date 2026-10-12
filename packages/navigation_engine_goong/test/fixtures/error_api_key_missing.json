@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "API_KEY_MISSING",
+    "message": "The api_key parameter is missing"
+  }
+}

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
 import 'package:navigation_engine/navigation_engine.dart';
@@ -791,6 +792,8 @@ void main() {
       RouteLabelColors? slowerLabelColors,
       Color? searchPinColor,
       NavigationSession? session,
+      String? attributionText,
+      bool night = false,
     }) async {
       installRecordingPlatform(platform);
       tester.view
@@ -816,6 +819,8 @@ void main() {
             fasterLabelColors: fasterLabelColors,
             slowerLabelColors: slowerLabelColors,
             searchPinColor: searchPinColor,
+            attributionText: attributionText,
+            night: night,
           ),
         ),
       );
@@ -1134,6 +1139,241 @@ void main() {
         await mount(tester, session: session, horizontalFocus: 0.75);
         await tester.pump();
         expect(last('logoViewMargins'), [208, 8]);
+      });
+    });
+
+    group('attributionText', () {
+      List<num> margins() {
+        final updates = [
+          (platform.creationParams.first['options']
+              as Map)['attributionButtonMargins'],
+          for (final update in platform.argsOf('updateMapOptions'))
+            if ((update! as Map).containsKey('attributionButtonMargins'))
+              (update as Map)['attributionButtonMargins'],
+        ];
+        return (updates.last! as List).cast<num>();
+      }
+
+      /// The overlay: the box that holds the pill, beside the button.
+      Finder overlay(String text) => find
+          .ancestor(of: find.text(text), matching: find.byType(IgnorePointer))
+          .first;
+
+      Text label(WidgetTester tester, String text) =>
+          tester.widget<Text>(find.text(text));
+
+      Color pill(WidgetTester tester, String text) {
+        final box = tester.widget<DecoratedBox>(
+          find
+              .ancestor(
+                of: find.text(text),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        );
+        return (box.decoration as BoxDecoration).color!;
+      }
+
+      /// The overlay's right edge sits beside the button (24 wide, 4 apart)
+      /// and its bottom on the button's margin, from the bottom right.
+      void expectBesideButton(WidgetTester tester, String text) {
+        final m = margins();
+        final rect = tester.getRect(overlay(text));
+        expect(rect.right, closeTo(400 - (m[0] + 24 + 4), 1e-9));
+        expect(rect.bottom, closeTo(800 - m[1], 1e-9));
+        expect(rect.height, greaterThanOrEqualTo(24));
+      }
+
+      testWidgets('absent by default', (tester) async {
+        await mount(tester);
+        expect(find.byType(Text), findsNothing);
+      });
+
+      testWidgets('an empty text shows nothing', (tester) async {
+        await mount(tester, attributionText: '');
+        expect(find.byType(Text), findsNothing);
+      });
+
+      testWidgets('shown small, beside the attribution button', (tester) async {
+        await mount(tester, attributionText: '© VIETMAP');
+        expect(find.text('© VIETMAP'), findsOneWidget);
+        final size = label(tester, '© VIETMAP').style!.fontSize!;
+        expect(size, inInclusiveRange(10, 11));
+        expect(margins(), [8, 8]);
+        expectBesideButton(tester, '© VIETMAP');
+        expect(tester.getRect(overlay('© VIETMAP')).right, 364);
+      });
+
+      testWidgets('lets the map have the gestures', (tester) async {
+        await mount(tester, attributionText: '© Goong');
+        expect(
+          tester.widget<IgnorePointer>(overlay('© Goong')).ignoring,
+          isTrue,
+        );
+        // A pointer on the text, or on its pill's padding, hits the map
+        // (the platform view) and not the overlay.
+        final mapBox = tester.renderObject(
+          find.descendant(
+            of: find.byType(ml.MapLibreMap),
+            matching: find.byType(Listener),
+          ),
+        );
+        final paragraph = tester.renderObject(find.text('© Goong'));
+        final pill = tester.renderObject(
+          find.ancestor(
+            of: find.text('© Goong'),
+            matching: find.byType(DecoratedBox),
+          ),
+        );
+        for (final at in [
+          tester.getCenter(find.text('© Goong')),
+          tester.getRect(overlay('© Goong')).centerLeft + const Offset(1, 0),
+        ]) {
+          final targets = [
+            for (final entry in tester.hitTestOnBinding(at).path) entry.target,
+          ];
+          expect(targets, contains(same(mapBox)), reason: '$at');
+          expect(targets, isNot(contains(same(paragraph))));
+          expect(targets, isNot(contains(same(pill))));
+        }
+      });
+
+      testWidgets('reads plainly under a MaterialApp with no Material', (
+        tester,
+      ) async {
+        installRecordingPlatform(platform);
+        tester.view
+          ..physicalSize = const Size(400, 800)
+          ..devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final session = NavigationSession(fixes: _Fixes())..start();
+        addTearDown(session.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MapLibreNavigationView(
+              session: session,
+              styleString: 'day.json',
+              initialCenter: _main.points.first,
+              vehicleImage: (_) async => Uint8List(4),
+              attributionText: '© VIETMAP',
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        final style = tester
+            .renderObject<RenderParagraph>(find.text('© VIETMAP'))
+            .text
+            .style!;
+        expect(style.decoration, TextDecoration.none);
+        expect(style.fontWeight, FontWeight.w400);
+        expect(style.fontFamily, isNot('monospace'));
+        expect(style.fontStyle, FontStyle.normal);
+        expect(style.fontSize, 10);
+      });
+
+      testWidgets('hidden where there is no room for it', (tester) async {
+        // A panel on the left leaves 400 - 36 - 320 - 8 = 36 wide.
+        await mount(tester, attributionText: '© Goong', horizontalFocus: 0.9);
+        expect(find.text('© Goong'), findsNothing);
+      });
+
+      testWidgets('shown where there is just room for it', (tester) async {
+        // 400 - 36 - 280 - 8 = 76 wide.
+        await mount(tester, attributionText: '© Goong', horizontalFocus: 0.85);
+        expect(find.text('© Goong'), findsOneWidget);
+        expectBesideButton(tester, '© Goong');
+      });
+
+      testWidgets('keeps above the bottom overlay', (tester) async {
+        await mount(tester, attributionText: '© Goong', bottomInset: 120);
+        expect(margins(), [8, 128]);
+        expectBesideButton(tester, '© Goong');
+        expect(tester.getRect(overlay('© Goong')).bottom, 800 - 128);
+      });
+
+      testWidgets('keeps clear of a panel on the left', (tester) async {
+        await mount(
+          tester,
+          attributionText: '© Goong',
+          horizontalFocus: 0.75,
+          bottomInset: 50,
+        );
+        expectBesideButton(tester, '© Goong');
+        expect(
+          tester.getRect(find.text('© Goong')).left,
+          greaterThanOrEqualTo(200),
+        );
+      });
+
+      testWidgets('keeps clear of a panel on the right (right to left)', (
+        tester,
+      ) async {
+        await mount(
+          tester,
+          attributionText: '© VIETMAP',
+          horizontalFocus: 0.25,
+          direction: TextDirection.rtl,
+        );
+        expect(margins(), [208, 8]);
+        expectBesideButton(tester, '© VIETMAP');
+        expect(tester.getRect(overlay('© VIETMAP')).right, 164);
+      });
+
+      testWidgets('a long text is cut before a panel on the left', (
+        tester,
+      ) async {
+        final long = 'Map data © ${'Provider ' * 20}';
+        await mount(tester, attributionText: long, horizontalFocus: 0.75);
+        expectBesideButton(tester, long);
+        expect(
+          tester.getRect(find.text(long)).left,
+          greaterThanOrEqualTo(200 + 8),
+        );
+        expect(label(tester, long).maxLines, 1);
+        expect(label(tester, long).overflow, TextOverflow.ellipsis);
+      });
+
+      testWidgets('follows day and night', (tester) async {
+        final session = NavigationSession(fixes: _Fixes())..start();
+        addTearDown(session.dispose);
+        await mount(tester, session: session, attributionText: '© VIETMAP');
+        final dayText = label(tester, '© VIETMAP').style!.color!;
+        final dayPill = pill(tester, '© VIETMAP');
+        expect(dayText.computeLuminance(), lessThan(0.2), reason: 'dark text');
+        expect(dayPill.computeLuminance(), greaterThan(0.8));
+        expect(dayPill.a, inExclusiveRange(0, 1), reason: 'translucent');
+
+        await mount(
+          tester,
+          session: session,
+          attributionText: '© VIETMAP',
+          night: true,
+        );
+        final nightText = label(tester, '© VIETMAP').style!.color!;
+        final nightPill = pill(tester, '© VIETMAP');
+        expect(nightText.computeLuminance(), greaterThan(0.8));
+        expect(nightPill.computeLuminance(), lessThan(0.2));
+        expect(nightPill.a, inExclusiveRange(0, 1), reason: 'translucent');
+        expectBesideButton(tester, '© VIETMAP');
+      });
+
+      testWidgets('a new text replaces the old one', (tester) async {
+        final session = NavigationSession(fixes: _Fixes())..start();
+        addTearDown(session.dispose);
+        await mount(tester, session: session);
+        final mapState = tester.state(find.byType(ml.MapLibreMap));
+        await mount(tester, session: session, attributionText: '© VIETMAP');
+        await mount(tester, session: session, attributionText: '© Goong');
+        expect(find.text('© VIETMAP'), findsNothing);
+        expect(find.text('© Goong'), findsOneWidget);
+        await mount(tester, session: session);
+        expect(find.text('© Goong'), findsNothing);
+        expect(
+          tester.state(find.byType(ml.MapLibreMap)),
+          same(mapState),
+          reason: 'the platform map is kept',
+        );
       });
     });
   });

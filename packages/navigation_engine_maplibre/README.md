@@ -84,6 +84,13 @@ speed sign) and the arrival panel (`attributionButtonMargins`), as the map
 data's licences require (the view shows no logo, maplibre_gl's default); with your own `MapLibreNavigationView`, set its
 `bottomInset`.
 
+A style without an attribution string of its own (Vietmap's, say) leaves
+the button with nothing to credit: pass `attributionText` (`© VIETMAP`,
+`© Goong`) to `MapLibreStyleNavigation` or `MapLibreNavigationView`. It is
+drawn as small text on a translucent pill beside the button, keeps clear
+of `bottomInset` and of a side panel as the button does, follows day and
+night, and lets the map have the gestures.
+
 ### Day and night
 
 `flow.isNight` switches the look. With a `nightStyleString`, night loads that

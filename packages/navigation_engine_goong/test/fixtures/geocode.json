@@ -1,0 +1,39 @@
+{
+  "results": [
+    {
+      "address_components": [
+        { "long_name": "11", "short_name": "11" },
+        { "long_name": "Trần Cung", "short_name": "Trần Cung" },
+        { "long_name": "Phường Nghĩa Đô", "short_name": "Phường Nghĩa Đô" },
+        { "long_name": "Thành phố Hà Nội", "short_name": "Thành phố Hà Nội" }
+      ],
+      "formatted_address": "11 Trần Cung, Phường Nghĩa Đô, Thành phố Hà Nội",
+      "geometry": {
+        "location": { "lat": 21.04663, "lng": 105.79022 },
+        "boundary": null
+      },
+      "place_id": "REDACTED-place-4",
+      "reference": "REDACTED-place-4",
+      "plus_code": { "compound_code": "+QG4 Hà Nội", "global_code": "7PH7+QG4" },
+      "compound": { "commune": "Phường Nghĩa Đô", "province": "Thành phố Hà Nội" },
+      "types": [],
+      "name": "11 Trần Cung",
+      "address": "Phường Nghĩa Đô, Thành phố Hà Nội"
+    },
+    {
+      "address_components": [],
+      "formatted_address": "Trần Cung, Phường Nghĩa Đô, Thành phố Hà Nội",
+      "geometry": {
+        "location": { "lat": 21.0466, "lng": 105.7903 },
+        "boundary": null
+      },
+      "place_id": "REDACTED-place-5",
+      "reference": "REDACTED-place-5",
+      "compound": { "commune": "Phường Nghĩa Đô", "province": "Thành phố Hà Nội" },
+      "types": [],
+      "name": "Trần Cung",
+      "address": "Phường Nghĩa Đô, Thành phố Hà Nội"
+    }
+  ],
+  "status": "OK"
+}

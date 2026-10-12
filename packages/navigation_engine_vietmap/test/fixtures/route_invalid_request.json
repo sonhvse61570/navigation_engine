@@ -1,0 +1,5 @@
+{
+  "license": "vietmap",
+  "code": "INVALID_REQUEST",
+  "messages": "Point 1 is out of bounds: 91.0,106.7"
+}
