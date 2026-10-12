@@ -28,5 +28,15 @@
   codes such as `NoRoute` and `NoSegment`), `OsrmHttpException`,
   `OsrmTimeoutException` (also a `TimeoutException`) and
   `OsrmFormatException` (the message names the malformed field).
-- Works on the web: the `polyline6` decoder is safe under dart2js (its
-  tests also run on node, `dart test -p node -t js`).
+- `OsrmResponseParser.parse(json, geometries:, speedLimits:,
+  maxAlternatives:, providerName:)`: the provider's reading of a route
+  service answer (steps, manoeuvres, lanes, durations and `maxspeed` speed
+  limits) as a public API, for providers whose answers follow OSRM's
+  format, such as Mapbox's Directions API. `OsrmRouteProvider` uses it and
+  behaves as before.
+- `OsrmGeometries` (`geojson` or `polyline6`) lives in its own file, still
+  exported from `navigation_engine_osrm.dart`, since the parser and
+  `OsrmRouteProvider` both take it.
+- Works on the web: `polyline6` geometries are decoded with the core's
+  `decodePolyline`, which is safe under dart2js (its tests, and this
+  package's, also run on node, `dart test -p node -t js`).

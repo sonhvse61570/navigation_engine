@@ -19,9 +19,10 @@ Smooth, map-agnostic turn-by-turn navigation for Dart and Flutter, split into sm
 | [`navigation_engine_osrm`](packages/navigation_engine_osrm) | Routes from an OSRM server (`OsrmRouteProvider`, pure Dart) |
 | [`navigation_engine_vietmap`](packages/navigation_engine_vietmap) | Vietmap: MapLibre styles, routes and place search (pure Dart) |
 | [`navigation_engine_goong`](packages/navigation_engine_goong) | Goong: MapLibre styles, routes and place search (pure Dart) |
+| [`navigation_engine_mapbox_directions`](packages/navigation_engine_mapbox_directions) | Mapbox: routes with lanes and speed limits (Directions API; speed limits on the driving profiles only, lanes without Mapbox's preferred-lane flag) and place search (Search Box API) (pure Dart) |
+| [`navigation_engine_google_routes`](packages/navigation_engine_google_routes) | Google: routes (Routes API) and place search (Places API (New) and Geocoding), no lanes or speed limits (pure Dart) |
 
-More routing adapters (such as `navigation_engine_google_routes`) will live
-next to them.
+More routing adapters will live next to them.
 
 Development: `dart pub get` at the root, then `dart test` in a package.
 
@@ -38,13 +39,27 @@ Development: `dart pub get` at the root, then `dart test` in a package.
 | Routing | OSRM | `OsrmRouteProvider` (`navigation_engine_osrm`) | none; the public demo server is for testing only |
 | | Vietmap | `VietmapRouteProvider` (`navigation_engine_vietmap`) | services key |
 | | Goong | `GoongRouteProvider` (`navigation_engine_goong`) | API key |
+| | Mapbox | `MapboxDirectionsRouteProvider` (`navigation_engine_mapbox_directions`) | access token |
+| | Google | `GoogleRoutesRouteProvider` (`navigation_engine_google_routes`) | API key |
 | Place search | Vietmap | `VietmapPlaceSearch` (`navigation_engine_vietmap`) | services key |
 | | Goong | `GoongPlaceSearch` (`navigation_engine_goong`) | API key |
+| | Mapbox | `MapboxSearch` (`navigation_engine_mapbox_directions`) | access token |
+| | Google | `GooglePlacesSearch` (`navigation_engine_google_routes`) | API key |
 | | Photon, or any geocoder | bring your own: implement `PlaceSearchProvider` (`navigation_engine`) | yours |
 
 Vietmap and Goong publish no developer terms: check them with the provider
 before production use (see each package's README). Keep their REST keys
 behind your back end or a proxy; the packages take a `baseUrl` for that.
+
+Google Routes, Places and Geocoding results (everything
+`navigation_engine_google_routes` returns) must be shown on a Google map
+(`navigation_engine_google_maps`), per Google Maps Platform's terms: see
+`navigation_engine_google_routes`'s README.
+
+Mapbox's terms also set which map the results may be shown on, as well as
+what you may store and the attribution you must show: see
+`navigation_engine_mapbox_directions`'s README, and read them for your
+use case.
 
 ## Feature parity
 

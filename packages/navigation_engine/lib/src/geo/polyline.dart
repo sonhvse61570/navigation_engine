@@ -1,13 +1,25 @@
 import 'dart:math' as math;
 
-import 'package:navigation_engine/navigation_engine.dart';
+import 'geo_point.dart';
 
-/// Decodes an encoded polyline (Google's algorithm, as OSRM sends with
-/// `geometries=polyline` or `polyline6`) with [precision] decimals.
+/// Decodes an encoded polyline (Google's polyline algorithm) whose
+/// coordinates have [precision] decimals: 5 by default, as Google, Goong
+/// and Vietmap send them; 6 for OSRM's and Mapbox's `polyline6`.
 ///
-/// Throws [FormatException] for a character outside the alphabet, a value
-/// cut short (a latitude without its longitude included).
-List<GeoPoint> decodePolyline(String encoded, {required int precision}) {
+/// ```dart
+/// decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@');
+/// // [GeoPoint(38.5, -120.2), GeoPoint(40.7, -120.95),
+/// //  GeoPoint(43.252, -126.453)]
+/// ```
+///
+/// It is safe on the web: under dart2js, where bitwise operators work on
+/// 32-bit values, negative coordinates and large jumps decode as on the VM.
+/// An empty string has no points.
+///
+/// Throws [FormatException] for a character outside the alphabet (with its
+/// offset), a value cut short (a latitude without its longitude included)
+/// or a value too long to be a coordinate.
+List<GeoPoint> decodePolyline(String encoded, {int precision = 5}) {
   final factor = math.pow(10, precision).toDouble();
   final points = <GeoPoint>[];
   var index = 0;

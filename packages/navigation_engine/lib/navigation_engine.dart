@@ -9,6 +9,7 @@ export 'src/fix/nav_fix.dart';
 export 'src/geo/geo_math.dart'
     show angleDelta, bearingBetween, distanceBetween, offsetPoint;
 export 'src/geo/geo_point.dart';
+export 'src/geo/polyline.dart';
 export 'src/guidance/english_guidance_formatter.dart';
 export 'src/guidance/guidance_announcement.dart';
 export 'src/guidance/guidance_formatter.dart'

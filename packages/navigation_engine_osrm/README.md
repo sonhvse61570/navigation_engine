@@ -146,6 +146,25 @@ default and answer `TooBig` for more.
 The engine has no field for a roundabout's exit number, which OSRM sends
 as `maneuver.exit`; it is not kept.
 
+## Reading OSRM-format answers
+
+`OsrmResponseParser.parse` is the provider's reading of an answer, made
+public for other servers that answer in OSRM's format (Mapbox's
+Directions API, for one). Check `code` first, then:
+
+```dart
+final routes = OsrmResponseParser.parse(
+  json, // the decoded answer, whose code is 'Ok'
+  geometries: OsrmGeometries.polyline6,
+  speedLimits: true, // read annotation.maxspeed
+  providerName: 'Mapbox', // route names such as "Mapbox 2192 m"
+);
+```
+
+It gives every route (or the best one and `maxAlternatives` more), as
+described above, and throws `OsrmFormatException` naming the malformed
+field.
+
 ## Errors
 
 Every failure the provider detects throws an `OsrmException`:

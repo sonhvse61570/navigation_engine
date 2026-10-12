@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"coordinates": [105.85241, 21.02879], "type": "Point"},
+      "properties": {
+        "name": "12 Đinh Tiên Hoàng",
+        "mapbox_id": "REDACTED-mapbox-id-4",
+        "feature_type": "address",
+        "address": "12 Đinh Tiên Hoàng",
+        "full_address": "12 Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội, Việt Nam",
+        "place_formatted": "Hoàn Kiếm, Hà Nội, Việt Nam",
+        "context": {
+          "country": {"name": "Việt Nam", "country_code": "VN", "country_code_alpha_3": "VNM"},
+          "place": {"name": "Hà Nội"},
+          "street": {"name": "Đinh Tiên Hoàng"}
+        },
+        "coordinates": {"latitude": 21.02879, "longitude": 105.85241},
+        "language": "vi"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"coordinates": [105.8524, 21.0288], "type": "Point"},
+      "properties": {
+        "name": "Hoàn Kiếm",
+        "mapbox_id": "REDACTED-mapbox-id-5",
+        "feature_type": "locality",
+        "full_address": "Hoàn Kiếm, Hà Nội, Việt Nam",
+        "place_formatted": "Hà Nội, Việt Nam",
+        "context": {},
+        "coordinates": {"latitude": 21.0288, "longitude": 105.8524},
+        "language": "vi"
+      }
+    }
+  ],
+  "attribution": "© 2026 Mapbox and its suppliers. All rights reserved. Use of this data is subject to the Mapbox Terms of Service. (https://www.mapbox.com/about/maps/)"
+}

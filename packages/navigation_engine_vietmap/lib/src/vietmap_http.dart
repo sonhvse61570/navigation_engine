@@ -79,7 +79,9 @@ final class VietmapHttp {
   /// Throws [VietmapCodeException] for a body whose `code` is not `OK`,
   /// [VietmapHttpException] for another HTTP error, [VietmapTimeoutException]
   /// after [timeout], and [VietmapFormatException] for a body that is not
-  /// UTF-8 JSON. Transport errors pass through, the key in their URL and
+  /// UTF-8 JSON (for one that is not JSON, a fixed message and, as its
+  /// cause, a `FormatException` that keeps only the parser's offset: no
+  /// text of the body, so no fragment of the key). Transport errors pass through, the key in their URL and
   /// their message redacted.
   Future<Object?> get(List<String> path, List<(String, String)> params) async {
     checkOpen();
@@ -106,12 +108,14 @@ final class VietmapHttp {
     // Decoded once: UTF-8, then JSON.
     final text = _text(response);
     Object? json;
-    String? jsonError;
+    FormatException? jsonError;
     if (text != null) {
       try {
         json = jsonDecode(text);
       } on FormatException catch (e) {
-        jsonError = e.message;
+        // Only the offset is kept: on the web the parser's message quotes
+        // the body around the error, where part of the key could be.
+        jsonError = FormatException('invalid JSON', null, e.offset);
       }
     }
     final status = response.statusCode;
@@ -136,7 +140,8 @@ final class VietmapHttp {
       throw const VietmapFormatException('the body is not UTF-8');
     }
     if (jsonError != null) {
-      throw VietmapFormatException('invalid JSON ($jsonError)');
+      // A fixed message: see [jsonError].
+      throw VietmapFormatException('invalid JSON', cause: jsonError);
     }
     if (code != null) {
       if (code is! String) {

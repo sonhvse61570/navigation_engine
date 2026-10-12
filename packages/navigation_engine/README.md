@@ -97,6 +97,10 @@ New `ManeuverType` and `ManeuverModifier` values may be added in minor
 versions, as routing providers add manoeuvre kinds. Give a `switch` over them
 a default case, or expect to update it.
 
+A `RouteProvider` whose server sends encoded polylines can decode them with
+`decodePolyline(encoded, precision: 5)` (6 for `polyline6`), which is safe
+on the web.
+
 Planned companion packages: `navigation_engine_google_maps`,
 `navigation_engine_mapbox`, `navigation_engine_flutter_map`,
 `navigation_engine_geolocator`, `navigation_engine_osrm`.

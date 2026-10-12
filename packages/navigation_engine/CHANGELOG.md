@@ -73,3 +73,12 @@
   groups the calls of one search for providers that bill per session; and
   `PlaceSearchException` for their errors, with the HTTP `statusCode` and
   the `cause` when known, which providers may extend.
+- `PlaceSearchSession` falls back to its clock-seeded tokens whenever
+  `Random.secure()` throws, not only on `UnsupportedError`: under dart2js
+  on node it throws a plain JavaScript error, which made every new session
+  crash there.
+- `decodePolyline(encoded, precision: 5)`: decodes an encoded polyline
+  (Google's algorithm) at any precision, 5 by default (Google, Goong,
+  Vietmap) or 6 (OSRM's and Mapbox's `polyline6`). It is safe under
+  dart2js: its tests also run on node (`dart test -p node -t js`). The
+  route provider packages share it instead of each keeping a copy.

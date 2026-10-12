@@ -31,5 +31,10 @@
   an exception quotes (the code, the messages, the reason phrase, the
   body) and in a transport error's URL and message; a malformed field is
   described, never quoted.
-- Works on the web: the polyline decoder is safe under dart2js (its tests
-  also run on node, `dart test -p node -t js`).
+- An answer that is not JSON gets the fixed message `invalid JSON`, and
+  `VietmapFormatException.cause` is a `FormatException` that keeps only the
+  parser's offset: on the web the parser's own message quotes the body
+  around the error, where part of the key could be.
+- Works on the web: polylines are decoded with the core's
+  `decodePolyline`, which is safe under dart2js (its tests, and this
+  package's, also run on node, `dart test -p node -t js`).

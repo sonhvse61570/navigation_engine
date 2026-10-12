@@ -11,7 +11,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:navigation_engine/navigation_engine.dart';
 import 'package:navigation_engine_osrm/navigation_engine_osrm.dart';
-import 'package:navigation_engine_osrm/src/polyline.dart';
 import 'package:test/test.dart';
 
 void expectPoints(List<GeoPoint> actual, List<(double, double)> expected) {

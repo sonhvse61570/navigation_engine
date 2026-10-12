@@ -1,0 +1,12 @@
+{
+  "id": "REDACTED-place-id-1",
+  "formattedAddress": "Lê Lợi, Phường Bến Thành, Quận 1, Hồ Chí Minh 700000, Việt Nam",
+  "location": {
+    "latitude": 10.7724297,
+    "longitude": 106.6980484
+  },
+  "displayName": {
+    "text": "Chợ Bến Thành",
+    "languageCode": "vi"
+  }
+}

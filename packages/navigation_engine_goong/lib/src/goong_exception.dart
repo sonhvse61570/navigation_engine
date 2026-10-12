@@ -156,8 +156,14 @@ final class GoongTimeoutException extends GoongException
 /// unexpected shape. [message] names the field, such as
 /// `routes[0].legs[0].steps[2].polyline.points`.
 final class GoongFormatException extends GoongException {
-  /// A malformed answer, described by [message].
-  const GoongFormatException(super.message);
+  /// A malformed answer, described by [message], because of [cause] when
+  /// there is one.
+  const GoongFormatException(super.message, {this.cause});
+
+  /// The error that found the problem, when there is one: for an answer
+  /// that is not JSON, a `FormatException` that keeps only the parser's
+  /// offset, since the web's parser quotes the body around the error.
+  final Object? cause;
 
   @override
   String get _name => 'GoongFormatException';

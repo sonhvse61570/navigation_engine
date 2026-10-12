@@ -36,6 +36,11 @@
   replaced by `REDACTED` (raw or percent-encoded) in every server string
   an exception quotes (the code, the server message, the reason phrase,
   the body) and in a transport error's URL and message.
-- Works on the web: the polyline decoder is safe under dart2js, and the
-  instruction parser's regular expressions are checked on JavaScript too
+- An answer that is not JSON gets the fixed message `invalid JSON`, and
+  `GoongFormatException.cause` is a `FormatException` that keeps only the
+  parser's offset: on the web the parser's own message quotes the body
+  around the error, where part of the key could be.
+- Works on the web: polylines are decoded with the core's
+  `decodePolyline`, which is safe under dart2js, and the instruction
+  parser's regular expressions are checked on JavaScript too
   (`dart test -p node -t js`).
