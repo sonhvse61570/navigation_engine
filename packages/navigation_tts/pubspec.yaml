@@ -1,0 +1,30 @@
+name: navigation_tts
+description: >-
+  A navigation_engine voice module: speaks turn-by-turn prompts through the device's text-to-speech.
+version: 0.1.0
+repository: https://github.com/sonhvse61570/navigation_engine/tree/main/packages/navigation_tts
+issue_tracker: https://github.com/sonhvse61570/navigation_engine/issues
+topics:
+  - navigation
+  - text-to-speech
+  - voice-guidance
+  - turn-by-turn
+  - navigation-engine
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_tts: ^4.2.5
+  navigation_engine: ^0.1.0
+  navigation_engine_flutter: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter

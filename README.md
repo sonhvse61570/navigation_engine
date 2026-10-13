@@ -19,6 +19,7 @@ Smooth, map-agnostic turn-by-turn navigation for Dart and Flutter, split into sm
 | [`navigation_osrm`](packages/navigation_osrm) | Routes from an OSRM server (`OsrmRouteProvider`, pure Dart) |
 | [`navigation_vietmap`](packages/navigation_vietmap) | Vietmap: MapLibre styles, routes and place search (pure Dart) |
 | [`navigation_goong`](packages/navigation_goong) | Goong: MapLibre styles, routes and place search (pure Dart) |
+| [`navigation_tts`](packages/navigation_tts) | Optional voice guidance: speaks the prompts through the device's text-to-speech |
 
 More routing adapters will live next to them.
 
