@@ -6,7 +6,7 @@ No API key needed.
 
     flutter run --profile        # judge smoothness in profile mode
 
-The map comes from `navigation_engine_flutter_map`
+The map comes from `navigation_flutter_map`
 (`FlutterMapNavigationView`) and the banner from
 `navigation_engine_flutter` (`NavigationBanner`).
 

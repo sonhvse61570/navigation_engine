@@ -2,6 +2,8 @@ import '../geo/geo_point.dart';
 
 /// One raw GPS fix, whatever its source (device, simulator, recording).
 final class NavFix {
+  /// Creates a fix at [position], measured at [time] with an accuracy radius of
+  /// [accuracy] metres; [speed] and [heading] are null when unknown.
   const NavFix({
     required this.position,
     required this.accuracy,
@@ -10,6 +12,7 @@ final class NavFix {
     this.heading,
   });
 
+  /// Where the device was measured to be.
   final GeoPoint position;
 
   /// Horizontal accuracy radius in metres.

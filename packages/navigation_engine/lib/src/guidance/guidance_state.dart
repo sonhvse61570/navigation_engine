@@ -3,6 +3,8 @@ import 'guidance_announcement.dart';
 
 /// What a turn-by-turn banner shows at one moment.
 final class GuidanceState {
+  /// Creates the state of a banner that shows [step], then [thenStep], with
+  /// [remaining] metres to go.
   const GuidanceState({
     required this.step,
     required this.stepIndex,
@@ -35,5 +37,8 @@ final class GuidanceState {
 
   /// Metres along the route to the destination.
   final double remaining;
+
+  /// Whether the vehicle is within `NavGuidance.arriveWithin` of the
+  /// destination.
   final bool arrived;
 }

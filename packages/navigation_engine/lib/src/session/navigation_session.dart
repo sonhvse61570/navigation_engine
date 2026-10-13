@@ -32,6 +32,10 @@ import 'session_event.dart';
 /// session.announcements.listen((a) => tts.speak(formatter.announcement(a)));
 /// ```
 class NavigationSession {
+  /// Creates a session that reads [fixes], draws on [map] and reroutes through
+  /// [routeProvider] when they are given. [camera] and [filter] default to new
+  /// ones. [clock] tells the time and must be the clock that stamps the fixes
+  /// (see [NavFix.time]).
   NavigationSession({
     required FixSource fixes,
     NavigationMap? map,
@@ -55,6 +59,8 @@ class NavigationSession {
 
   final FixSource _source;
   NavigationMap? _map;
+
+  /// Where a reroute comes from; null to never reroute.
   final RouteProvider? routeProvider;
 
   /// The follow camera. One created by the session is disposed with it;
@@ -133,6 +139,8 @@ class NavigationSession {
   /// Prompts to speak, in order.
   Stream<GuidanceAnnouncement> get announcements => _announcements.stream;
 
+  /// What happens during the run, such as going off route or arriving; see
+  /// [SessionEvent].
   Stream<SessionEvent> get events => _events.stream;
 
   /// The new value of [follow] each time it changes (setting the same value
@@ -167,6 +175,8 @@ class NavigationSession {
 
   /// Between [pause] and [resume] (or [stop]).
   bool get isPaused => _paused;
+
+  /// The route being followed; null while driving without one (see [setRoute]).
   NavRoute? get route => _route;
 
   /// The latest frame (null until the first fix after [start] / [resetMotion]).
@@ -178,6 +188,7 @@ class NavigationSession {
   /// The last fix that passed the filter.
   NavFix? get lastFix => _lastFix;
 
+  /// The counters so far, for diagnostics overlays.
   SessionStats get stats => SessionStats(
     fixesAccepted: _fixesAccepted,
     fixesRejected: _fixesRejected,

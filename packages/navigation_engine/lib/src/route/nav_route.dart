@@ -178,8 +178,15 @@ final class NavRoute {
     return best;
   }
 
+  /// The name of the route; empty when it has none.
   final String name;
+
+  /// The polyline of the route, from its start to its destination.
+  /// Unmodifiable.
   final List<GeoPoint> points;
+
+  /// The manoeuvres along the route, in the order given to
+  /// [NavRoute.fromPoints]. Unmodifiable.
   final List<RouteStep> steps;
 
   /// The "via …" label of the route (may be empty).

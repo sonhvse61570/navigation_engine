@@ -5,6 +5,8 @@ import 'nav_fix.dart';
 /// that imply an impossible speed (multipath in street canyons, cell / Wi-Fi
 /// fallback positions).
 class FixFilter {
+  /// Creates a filter that drops fixes with an accuracy radius over
+  /// [maxAccuracy] metres and jumps faster than [maxSpeed] metres per second.
   FixFilter({this.maxAccuracy = 30, this.maxSpeed = 55});
 
   /// Metres; fixes with a larger accuracy radius are dropped.
@@ -30,5 +32,7 @@ class FixFilter {
     return true;
   }
 
+  /// Forgets the last accepted fix, so the next fix is judged on its accuracy
+  /// alone.
   void reset() => _last = null;
 }

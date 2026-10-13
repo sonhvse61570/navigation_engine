@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:navigation_engine/testing.dart';
 
-import 'package:navigation_engine_flutter_map/navigation_engine_flutter_map.dart';
+import 'package:navigation_flutter_map/navigation_flutter_map.dart';
 import 'package:navigation_engine_flutter/navigation_engine_flutter.dart';
 
 void main() {

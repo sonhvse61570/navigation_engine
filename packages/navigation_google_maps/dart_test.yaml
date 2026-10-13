@@ -1,0 +1,16 @@
+# Tests tagged `js` guard code whose behaviour differs under dart2js
+# (32-bit bitwise operators in the polyline decoder, number formatting, the
+# web's User-Agent, the key scrub's regular expressions). The default run,
+# and `flutter test` in CI, run them on the VM like the rest. Run them in
+# Chrome too with
+#
+#     flutter test --platform chrome --tags js
+#
+# The platform is named on the command line, not here. The js-tagged tests
+# import only the `src/routing`, `src/search` and `src/web_service`
+# libraries, never the barrel, because those compile for the web.
+tags:
+  js:
+  # Live requests to Google, billed to the key; skipped unless
+  # GOOGLE_ROUTES_KEY is set (see test/routing/live_test.dart).
+  live:

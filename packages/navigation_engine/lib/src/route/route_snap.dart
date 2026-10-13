@@ -2,6 +2,8 @@ import '../geo/geo_point.dart';
 
 /// The result of projecting a position onto a route.
 final class RouteSnap {
+  /// Creates a snap of a position onto [segment], at [point] [distance] metres
+  /// along the route and [offset] metres from the position.
   const RouteSnap({
     required this.distance,
     required this.segment,

@@ -5,6 +5,7 @@ import 'guidance_announcement.dart';
 /// language; `EnglishGuidanceFormatter` and `VietnameseGuidanceFormatter`
 /// ship with the package.
 abstract class GuidanceFormatter {
+  /// Creates a formatter; it is const so that subclasses can be.
   const GuidanceFormatter();
 
   /// The banner text for [step]: "Turn right onto Main Street".
@@ -63,8 +64,10 @@ int roundedMetres(double m) {
   return r < 10 ? 10 : r;
 }
 
+/// [s] with its first character in upper case.
 String capitalizeFirst(String s) =>
     s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
+/// [s] with its first character in lower case.
 String lowerFirst(String s) =>
     s.isEmpty ? s : s[0].toLowerCase() + s.substring(1);

@@ -1,0 +1,32 @@
+name: navigation_mapbox
+description: >-
+  A navigation_engine map adapter for Mapbox (mapbox_maps_flutter) with Mapbox Directions routing and Search Box search: follow camera, route line, vehicle puck.
+version: 0.1.0
+repository: https://github.com/sonhvse61570/navigation_engine/tree/main/packages/navigation_mapbox
+issue_tracker: https://github.com/sonhvse61570/navigation_engine/issues
+topics:
+  - navigation
+  - maps
+  - turn-by-turn
+  - routing
+  - navigation-engine
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.1"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.5.0
+  mapbox_maps_flutter: ^3.0.0
+  navigation_engine: ^0.1.0
+  navigation_engine_flutter: ^0.1.0
+  navigation_osrm: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter

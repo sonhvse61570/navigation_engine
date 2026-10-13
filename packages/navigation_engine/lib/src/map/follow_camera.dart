@@ -8,6 +8,9 @@ import 'camera_target.dart';
 /// zoomed in when slow (junctions) and out when fast (more road ahead), with
 /// the zoom smoothed so speed changes do not make it pump.
 class FollowCamera {
+  /// Creates a camera whose zoom goes from [zoomSlow] to [zoomFast] as the
+  /// speed goes from [slowSpeed] to [fastSpeed] (m/s), with [tilt] degrees of
+  /// tilt and [zoomTau] seconds of zoom smoothing.
   FollowCamera({
     this.zoomSlow = 18.7,
     this.zoomFast = 17.1,
@@ -22,7 +25,11 @@ class FollowCamera {
 
   /// Zoom at or above [fastSpeed] (m/s).
   final double zoomFast;
+
+  /// Speed (m/s) at or below which the zoom is [zoomSlow]. Default 4.
   final double slowSpeed;
+
+  /// Speed (m/s) at or above which the zoom is [zoomFast]. Default 22.
   final double fastSpeed;
 
   /// Degrees of tilt while [headingUp]: low, like the common driving apps,
@@ -83,5 +90,7 @@ class FollowCamera {
     );
   }
 
+  /// Forgets the smoothed zoom, so the next [update] jumps straight to the
+  /// target zoom.
   void reset() => _zoom = null;
 }

@@ -4,7 +4,7 @@ This is a Dart workspace: one repo, several packages under `packages/`, resolved
 
 ## Setup
 
-You need a recent stable Flutter SDK (`navigation_engine_google_maps` needs Flutter 3.47 or newer).
+You need a recent stable Flutter SDK (`navigation_google_maps` needs Flutter 3.47 or newer).
 
 ```sh
 flutter pub get   # at the repo root, resolves every package

@@ -180,7 +180,7 @@
   again). A pin the app shows itself meanwhile is left alone until the
   overview replaces it. A call that throws is reported through
   `FlutterError`.
-- `paintSearchPin` (moved from navigation_engine_google_maps) and
+- `paintSearchPin` (moved from navigation_google_maps) and
   `paintDestinationPin`: the shared search result pin and the destination
   pin (a red pin of this package's own design, 32×42 logical px) as PNG
   bytes for native marker images, for every adapter.

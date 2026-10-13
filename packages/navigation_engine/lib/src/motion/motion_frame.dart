@@ -2,6 +2,8 @@ import '../geo/geo_point.dart';
 
 /// Where the vehicle is on one display frame.
 final class MotionFrame {
+  /// Creates a frame with the vehicle at [position], heading [bearing] at
+  /// [speed] m/s.
   const MotionFrame({
     required this.position,
     required this.bearing,
@@ -10,6 +12,7 @@ final class MotionFrame {
     this.offRoute = false,
   });
 
+  /// Where the vehicle is drawn on this frame.
   final GeoPoint position;
 
   /// Degrees clockwise from north (the vehicle's heading).

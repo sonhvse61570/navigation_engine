@@ -10,6 +10,9 @@ import 'guidance_state.dart';
 /// Distances are measured along the route: a straight-line distance to the
 /// next turn is wrong on any curved road and wildly wrong after a U-turn.
 class NavGuidance {
+  /// Creates the guidance of [route]. The other arguments set where prompts
+  /// fire and how far the "then" step reaches; see the fields of the same
+  /// names.
   NavGuidance(
     this.route, {
     this.thresholds = const [500, 200, 0],
@@ -20,11 +23,15 @@ class NavGuidance {
     this.minGap = 80,
   });
 
+  /// The route the guidance follows.
   final NavRoute route;
 
   /// Announcement distances (m), largest first; 0 is the "now" prompt, which
   /// fires at [nowDistance].
   final List<double> thresholds;
+
+  /// Metres before a manoeuvre at which the "now" prompt (the 0 entry of
+  /// [thresholds]) fires. Default 30 m.
   final double nowDistance;
 
   /// Rule (b) of the "then" step: a manoeuvre at most this many metres
@@ -66,6 +73,7 @@ class NavGuidance {
     return steps.isNotEmpty && steps.first.type == ManeuverType.depart ? 1 : 0;
   }
 
+  /// Starts again from the first step and forgets which prompts have fired.
   void reset() {
     _stepIndex = _firstStep();
     _fired.clear();

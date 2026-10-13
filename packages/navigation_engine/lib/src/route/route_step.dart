@@ -26,9 +26,17 @@ final class RouteStepSeed {
     this.lanes = const [],
   }) : vertex = null;
 
+  /// The index of the route point the manoeuvre is at; null when [location]
+  /// places it.
   final int? vertex;
+
+  /// Where the manoeuvre is; null when [vertex] places it.
   final GeoPoint? location;
+
+  /// What the driver has to do.
   final ManeuverType type;
+
+  /// The direction of the manoeuvre.
   final ManeuverModifier modifier;
 
   /// The road the manoeuvre leads onto; empty when unnamed.
@@ -40,6 +48,7 @@ final class RouteStepSeed {
 
 /// A manoeuvre placed on a route.
 final class RouteStep {
+  /// Creates a step [distance] metres along the route.
   const RouteStep({
     required this.distance,
     required this.type,
@@ -50,7 +59,11 @@ final class RouteStep {
 
   /// Metres from the start of the route to the manoeuvre.
   final double distance;
+
+  /// What the driver has to do.
   final ManeuverType type;
+
+  /// The direction of the manoeuvre.
   final ManeuverModifier modifier;
 
   /// The road the manoeuvre leads onto; empty when unnamed.
@@ -59,6 +72,7 @@ final class RouteStep {
   /// The lanes before the manoeuvre, left to right (empty when unknown).
   final List<Lane> lanes;
 
+  /// Whether this is the arrival at the destination.
   bool get isArrival => type == ManeuverType.arrive;
 
   @override
