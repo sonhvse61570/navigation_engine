@@ -6,6 +6,7 @@ import '../route/nav_route.dart';
 /// Extend it: [route] is required, and [routes] has a default that returns
 /// only the best route.
 abstract class RouteProvider {
+  /// Creates a provider; it is const so that subclasses can be.
   const RouteProvider();
 
   /// A route from [from] to [to]. [heading] (degrees clockwise from north)

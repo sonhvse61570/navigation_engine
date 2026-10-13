@@ -3,8 +3,8 @@
 Map-independent Flutter building blocks for
 [navigation_engine](https://pub.dev/packages/navigation_engine) map views.
 Use one of the adapters for a complete view:
-`navigation_engine_google_maps`, `navigation_engine_mapbox`,
-`navigation_engine_maplibre`, `navigation_engine_flutter_map`.
+`navigation_google_maps`, `navigation_mapbox`,
+`navigation_maplibre`, `navigation_flutter_map`.
 
 - **`NavigationMapFrame`** — ticks a `NavigationSession` every display
   frame, keeps the followed vehicle at a focus point (70 % of the height by
@@ -251,10 +251,10 @@ adapter. The app reaches the map through:
 
 | Drop-in | Package | Map callback | App content on the map |
 | --- | --- | --- | --- |
-| `GoogleStyleNavigation` | navigation_engine_google_maps | `onMapCreated(GoogleMapController)` | `markers` |
-| `MapboxStyleNavigation` | navigation_engine_mapbox | `onMapCreated(MapboxMap)` | layers through the `MapboxMap` |
-| `MapLibreStyleNavigation` | navigation_engine_maplibre | `onMapCreated(MapLibreMapController)` | layers through the controller |
-| `NeutralNavigation` | navigation_engine_flutter_map | `onMapReady(MapController)` | `children` (flutter_map layers) |
+| `GoogleStyleNavigation` | navigation_google_maps | `onMapCreated(GoogleMapController)` | `markers` |
+| `MapboxStyleNavigation` | navigation_mapbox | `onMapCreated(MapboxMap)` | layers through the `MapboxMap` |
+| `MapLibreStyleNavigation` | navigation_maplibre | `onMapCreated(MapLibreMapController)` | layers through the controller |
+| `NeutralNavigation` | navigation_flutter_map | `onMapReady(MapController)` | `children` (flutter_map layers) |
 
 Each callback runs after the route overview is drawn on the new map.
 

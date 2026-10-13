@@ -46,7 +46,7 @@ session.start(route: sampleRoute);
 
 The app in `example/lib/` drives the 5.5 km sample route in Ho Chi Minh City with simulated GPS on
 flutter_map (no API key needed), using `FlutterMapNavigationView` from
-`navigation_engine_flutter_map`.
+`navigation_flutter_map`.
 
     cd example
     flutter run --profile        # judge smoothness in profile mode

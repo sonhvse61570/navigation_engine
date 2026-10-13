@@ -15,8 +15,8 @@ void main() {
 }
 
 /// The map-independent frame and banner over a placeholder "map": use a
-/// map adapter package (navigation_engine_flutter_map, _maplibre,
-/// _google_maps, _mapbox) for a real one.
+/// map adapter package (navigation_flutter_map, navigation_maplibre,
+/// navigation_google_maps, navigation_mapbox) for a real one.
 class FrameDemo extends StatefulWidget {
   const FrameDemo({super.key});
 

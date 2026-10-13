@@ -1,0 +1,133 @@
+// An app that imports only navigation_google_maps can build the
+// drop-in with every option: the library re-exports the names of its
+// signature, and the Google-style pieces that moved to
+// navigation_engine_flutter. Each name below would fail to compile without
+// that re-export.
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:navigation_engine/testing.dart';
+import 'package:navigation_google_maps/navigation_google_maps.dart';
+
+import 'support/fake_google_maps_platform.dart';
+
+void main() {
+  testWidgets('GoogleStyleNavigation needs only this library', (tester) async {
+    installFakeGoogleMapsPlatform(FakeGoogleMapsPlatform());
+    final NavigationSession session = NavigationSession(
+      fixes: SimulatedFixSource(GpsSimulator(sampleRoute)),
+    );
+    final NavigationFlowController flow = NavigationFlowController(
+      session: session,
+    );
+    final GeoPoint center = sampleRoute.points.first;
+    VehicleImageBuilder vehicleImage() =>
+        (ratio) async => Uint8List(4);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GoogleStyleNavigation(
+          session: session,
+          flow: flow,
+          initialCenter: center,
+          strings: const NavigationStrings.vietnamese(),
+          dayColors: GoogleStyleColors.day,
+          nightColors: GoogleStyleColors.night,
+          speedLimitSignStyle: SpeedLimitSignStyle.us,
+          dayRouteColors: const RouteColors(),
+          nightRouteColors: const RouteColors(),
+          puck: const CarPuck(size: 40),
+          vehicleImage: vehicleImage(),
+          idleBuilder: (_) => const Text('IDLE'),
+          audioGuidance: AudioGuidance.alertsOnly,
+          onAudioGuidanceChanged: (AudioGuidance _) {},
+          onReportIncident: (IncidentType _) {},
+          searchAlongRoute: (AlongRouteQuery _) async =>
+              const <AlongRoutePlace>[],
+          onAddStop: (AlongRoutePlace _) {},
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('IDLE'), findsOneWidget);
+    const PlaceLabel label = PlaceLabel(name: 'Landmark 81');
+    expect(label.name, 'Landmark 81');
+    expect(session.map, isA<GoogleMapsNavigationMap>());
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox());
+    flow.dispose();
+    session.dispose();
+  });
+
+  test('every re-exported name resolves from this library alone', () {
+    // Type literals and tear-offs: a name dropped from the barrel is a
+    // compile error here.
+    final types = <Type>[
+      // navigation_engine.
+      GeoPoint,
+      NavigationSession,
+      // The search along the route.
+      AlongRouteCategory,
+      AlongRoutePlace,
+      AlongRouteQuery,
+      AlongRouteSearch,
+      // The flow vocabulary and the optional map interfaces.
+      AlternateRoute,
+      AlternateRoutesMap,
+      SearchPinsMap,
+      NavigationFlowController,
+      NavigationStrings,
+      PlaceLabel,
+      RouteColors,
+      RouteLabelColors,
+      CarPuck,
+      VehicleImageBuilder,
+      // The Google-style pieces.
+      AudioGuidance,
+      GoogleStyleArrivalSheet,
+      GoogleStyleColors,
+      GoogleStyleCompassButton,
+      GoogleStyleControlStack,
+      GoogleStyleLaneGuidance,
+      GoogleStyleManeuverHeader,
+      GoogleStyleOverviewPanel,
+      GoogleStyleRecenterButton,
+      GoogleStyleReportButton,
+      GoogleStyleReportSheet,
+      GoogleStyleRoundButton,
+      GoogleStyleSearchAlongRoute,
+      GoogleStyleSheetAction,
+      GoogleStyleSoundButton,
+      GoogleStyleSpeedCluster,
+      GoogleStyleStepList,
+      GoogleStyleTripProgressBar,
+      GoogleStyleTripSheet,
+      IncidentType,
+      SpeedLimitSignStyle,
+      SpeedingLevel,
+    ];
+    expect(types.toSet(), hasLength(types.length));
+
+    // Functions.
+    final functions = <Object>[
+      fitCameraToBounds,
+      laneDirectionIcon,
+      paintRouteLabel,
+      showGoogleStyleReportSheet,
+    ];
+    expect(functions, hasLength(4));
+
+    // The two extensions, applied explicitly.
+    expect(
+      GoogleStyleRouteLabelColors(GoogleStyleColors.day).routeLabelColors,
+      isA<RouteLabelColors>(),
+    );
+    expect(
+      GoogleStyleIncidentType(IncidentType.crash)
+          .label(const NavigationStrings()),
+      isNotEmpty,
+    );
+  });
+}

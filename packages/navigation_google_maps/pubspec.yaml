@@ -1,0 +1,32 @@
+name: navigation_google_maps
+description: >-
+  A navigation_engine map adapter for Google Maps (google_maps_flutter) with Google Routes routing and Places search: follow camera, route line, vehicle puck.
+version: 0.1.0
+repository: https://github.com/sonhvse61570/navigation_engine/tree/main/packages/navigation_google_maps
+issue_tracker: https://github.com/sonhvse61570/navigation_engine/issues
+topics:
+  - navigation
+  - maps
+  - turn-by-turn
+  - routing
+  - navigation-engine
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_maps_flutter: ^2.18.2
+  http: ^1.5.0
+  navigation_engine: ^0.1.0
+  navigation_engine_flutter: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  google_maps_flutter_platform_interface: ^2.17.0

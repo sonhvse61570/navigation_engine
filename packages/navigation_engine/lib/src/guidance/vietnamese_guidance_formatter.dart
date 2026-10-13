@@ -5,6 +5,7 @@ import 'guidance_formatter.dart';
 
 /// Vietnamese guidance: "Sau 200 m, rẽ phải vào Lý Tự Trọng, rồi rẽ trái".
 class VietnameseGuidanceFormatter extends GuidanceFormatter {
+  /// Creates the Vietnamese formatter.
   const VietnameseGuidanceFormatter();
 
   @override

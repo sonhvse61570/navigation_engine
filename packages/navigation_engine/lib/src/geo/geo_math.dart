@@ -12,6 +12,7 @@ const _mPerDegLngEquator = 111320.0;
 double metresPerDegLng(double lat) =>
     math.cos(lat * math.pi / 180) * _mPerDegLngEquator;
 
+/// The length of the vector ([x], [y]), in the units of its components.
 double hypot(double x, double y) => math.sqrt(x * x + y * y);
 
 /// Heading (degrees clockwise from north) of the planar vector

@@ -1,0 +1,18 @@
+# Tests tagged `js` guard code whose behaviour differs under dart2js
+# (32-bit bitwise operators in the polyline decoder, number formatting, the
+# web's User-Agent, the token scrub's regular expressions). The default run,
+# and `flutter test` in CI, run them on the VM like the rest. Run them in
+# Chrome too with
+#
+#     flutter test --platform chrome --tags js test/routing
+#
+# The platform is named on the command line, not here. The js-tagged tests
+# import only the `src/routing`, `src/search` and `src/web_service`
+# libraries, never the barrel, so they exercise only the code a web build
+# of the routing compiles. Name test/routing: every js test lives there, and
+# the run stays short.
+tags:
+  js:
+  # Live requests to Mapbox, billed to the token; skipped unless
+  # MAPBOX_TOKEN is set (see test/routing/live_test.dart).
+  live:

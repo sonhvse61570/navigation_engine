@@ -11,9 +11,11 @@ import 'gps_simulator.dart';
 /// be the clock the session uses
 /// (`NavigationSession(clock: ...)`): the engines compare the two.
 class SimulatedFixSource implements FixSource {
+  /// Creates a source that streams the fixes of [sim], stamped with [clock].
   SimulatedFixSource(this.sim, {DateTime Function() clock = DateTime.now})
     : _now = clock;
 
+  /// The simulator the fixes are sampled from.
   final GpsSimulator sim;
   final DateTime Function() _now;
   final _controller = StreamController<NavFix>.broadcast();

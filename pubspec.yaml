@@ -7,13 +7,11 @@ environment:
 workspace:
   - packages/navigation_engine
   - packages/navigation_engine_flutter
-  - packages/navigation_engine_flutter_map
-  - packages/navigation_engine_geolocator
-  - packages/navigation_engine_maplibre
-  - packages/navigation_engine_google_maps
-  - packages/navigation_engine_mapbox
-  - packages/navigation_engine_osrm
-  - packages/navigation_engine_vietmap
-  - packages/navigation_engine_goong
-  - packages/navigation_engine_mapbox_directions
-  - packages/navigation_engine_google_routes
+  - packages/navigation_flutter_map
+  - packages/navigation_geolocator
+  - packages/navigation_maplibre
+  - packages/navigation_google_maps
+  - packages/navigation_mapbox
+  - packages/navigation_osrm
+  - packages/navigation_vietmap
+  - packages/navigation_goong

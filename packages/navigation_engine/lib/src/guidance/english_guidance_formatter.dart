@@ -5,6 +5,7 @@ import 'guidance_formatter.dart';
 
 /// English guidance: "In 200 m, turn right onto Main Street, then turn left".
 class EnglishGuidanceFormatter extends GuidanceFormatter {
+  /// Creates the English formatter.
   const EnglishGuidanceFormatter();
 
   @override

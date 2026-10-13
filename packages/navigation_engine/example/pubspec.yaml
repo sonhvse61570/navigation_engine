@@ -13,16 +13,16 @@ dependencies:
     path: ../
   navigation_engine_flutter:
     path: ../../navigation_engine_flutter
-  navigation_engine_flutter_map:
-    path: ../../navigation_engine_flutter_map
+  navigation_flutter_map:
+    path: ../../navigation_flutter_map
 
 dependency_overrides:
   navigation_engine:
     path: ../
   navigation_engine_flutter:
     path: ../../navigation_engine_flutter
-  navigation_engine_flutter_map:
-    path: ../../navigation_engine_flutter_map
+  navigation_flutter_map:
+    path: ../../navigation_flutter_map
 
 dev_dependencies:
   flutter_lints: ^6.0.0

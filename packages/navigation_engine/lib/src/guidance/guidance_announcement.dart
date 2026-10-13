@@ -1,6 +1,7 @@
 import '../route/route_step.dart';
 import 'guidance_state.dart';
 
+/// Which prompt a [GuidanceAnnouncement] is.
 enum AnnouncementKind {
   /// "In 200 m, turn right".
   approaching,
@@ -15,6 +16,8 @@ enum AnnouncementKind {
 /// A one-off prompt: what a voice would say. Turn it into words with a
 /// `GuidanceFormatter`.
 final class GuidanceAnnouncement {
+  /// Creates the prompt of [kind] for [step], which is at [stepIndex] in the
+  /// route, when the vehicle is [distance] metres from it.
   const GuidanceAnnouncement({
     required this.stepIndex,
     required this.step,
@@ -33,6 +36,9 @@ final class GuidanceAnnouncement {
   /// manoeuvre; null only on a route without steps. Formatters do not read
   /// it for arrivals.
   final RouteStep? step;
+
+  /// Whether this approaches the manoeuvre, announces it as imminent or
+  /// announces the arrival.
   final AnnouncementKind kind;
 
   /// The threshold that fired (metres; 0 = "now" and arrival).
@@ -50,8 +56,11 @@ final class GuidanceAnnouncement {
 
 /// The result of one `NavGuidance.update`.
 final class GuidanceUpdate {
+  /// Creates the result of an update from the new [state] and the due
+  /// [announcements].
   const GuidanceUpdate({required this.state, required this.announcements});
 
+  /// The guidance state after the update.
   final GuidanceState state;
 
   /// Prompts that became due since the previous update, in order.

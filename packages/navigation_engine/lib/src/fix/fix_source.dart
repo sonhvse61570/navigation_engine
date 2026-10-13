@@ -8,6 +8,7 @@ abstract interface class FixSource {
   /// Broadcast stream of fixes, in the order they were measured.
   Stream<NavFix> get fixes;
 
+  /// Whether the source is delivering fixes, between [start] and [stop].
   bool get isRunning;
 
   /// Starts delivering fixes. Calling it while running does nothing.

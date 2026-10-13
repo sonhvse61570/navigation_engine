@@ -18,6 +18,8 @@ abstract interface class MotionEngine {
   /// Advances by [dt] seconds; null until the first fix.
   MotionFrame? tick(double dt, DateTime now);
 
+  /// Forgets all fixes and motion, as at the start: [tick] returns null until
+  /// the next fix.
   void reset();
 }
 

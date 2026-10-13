@@ -1,1 +1,0 @@
-Demo of navigation_engine_google_maps: drives a sample route with simulated GPS on Google Maps; it needs `MAPS_API_KEY` set in `android/local.properties`. On iOS, add `GMSServices.provideAPIKey("…")` in `AppDelegate.swift` before running.

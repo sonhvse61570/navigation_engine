@@ -11,6 +11,10 @@ import 'motion_frame.dart';
 /// so the vehicle can only move along the road, never sideways, and corners
 /// are driven along the polyline instead of being cut.
 class RouteMotionEngine implements MotionEngine {
+  /// Creates an engine that keeps the vehicle on [route]. It counts as off
+  /// route after [offRouteAfter] over [offRouteDistance] metres away, and may
+  /// speed up or slow down by [maxCorrection] m/s to catch up with the fixes;
+  /// [lead] is the extra prediction time.
   RouteMotionEngine(
     this.route, {
     this.lead = 0.25,
@@ -19,6 +23,7 @@ class RouteMotionEngine implements MotionEngine {
     this.maxCorrection = 5,
   });
 
+  /// The route the vehicle is kept on.
   final NavRoute route;
 
   /// Metres per second the vehicle may speed up or slow down by to catch up

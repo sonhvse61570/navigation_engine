@@ -13,6 +13,8 @@ import '../route/nav_route.dart';
 /// Pure and deterministic for a given seed: [advance] moves the car,
 /// [sample] reads a fix. `SimulatedFixSource` runs it in real time.
 class GpsSimulator {
+  /// Creates a car at the start of [route]. [seed] makes the random noise
+  /// repeatable; the other arguments are the fields of the same names.
   GpsSimulator(
     NavRoute route, {
     int seed = 7,
@@ -40,6 +42,8 @@ class GpsSimulator {
   /// [stopSeconds]. None by default; `sampleRouteRedLights` has two for
   /// `sampleRoute`.
   final List<double> stops;
+
+  /// Seconds the car stands at each of the [stops]. Default 6.
   final double stopSeconds;
 
   /// Seconds of simulated time.
@@ -47,6 +51,8 @@ class GpsSimulator {
 
   /// Distance along the route (while on it).
   double distance = 0;
+
+  /// Current speed in m/s; it eases towards the speed the road allows.
   double speed = 0;
 
   /// Set while the car has left the route (see [driveOffRoute]).
@@ -61,11 +67,19 @@ class GpsSimulator {
   /// Recent true positions, to report fixes that were measured earlier.
   final _history = <(double, GeoPoint, double)>[];
 
+  /// The route being driven.
   NavRoute get route => _route;
+
+  /// Whether the car has left the route (see [driveOffRoute]).
   bool get isOffRoute => _offPos != null;
+
+  /// Whether the car has reached the end of the route.
   bool get finished => !isOffRoute && distance >= _route.length;
 
+  /// Where the car truly is; the fixes add noise to it.
   GeoPoint get position => _offPos ?? _route.pointAt(distance);
+
+  /// The true heading of the car, in degrees clockwise from north.
   double get heading => _offPos != null
       ? _offBearing
       : _route.bearingAt(distance, behind: 2, ahead: 3);

@@ -1,5 +1,6 @@
 /// A latitude/longitude pair in degrees (WGS 84).
 final class GeoPoint {
+  /// Creates a point at [lat] degrees north and [lng] degrees east.
   const GeoPoint(this.lat, this.lng);
 
   /// Degrees north of the equator.

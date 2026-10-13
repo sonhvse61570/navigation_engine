@@ -9,6 +9,8 @@ import 'motion_frame.dart';
 /// Free driving (no route): the same predict-and-correct scheme in 2D. It
 /// only smooths the GPS; it cannot remove the sideways noise a route removes.
 class FreeMotionEngine implements MotionEngine {
+  /// Creates an engine that predicts [lead] seconds ahead, on top of the age of
+  /// each fix.
   FreeMotionEngine({this.lead = 0.25});
 
   /// Extra seconds of prediction on top of the fix's own age.

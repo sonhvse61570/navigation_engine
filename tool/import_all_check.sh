@@ -3,7 +3,7 @@
 # once, without prefixes: a name exported by two libraries for different
 # elements would be ambiguous and fail to analyze.
 #
-# It writes a throwaway app (path dependencies on all twelve packages) to a
+# It writes a throwaway app (path dependencies on all the packages) to a
 # temporary directory, resolves it offline from the workspace's lock (run
 # `flutter pub get` at the repo root first) and analyzes it; nothing is
 # built.
@@ -17,16 +17,14 @@ trap 'rm -rf "$app"' EXIT
 packages=(
   navigation_engine
   navigation_engine_flutter
-  navigation_engine_flutter_map
-  navigation_engine_geolocator
-  navigation_engine_google_maps
-  navigation_engine_mapbox
-  navigation_engine_maplibre
-  navigation_engine_osrm
-  navigation_engine_vietmap
-  navigation_engine_goong
-  navigation_engine_mapbox_directions
-  navigation_engine_google_routes
+  navigation_flutter_map
+  navigation_geolocator
+  navigation_google_maps
+  navigation_mapbox
+  navigation_maplibre
+  navigation_osrm
+  navigation_vietmap
+  navigation_goong
 )
 
 {
@@ -40,10 +38,10 @@ packages=(
   for p in "${packages[@]}"; do
     echo "  $p: {path: $repo/packages/$p}"
   done
-  # The adapters depend on the core packages (and the Mapbox routing
-  # package on the OSRM one) by version: use the local ones.
+  # The adapters depend on the core packages (and navigation_mapbox
+  # on the OSRM one) by version: use the local ones.
   echo 'dependency_overrides:'
-  for p in navigation_engine navigation_engine_flutter navigation_engine_osrm; do
+  for p in navigation_engine navigation_engine_flutter navigation_osrm; do
     echo "  $p: {path: $repo/packages/$p}"
   done
 } > "$app/pubspec.yaml"
@@ -173,7 +171,7 @@ flutter pub get --offline > /dev/null
 # workspace's own packages are path dependencies here, not in that lock).
 versions() {
   awk '/^  [a-z_0-9]+:$/ { name = $1 } /^    version:/ { print name, $2 }' "$1" |
-    grep -v '^navigation_engine' | sort
+    grep -v '^navigation_' | sort
 }
 drift="$(comm -13 <(versions "$repo/pubspec.lock") <(versions pubspec.lock))"
 if [ -n "$drift" ]; then
