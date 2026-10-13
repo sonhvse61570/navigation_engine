@@ -15,3 +15,4 @@ workspace:
   - packages/navigation_osrm
   - packages/navigation_vietmap
   - packages/navigation_goong
+  - packages/navigation_tts

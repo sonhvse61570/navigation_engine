@@ -53,6 +53,15 @@ jobs:
             (cd "$p" && flutter test --no-pub)
             echo "::endgroup::"
           done
+          # The examples are apps of their own: their dependencies are
+          # not in the workspace's package config, so each gets its own
+          # `pub get` (a failure of that fails the job).
+          for e in packages/*/example; do
+            [ -d "$e/test" ] || continue
+            echo "::group::test $e"
+            (cd "$e" && flutter pub get && flutter test --no-pub)
+            echo "::endgroup::"
+          done
 
       # Code whose behaviour differs under dart2js (tests tagged `js`) also
       # runs as JS, in every package whose dart_test.yaml declares the `js`

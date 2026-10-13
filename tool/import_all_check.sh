@@ -25,6 +25,7 @@ packages=(
   navigation_osrm
   navigation_vietmap
   navigation_goong
+  navigation_tts
 )
 
 {
@@ -158,6 +159,12 @@ final _names = <Object>[
   GoogleRoutesTimeoutException,
   GoogleRoutesFormatException,
   GooglePlacesSearchException,
+  TtsEngine,
+  TtsEngineException,
+  FlutterTtsEngine,
+  NavigationVoice,
+  TtsVoiceUnavailable,
+  defaultVoiceLanguage,
 ];
 DART
 } > "$app/lib/import_all.dart"
